@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "26774040835",
+    "project_id": "sumathi-s-styles",
+    "storage_bucket": "sumathi-s-styles.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:26774040835:android:b2d640f67454b70f153936",
+        "android_client_info": {
+          "package_name": "com.example.fashion"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZqX46445YFodtuR0ti4Pid8_RQiwOt4E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
