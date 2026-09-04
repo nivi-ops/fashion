@@ -14,7 +14,7 @@ import 'app_state.dart';
 /// Example: 'https://sumathistyles.up.railway.app'
 /// Do NOT add a trailing slash.
 /// -----------------------------------------------------------------
-const String baseUrl = 'http://localhost/fashion/backend';
+const String baseUrl = 'http://192.168.1.5/fashion/backend';
 
 /// A tailoring/stitching service offered by the shop.
 class StitchingService {
