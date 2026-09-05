@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Flutter conversion of the supplied "Sumathi's Styles – Admin Dashboard".
 /// The login screen matches admin.html: black top bar ("Admin Login"),
@@ -108,7 +109,8 @@ class _AdminPageState extends State<AdminPage> {
   String pCategory = '';
   String pStock = 'Available';
   String pVisible = 'yes';
-  List<XFile> uploadedPhotos = [];
+    List<XFile> uploadedPhotos = [];
+  final TextEditingController pImageUrl = TextEditingController();
   List<TextEditingController> highlightControllers = [TextEditingController()];
   List<TextEditingController> priceTagControllers = [
     TextEditingController(),
@@ -141,6 +143,7 @@ class _AdminPageState extends State<AdminPage> {
       pName,
       pPrice,
       pDesc,
+      pImageUrl,
       notificationTitle,
       notificationMessage,
     ]) {
@@ -497,18 +500,31 @@ class _AdminPageState extends State<AdminPage> {
       }
     }
 
-    setState(() => loading = true);
+        setState(() => loading = true);
     try {
-      // Upload every selected photo to Firebase Storage first, collecting
-      // their public download URLs.
+      // Collect photo URLs from TWO sources:
+      // 1) Any photos picked via the file picker (uploaded to Firebase
+      //    Storage) — kept for when Storage billing is enabled later.
+      // 2) A pasted image link (free — no Storage/billing needed).
       final List<String> photoUrls = [];
+
       for (final photo in uploadedPhotos) {
-        final bytes = await photo.readAsBytes();
-        final ref = FirebaseStorage.instance.ref(
-          'product_photos/${DateTime.now().millisecondsSinceEpoch}_${photo.name}',
-        );
-        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-        photoUrls.add(await ref.getDownloadURL());
+        try {
+          final bytes = await photo.readAsBytes();
+          final ref = FirebaseStorage.instance.ref(
+            'product_photos/${DateTime.now().millisecondsSinceEpoch}_${photo.name}',
+          );
+          await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+          photoUrls.add(await ref.getDownloadURL());
+        } catch (e) {
+          // Storage may not be enabled (Spark/free plan) — skip silently
+          // so a pasted link can still be used instead.
+        }
+      }
+
+      final pastedUrl = pImageUrl.text.trim();
+      if (pastedUrl.isNotEmpty) {
+        photoUrls.add(pastedUrl);
       }
 
       await _db.collection('products').add({
@@ -543,10 +559,11 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  void resetUploadForm() {
+    void resetUploadForm() {
     pName.clear();
     pPrice.clear();
     pDesc.clear();
+    pImageUrl.clear();
     setState(() {
       pCategory = '';
       pStock = 'Available';
@@ -1144,7 +1161,7 @@ class _AdminPageState extends State<AdminPage> {
               ),
             ),
           ),
-          if (uploadedPhotos.isNotEmpty) ...[
+                    if (uploadedPhotos.isNotEmpty) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 10,
@@ -1182,6 +1199,43 @@ class _AdminPageState extends State<AdminPage> {
                   ],
                 );
               }),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: const [
+              Expanded(child: Divider()),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Text('OR', style: TextStyle(fontSize: 11, color: Color(0xFF757575), fontWeight: FontWeight.bold)),
+              ),
+              Expanded(child: Divider()),
+            ],
+          ),
+          const SizedBox(height: 10),
+          field(
+            '🔗 Paste Image Link (e.g. from Imgur, Google Drive share link)',
+            pImageUrl,
+            hint: 'https://i.imgur.com/example.jpg',
+          ),
+          if (pImageUrl.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: border, width: 2),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Image.network(
+                pImageUrl.text.trim(),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: tealLight,
+                  child: const Center(child: Text('❌ Invalid link', style: TextStyle(fontSize: 10))),
+                ),
+              ),
             ),
           ],
           const SizedBox(height: 18),
@@ -2187,15 +2241,17 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Future<void> openWhatsApp(String mobile, String name) async {
+    Future<void> openWhatsApp(String mobile, String name) async {
     final numText = mobile.replaceAll(RegExp(r'\D'), '');
     final msg = Uri.encodeComponent(
         "Hi $name! 👗 Thank you for choosing Sumathi's Styles, Injambakkam. How can we help you today?");
     final uri = Uri.parse('https://wa.me/91$numText?text=$msg');
-    // Using the browser is intentionally avoided here to keep this file
-    // dependency-light. The URL is copied into the platform share/browser
-    // by the OS when a webview/browser integration is added.
-    showToast('💬 WhatsApp: ${uri.toString()}');
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) showToast('❌ Could not open WhatsApp');
+    } catch (e) {
+      showToast('❌ WhatsApp error: $e');
+    }
   }
 
   Widget currentContent(bool mobile) {
