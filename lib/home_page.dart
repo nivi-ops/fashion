@@ -222,49 +222,21 @@ class _HomePageState extends State<HomePage> {
   // LOAD PRODUCTS
   // ---------------------------------------------------------------
 
-     Future<void> _loadProducts() async {
+       Future<void> _loadProducts() async {
     try {
       final products = await ApiService.fetchProducts();
 
       if (!mounted) return;
 
-      // ignore: avoid_print
-      print('✅ Loaded ${products.length} products from Firestore');
-
       setState(() {
-        _featuredProducts = products.isNotEmpty
-            ? products
-            : List.generate(
-                8,
-                (i) => Product(
-                  id: i + 1,
-                  name: 'Product ${i + 1}',
-                  price: 400.0 + (i * 150),
-                  image: 'assets/images/placeholder.png',
-                  rating: 4.3 + (i % 3) * 0.2,
-                ),
-              );
-
+        _featuredProducts = products; // real Firestore data only — no dummy fallback
         _loadingProducts = false;
       });
     } catch (e) {
-      // ignore: avoid_print
-      print('❌ _loadProducts error: $e');
-
       if (!mounted) return;
 
       setState(() {
-        _featuredProducts = List.generate(
-          8,
-          (i) => Product(
-            id: i + 1,
-            name: 'Product ${i + 1}',
-            price: 400.0 + (i * 150),
-            image: 'assets/images/placeholder.png',
-            rating: 4.3 + (i % 3) * 0.2,
-          ),
-        );
-
+        _featuredProducts = []; // show empty state instead of dummy products
         _loadingProducts = false;
       });
     }
@@ -1436,7 +1408,7 @@ class _HomePageState extends State<HomePage> {
             height: 16,
           ),
 
-          _loadingProducts
+             _loadingProducts
               ? const SizedBox(
                   height: 260,
                   child:
@@ -1445,7 +1417,20 @@ class _HomePageState extends State<HomePage> {
                         CircularProgressIndicator(),
                   ),
                 )
-              : SizedBox(
+              : _featuredProducts.isEmpty
+                  ? const SizedBox(
+                      height: 200,
+                      child: Center(
+                        child: Text(
+                          'No products yet — check back soon!',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ),
+                    )
+                  : SizedBox(
                   height: 260,
                   child:
                       ListView.separated(
@@ -1921,8 +1906,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-
-          _loadingProducts
+           _loadingProducts
               ? const SliverToBoxAdapter(
                   child:
                       SizedBox(
@@ -1934,7 +1918,22 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 )
-              : SliverGrid(
+              : _featuredProducts.isEmpty
+                  ? const SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 150,
+                        child: Center(
+                          child: Text(
+                            'No products yet — check back soon!',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textLight,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : SliverGrid(
                   gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
@@ -1971,7 +1970,6 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-
   // ===============================================================
   // GRID PRODUCT CARD
   // ===============================================================
