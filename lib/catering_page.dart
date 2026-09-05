@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
-import 'api_service.dart' show baseUrl;
 
 // ---------------------------------------------------------------------
 // CATERING PAGE
@@ -443,7 +442,7 @@ class _CateringHomeTabState extends State<_CateringHomeTab> {
                             Image.asset(
                               slide['image']!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) {
+                              errorBuilder: (_, _, _) {
                                 return Container(
                                   color: AppColors.primaryDark,
                                 );
@@ -580,7 +579,7 @@ class _CateringHomeTabState extends State<_CateringHomeTab> {
                                 card['image']!,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) {
+                                errorBuilder: (_, _, _) {
                                   return Container(
                                     color: AppColors.gray,
                                     child: const Icon(
@@ -1089,7 +1088,7 @@ class _CateringAboutTab extends StatelessWidget {
                             width: double.infinity,
                             height: 180,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
+                            errorBuilder: (_, _, _) {
                               return Container(
                                 height: 180,
                                 color: AppColors.gray,
@@ -1764,7 +1763,7 @@ class _CateringServicesTab extends StatelessWidget {
                               height: 56,
                               fit: BoxFit.cover,
                               errorBuilder:
-                                  (_, __, ___) {
+                                  (_, _, _) {
                                 return Container(
                                   width: 56,
                                   height: 56,
@@ -1910,7 +1909,7 @@ class _CateringGalleryTab extends StatelessWidget {
                 child: Image.asset(
                   _images[index],
                   errorBuilder:
-                      (_, __, ___) {
+                      (_, _, _) {
                     return Container(
                       height: 300,
                       color: AppColors.gray,
@@ -1993,7 +1992,7 @@ class _CateringGalleryTab extends StatelessWidget {
                         _images[i],
                         fit: BoxFit.cover,
                         errorBuilder:
-                            (_, __, ___) {
+                            (_, _, _) {
                           return Container(
                             color: AppColors.gray,
                             alignment:
@@ -2074,12 +2073,13 @@ class _CateringContactTabState
   }
 
   // ---------------------------------------------------------------
-  // Sends the enquiry to submit_forms.php (contacts table) on the
-  // Railway/PHP backend. NOTE: the field names below (form_type,
-  // name, phone, email, service, message) are what this form sends —
-  // they must match what submit_forms.php reads from $_POST. If the
-  // real submit_forms.php uses different keys, update the body map
-  // below to match.
+  // Saves the enquiry directly to Firestore's `contacts` collection —
+  // the same collection admin_page.dart reads for its Customers /
+  // Catering Contact tabs, and the same one custom_order_page.dart's
+  // sibling forms use. `form_type: 'catering'` makes sure
+  // admin_page.dart's isCatering() check routes this submission into
+  // the "🍽️ Catering Contact Form Submissions" admin tab instead of
+  // the boutique one.
   // ---------------------------------------------------------------
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
@@ -2089,44 +2089,31 @@ class _CateringContactTabState
     setState(() => _isSubmitting = true);
 
     try {
-       final response = await http.post(
-  Uri.parse('$baseUrl/submit_forms.php'),
-  headers: {'Content-Type': 'application/json'},
-  body: jsonEncode({
-    'type': 'contact',
-    'name': _nameCtrl.text.trim(),
-    'phone': _phoneCtrl.text.trim(),
-    'email': _emailCtrl.text.trim(),
-    'service': _service ?? '',
-    'message': _messageCtrl.text.trim(),
-  }),
-);
-
-      final data = jsonDecode(response.body);
+      await FirebaseFirestore.instance.collection('contacts').add({
+        'name': _nameCtrl.text.trim(),
+        'phone': _phoneCtrl.text.trim(),
+        'email': _emailCtrl.text.trim(),
+        'service': _service ?? 'Catering Enquiry',
+        'message': _messageCtrl.text.trim(),
+        'form_type': 'catering',
+        'created_at': FieldValue.serverTimestamp(),
+      });
 
       if (!mounted) return;
 
-      if (data is Map && data['status'] == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '✅ Enquiry sent! We will contact you soon.',
-            ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '✅ Enquiry sent! We will contact you soon.',
           ),
-        );
-        _nameCtrl.clear();
-        _phoneCtrl.clear();
-        _emailCtrl.clear();
-        _messageCtrl.clear();
-        setState(() => _service = null);
-      } else {
-        final msg = data is Map
-            ? (data['message']?.toString() ?? 'Failed to send enquiry')
-            : 'Failed to send enquiry';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ $msg')),
-        );
-      }
+        ),
+      );
+
+      _nameCtrl.clear();
+      _phoneCtrl.clear();
+      _emailCtrl.clear();
+      _messageCtrl.clear();
+      setState(() => _service = null);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

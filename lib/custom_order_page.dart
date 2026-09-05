@@ -3,19 +3,25 @@
 // (id="custom"). Mobile-first: feature strip + heading on top, form below —
 // same content/behaviour as the website's .custom-order block.
 //
+// NOW CONNECTED TO FIREBASE (Firestore + Storage) instead of the
+// Railway/PHP submit_forms.php endpoint.
+//
 // SETUP:
-//   1. flutter pub add http record path_provider
+//   1. flutter pub add cloud_firestore firebase_storage record path_provider audioplayers
 //      (permission is handled internally by the `record` package on both
 //      Android and iOS, so you do NOT need permission_handler separately —
 //      but you DO need to declare the mic permission in your platform
 //      manifests, see below.)
-//   2. Set kSubmitFormsUrl below to your real submit_forms.php endpoint
-//      (same one the website posts to), e.g.
-//      'https://yourdomain.com/submit_forms.php'
-//   3. Voice recording is now REAL — it uses the device microphone via the
-//      `record` package, saves an .m4a file, and base64-encodes it into the
-//      'voice_note' field on submit (same idea as the website's
-//      getUserMedia -> base64 -> voice_note flow).
+//   2. Make sure Firebase.initializeApp() is already called in main.dart
+//      (it should be, since firebase_options.dart exists in this project).
+//   3. Voice recording is REAL — it uses the device microphone via the
+//      `record` package, saves an .m4a file, and uploads it to Firebase
+//      Storage. The download URL is saved in the Firestore order document
+//      (instead of embedding a big base64 string, which is safer for
+//      Firestore's 1MB-per-document limit).
+//   4. Voice PLAYBACK is REAL too — uses `audioplayers` to let the user
+//      listen back to their own recording (play/pause + seek bar) before
+//      submitting the order.
 //
 //   ANDROID: add this to android/app/src/main/AndroidManifest.xml,
 //   inside the <manifest> tag (above <application>):
@@ -26,16 +32,14 @@
 //     <string>We need microphone access so you can record a voice message
 //     about your custom order.</string>
 
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'app_colors.dart';
-
-/// TODO: point this to your real submit_forms.php URL.
-const String kSubmitFormsUrl = 'https://fashion-production-9a4b.up.railway.app/submit_forms.php';
 
 class CustomOrderPage extends StatefulWidget {
   const CustomOrderPage({super.key});
@@ -66,6 +70,12 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
   Duration _recordDuration = Duration.zero;
   DateTime? _recordStartedAt;
 
+  // ---------------- Voice playback state ----------------
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  Duration _playbackPosition = Duration.zero;
+  Duration _playbackTotalDuration = Duration.zero;
+
   final List<String> _orderTypes = const [
     'All',
     'Kids',
@@ -89,6 +99,36 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+
+    // Keep the playback UI (seek bar / play-pause icon) in sync with the
+    // actual player state.
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() => _isPlaying = state == PlayerState.playing);
+    });
+
+    _audioPlayer.onPositionChanged.listen((pos) {
+      if (!mounted) return;
+      setState(() => _playbackPosition = pos);
+    });
+
+    _audioPlayer.onDurationChanged.listen((dur) {
+      if (!mounted) return;
+      setState(() => _playbackTotalDuration = dur);
+    });
+
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+        _playbackPosition = Duration.zero;
+      });
+    });
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
@@ -98,6 +138,7 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
     _lengthController.dispose();
     _notesController.dispose();
     _audioRecorder.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -112,6 +153,11 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
   }
 
   Future<void> _startRecording() async {
+    // Stop any ongoing playback before starting a fresh recording.
+    if (_isPlaying) {
+      await _audioPlayer.stop();
+    }
+
     // record package requests mic permission internally on first call.
     final hasPermission = await _audioRecorder.hasPermission();
     if (!hasPermission) {
@@ -138,6 +184,8 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
         _recordedFilePath = null;
         _recordDuration = Duration.zero;
         _recordStartedAt = DateTime.now();
+        _playbackPosition = Duration.zero;
+        _playbackTotalDuration = Duration.zero;
       });
     } catch (e) {
       _showSnack('Could not start recording. Please try again.',
@@ -164,7 +212,32 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
     }
   }
 
+  // ---------------- Playback controls ----------------
+
+  Future<void> _togglePlayback() async {
+    final path = _recordedFilePath;
+    if (path == null || !_hasRecording) return;
+
+    if (_isPlaying) {
+      await _audioPlayer.pause();
+    } else {
+      // If playback had finished (position at/near the end), start over.
+      if (_playbackTotalDuration.inMilliseconds > 0 &&
+          _playbackPosition >= _playbackTotalDuration) {
+        await _audioPlayer.seek(Duration.zero);
+      }
+      await _audioPlayer.play(DeviceFileSource(path));
+    }
+  }
+
+  Future<void> _seekPlayback(Duration position) async {
+    await _audioPlayer.seek(position);
+  }
+
   void _discardRecording() {
+    if (_isPlaying) {
+      _audioPlayer.stop();
+    }
     final path = _recordedFilePath;
     if (path != null) {
       final f = File(path);
@@ -174,18 +247,35 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
       _hasRecording = false;
       _recordedFilePath = null;
       _recordDuration = Duration.zero;
+      _isPlaying = false;
+      _playbackPosition = Duration.zero;
+      _playbackTotalDuration = Duration.zero;
     });
   }
 
-  Future<String> _voiceNoteAsBase64() async {
+  /// Uploads the recorded voice note (if any) to Firebase Storage and
+  /// returns its public download URL. Returns an empty string when there
+  /// is no recording, so the Firestore field is simply blank.
+  Future<String> _uploadVoiceNote() async {
     final path = _recordedFilePath;
     if (path == null || !_hasRecording) return '';
     final file = File(path);
     if (!await file.exists()) return '';
-    final bytes = await file.readAsBytes();
-    // Prefixed like a data URI so your backend can tell what it is and
-    // decode it straight into an .m4a file.
-    return 'data:audio/m4a;base64,${base64Encode(bytes)}';
+
+    try {
+      final fileName =
+          'voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final ref =
+          FirebaseStorage.instance.ref('custom_order_voice_notes/$fileName');
+      await ref.putFile(
+        file,
+        SettableMetadata(contentType: 'audio/m4a'),
+      );
+      return await ref.getDownloadURL();
+    } catch (e) {
+      // Upload failed — order will still submit, just without the voice note.
+      return '';
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -216,52 +306,41 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
         'Hip: ${_hipController.text.trim()} | '
         'Length: ${_lengthController.text.trim()}';
 
-    final voiceNote = await _voiceNoteAsBase64();
-
-    final payload = {
-      'type': 'order',
-      'name': _nameController.text.trim(),
-      'mobile': _phoneController.text.trim(),
-      'product': _orderType,
-      'amount': 0,
-      'notes': _notesController.text.trim().isEmpty
-          ? 'None'
-          : _notesController.text.trim(),
-      'measurement': measurements,
-      'voice_note': voiceNote,
-      'source': 'custom-order',
-    };
-
     try {
-      final response = await http.post(
-        Uri.parse(kSubmitFormsUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      );
-
-      final data = jsonDecode(response.body);
-      if (data is Map && data['status'] == 'success') {
-        _showSnack(
-          'Custom order submitted! We will contact you soon. 📞',
-        );
-        _formKey.currentState?.reset();
-        _nameController.clear();
-        _phoneController.clear();
-        _bustController.clear();
-        _waistController.clear();
-        _hipController.clear();
-        _lengthController.clear();
-        _notesController.clear();
-        _discardRecording();
-        setState(() => _orderType = null);
-      } else {
-        _showSnack(
-          (data is Map && data['message'] != null)
-              ? data['message'].toString()
-              : 'Unable to save custom order',
-          isError: true,
-        );
+      if (_isPlaying) {
+        await _audioPlayer.stop();
       }
+
+      final voiceNoteUrl = await _uploadVoiceNote();
+
+      await FirebaseFirestore.instance.collection('orders').add({
+        'name': _nameController.text.trim(),
+        'mobile': _phoneController.text.trim(),
+        'product': _orderType,
+        'amount': 0,
+        'notes': _notesController.text.trim().isEmpty
+            ? 'None'
+            : _notesController.text.trim(),
+        'measurement': measurements,
+        'voice_note': voiceNoteUrl,
+        'source': 'custom-order',
+        'status': 'Ordered',
+        'payment_method': 'N/A',
+        'payment_status': 'Not Required',
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      _showSnack('Custom order submitted! We will contact you soon. 📞');
+      _formKey.currentState?.reset();
+      _nameController.clear();
+      _phoneController.clear();
+      _bustController.clear();
+      _waistController.clear();
+      _hipController.clear();
+      _lengthController.clear();
+      _notesController.clear();
+      _discardRecording();
+      setState(() => _orderType = null);
     } catch (e) {
       _showSnack('Unable to save custom order right now', isError: true);
     } finally {
@@ -641,6 +720,7 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Record / stop-recording tile
         InkWell(
           onTap: _toggleVoiceRecording,
           borderRadius: BorderRadius.circular(12),
@@ -690,7 +770,12 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
             ),
           ),
         ),
-        if (_hasRecording && !_isRecording)
+
+        // Playback tile — only shown once a recording exists and we're
+        // not actively recording a new one.
+        if (_hasRecording && !_isRecording) ...[
+          const SizedBox(height: 10),
+          _buildPlaybackBox(),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
@@ -704,7 +789,82 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
               ),
             ),
           ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildPlaybackBox() {
+    final total = _playbackTotalDuration.inMilliseconds > 0
+        ? _playbackTotalDuration
+        : _recordDuration;
+    final maxMs = total.inMilliseconds == 0 ? 1 : total.inMilliseconds;
+    final currentMs = _playbackPosition.inMilliseconds.clamp(0, maxMs);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: AppColors.primary.withValues(alpha: 0.06),
+        border: Border.all(color: AppColors.primaryLight, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: _togglePlayback,
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.primary,
+              ),
+              child: Icon(
+                _isPlaying ? Icons.pause : Icons.play_arrow,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 2.5,
+                thumbShape:
+                    const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape:
+                    const RoundSliderOverlayShape(overlayRadius: 12),
+              ),
+              child: Slider(
+                min: 0,
+                max: maxMs.toDouble(),
+                value: currentMs.toDouble(),
+                activeColor: AppColors.primary,
+                inactiveColor: AppColors.primaryLight,
+                onChanged: (v) {
+                  setState(() {
+                    _playbackPosition = Duration(milliseconds: v.round());
+                  });
+                },
+                onChangeEnd: (v) {
+                  _seekPlayback(Duration(milliseconds: v.round()));
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '${_formatDuration(_playbackPosition)} / ${_formatDuration(total)}',
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textLight,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

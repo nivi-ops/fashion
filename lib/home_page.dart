@@ -222,11 +222,14 @@ class _HomePageState extends State<HomePage> {
   // LOAD PRODUCTS
   // ---------------------------------------------------------------
 
-  Future<void> _loadProducts() async {
+     Future<void> _loadProducts() async {
     try {
       final products = await ApiService.fetchProducts();
 
       if (!mounted) return;
+
+      // ignore: avoid_print
+      print('✅ Loaded ${products.length} products from Firestore');
 
       setState(() {
         _featuredProducts = products.isNotEmpty
@@ -244,7 +247,10 @@ class _HomePageState extends State<HomePage> {
 
         _loadingProducts = false;
       });
-    } catch (_) {
+    } catch (e) {
+      // ignore: avoid_print
+      print('❌ _loadProducts error: $e');
+
       if (!mounted) return;
 
       setState(() {

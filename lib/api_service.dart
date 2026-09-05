@@ -1,20 +1,12 @@
 // api_service.dart
 // Handles all data operations for Sumathi's Styles.
-// Product fetching, notifications, and FCM token saving now call the
-// real PHP backend. Only fill in `baseUrl` below with your actual
-// Railway/InfinityFree URL — everything else is already wired.
+// Product fetching, notifications, product upload, and FCM token saving
+// now talk to Firebase (Cloud Firestore) instead of the old Railway/PHP
+// backend. No baseUrl / http calls needed anymore for these flows.
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models.dart';
 import 'app_state.dart';
-
-/// -----------------------------------------------------------------
-/// IMPORTANT: set this ONCE to your real backend URL.
-/// Example: 'https://sumathistyles.up.railway.app'
-/// Do NOT add a trailing slash.
-/// -----------------------------------------------------------------
-const String baseUrl = 'https://fashion-production-9a4b.up.railway.app';
 
 /// A tailoring/stitching service offered by the shop.
 class StitchingService {
@@ -79,8 +71,10 @@ class ApiService {
   ApiService._internal();
   static final ApiService instance = ApiService._internal();
 
+  static final FirebaseFirestore _db = FirebaseFirestore.instance;
+
   // ---------------- MOCK DATA (still used for services/addresses/orders
-  // until those flows are wired to the backend too) ----------------
+  // until those flows are wired to Firestore too) ----------------
 
   static final List<StitchingService> _mockServices = [
     const StitchingService(
@@ -186,10 +180,10 @@ class ApiService {
   /// "Edit" option in the delivery-address 3-dot menu and by the map
   /// picker's "Update pin and proceed" when editing.
   ///
-  /// NOTE: this follows the same in-memory mock pattern as addAddress
-  /// above, since addresses aren't wired to the PHP backend yet. When
-  /// you add a real endpoint (e.g. update_address.php), swap the body
-  /// below for an http.post call the same way fetchProducts does.
+  /// NOTE: this still follows the in-memory mock pattern, since addresses
+  /// aren't wired to Firestore yet. When you're ready, swap the body below
+  /// for a `_db.collection('addresses').doc(address.id).set(...)` call the
+  /// same way fetchProducts below now uses Firestore.
   Future<ShopAddress> updateAddress(ShopAddress address) async {
     await Future.delayed(const Duration(milliseconds: 400));
     final index = _mockAddresses.indexWhere((a) => a.id == address.id);
@@ -206,8 +200,8 @@ class ApiService {
   /// Deletes a saved address by id — used by the "Delete" option in the
   /// delivery-address 3-dot menu.
   ///
-  /// NOTE: same in-memory mock pattern as addAddress — swap for a real
-  /// backend call (e.g. delete_address.php) once that endpoint exists.
+  /// NOTE: same in-memory mock pattern as addAddress — swap for
+  /// `_db.collection('addresses').doc(id).delete()` once that's wired up.
   Future<void> deleteAddress(String id) async {
     await Future.delayed(const Duration(milliseconds: 300));
     _mockAddresses.removeWhere((a) => a.id == id);
@@ -236,30 +230,33 @@ class ApiService {
 
   // ---------------- STATIC METHODS (used by home_page.dart) ----------------
 
-  /// Fetches real products from the PHP/MySQL backend (uploaded via the
-  /// admin dashboard). Falls back to an empty list if the request fails,
-  /// so the UI's existing "no products" placeholder logic still applies.
+  /// Fetches real products from Firestore's `products` collection
+  /// (uploaded via the admin dashboard). Only products marked visible
+  /// to customers are returned. Falls back to an empty list on any
+  /// error, so the UI's existing "no products" placeholder logic still
+  /// applies.
   static Future<List<Product>> fetchProducts() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/get_products.php'),
-      );
+      final snap = await _db
+          .collection('products')
+          .where('visible', isEqualTo: 'yes')
+          .get();
 
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-
-        return data.map<Product>((item) {
-          return Product(
-            id: int.tryParse(item['id'].toString()) ?? 0,
-            name: item['name']?.toString() ?? '',
-            price: double.tryParse(item['price'].toString()) ?? 0,
-            image: item['image_url']?.toString() ?? '',
-            rating: double.tryParse(item['rating']?.toString() ?? '') ?? 4.5,
-          );
-        }).toList();
-      }
-    } catch (_) {
-      // Network/parse error — fall through to empty list below.
+      return snap.docs.map<Product>((doc) {
+        final item = doc.data();
+        return Product(
+          id: int.tryParse(doc.id) ?? doc.id.hashCode,
+          name: item['name']?.toString() ?? '',
+          price: double.tryParse(item['price'].toString()) ?? 0,
+          image: item['image_url']?.toString() ??
+              item['photo']?.toString() ??
+              '',
+          rating: double.tryParse(item['rating']?.toString() ?? '') ?? 4.5,
+        );
+      }).toList();
+         } catch (e) {
+      // ignore: avoid_print
+      print('❌ fetchProducts error: $e');
     }
 
     return [];
@@ -268,26 +265,31 @@ class ApiService {
   // ---------------- STATIC METHODS (used by notifications_page.dart) ----------------
 
   /// Fetches admin-broadcast notifications (matches admin.html broadcast
-  /// feature) from the real backend.
+  /// feature) from Firestore's `notifications` collection.
   static Future<List<AppNotification>> fetchNotifications() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/get_notifications.php'),
-      );
+      final snap = await _db
+          .collection('notifications')
+          .orderBy('created_at', descending: true)
+          .get();
 
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-
-        return data.map<AppNotification>((item) {
-          return AppNotification(
-            id: int.tryParse(item['id'].toString()) ?? 0,
-            title: item['title']?.toString() ?? '',
-            message: item['message']?.toString() ?? '',
-            time: DateTime.tryParse(item['created_at']?.toString() ?? '') ??
-                DateTime.now(),
-          );
-        }).toList();
-      }
+      return snap.docs.map<AppNotification>((doc) {
+        final item = doc.data();
+        final createdAt = item['created_at'];
+        DateTime time;
+        if (createdAt is Timestamp) {
+          time = createdAt.toDate();
+        } else {
+          time = DateTime.tryParse(createdAt?.toString() ?? '') ??
+              DateTime.now();
+        }
+        return AppNotification(
+          id: int.tryParse(doc.id) ?? doc.id.hashCode,
+          title: item['title']?.toString() ?? '',
+          message: item['message']?.toString() ?? '',
+          time: time,
+        );
+      }).toList();
     } catch (_) {
       // Network/parse error — fall through to empty list below.
     }
@@ -297,13 +299,15 @@ class ApiService {
 
   // ---------------- STATIC METHODS (used by product_upload_page.dart, admin side) ----------------
 
-  /// Uploads a new product from the admin panel to the PHP/MySQL backend
-  /// (upload_product.php). Returns a map with `success` (bool) and
+  /// Uploads a new product from the admin panel into Firestore's
+  /// `products` collection. Returns a map with `success` (bool) and
   /// `message` (String) so the UI can show a success/error banner, plus
   /// `product_id` on success.
   ///
   /// `highlights` — list of highlight strings (e.g. ["Pure cotton", "Hand embroidered"])
   /// `priceTags`  — list of maps like {"tag": "S", "price": "400"} for size/type variations
+  /// `imageUrl`   — should be a Firebase Storage download URL (upload the
+  ///                photo to Storage first, then pass its URL here).
   static Future<Map<String, dynamic>> uploadProduct({
     required String name,
     required String category,
@@ -316,51 +320,49 @@ class ApiService {
     String imageUrl = '',
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/upload_product.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': name,
-          'category': category,
-          'description': description,
-          'highlights': highlights,
-          'price_tags': priceTags,
-          'price': price,
-          'stock_status': stockStatus,
-          'visible': visible,
-          'image_url': imageUrl,
-        }),
-      );
+      final doc = await _db.collection('products').add({
+        'name': name,
+        'category': category,
+        'description': description,
+        'highlights': highlights,
+        'price_tags': priceTags,
+        'price': price,
+        'stock': stockStatus,
+        'visible': visible,
+        'image_url': imageUrl,
+        'created_at': FieldValue.serverTimestamp(),
+      });
 
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      } else {
-        return {
-          'success': false,
-          'message': 'Server error: ${response.statusCode}',
-        };
-      }
+      return {
+        'status': 'success',
+        'success': true,
+        'message': 'Product uploaded successfully',
+        'product_id': doc.id,
+      };
     } catch (e) {
       return {
+        'status': 'error',
         'success': false,
-        'message': 'Connection failed: $e',
+        'message': 'Upload failed: $e',
       };
     }
   }
 
   // ---------------- STATIC METHODS (used by notification_service.dart) ----------------
 
-  /// Sends this device's FCM token to the backend so push notifications
+  /// Saves this device's FCM token in Firestore so push notifications
   /// can be targeted to this user/device from the admin dashboard.
+  /// Stored under users/{userId} with merge, so it doesn't wipe out
+  /// other fields already saved for that user.
   static Future<void> saveFcmToken(String token) async {
     try {
-      await http.post(
-        Uri.parse('$baseUrl/save_fcm_token.php'),
-        body: {
-          'user_id': AppState.instance.userId ?? '',
-          'fcm_token': token,
-        },
-      );
+      final userId = AppState.instance.userId;
+      if (userId == null || userId.isEmpty) return;
+
+      await _db.collection('users').doc(userId).set({
+        'fcm_token': token,
+        'fcm_token_updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     } catch (e) {
       // Silently ignore for now — token save failing shouldn't crash the app.
     }

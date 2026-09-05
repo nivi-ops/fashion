@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,32 +12,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// blue shield icon with a person badge, "Admin Panel" title, plain
 /// bordered Email/Password fields, and a full-width blue pill LOGIN button.
 ///
+/// NOW CONNECTED TO FIREBASE (Firestore + Storage) instead of the
+/// Railway/PHP backend. Collections used:
+///   products            — product catalogue (name, category, price,
+///                          description, stock, visible, highlights,
+///                          price_tags, photos [list of Storage URLs])
+///   orders              — both normal orders and customized orders
+///                          (distinguished by the `source` field, e.g.
+///                          'custom-order')
+///   contacts            — boutique + catering contact form submissions
+///   notifications       — admin broadcast notifications
+///   customer_requests   — data-export / grievance / deactivated /
+///                          deleted-account requests, distinguished by
+///                          a `type` field
+///
 /// Add to pubspec.yaml:
-///   http: ^1.2.2
+///   cloud_firestore: ^5.6.12
+///   firebase_storage: ^12.3.2
 ///   image_picker: ^1.1.2
-///   shared_preferences: ^2.3.2
+///   shared_preferences: ^2.5.5
 ///
 /// Put this file at: lib/admin_page.dart
-///
-/// Backend files expected beside the web/PHP application:
-/// get_submissions.php, get_products.php, save_product.php,
-/// toggle_visible.php, delete_product.php, update_order_status.php,
-/// send_notification.php, get_notifications.php, delete_notification.php,
-/// get_customer_requests.php, resolve_grievance.php, clear_data.php,
-/// submit_forms.php
 
 class AdminPage extends StatefulWidget {
-  const AdminPage({
-    super.key,
-    this.baseUrl = 'https://fashion-production-9a4b.up.railway.app',
-  });
-
-  /// Example:
-  /// const AdminPage(baseUrl: 'https://sumathisstyles-production-25d9.up.railway.app/admin.html');
-  ///
-  /// Leave empty when the app is served from the same origin in a setup
-  /// where relative PHP endpoints are available.
-  final String baseUrl;
+  const AdminPage({super.key});
 
   @override
   State<AdminPage> createState() => _AdminPageState();
@@ -67,6 +65,8 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final ImagePicker picker = ImagePicker();
+
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   bool loggedIn = false;
   bool loading = false;
@@ -151,12 +151,6 @@ class _AdminPageState extends State<AdminPage> {
     super.dispose();
   }
 
-  String endpoint(String path) {
-    final base = widget.baseUrl.trim();
-    if (base.isEmpty) return path;
-    return '${base.endsWith('/') ? base : '$base/'}$path';
-  }
-
   Future<void> _restoreLogin() async {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('ss_admin_logged') == true) {
@@ -164,7 +158,6 @@ class _AdminPageState extends State<AdminPage> {
       await initDashboard();
     }
   }
-
 
   Future<void> doLogin() async {
     final e = emailController.text.trim();
@@ -202,19 +195,6 @@ class _AdminPageState extends State<AdminPage> {
     await loadCustomerRequests();
   }
 
-  Future<List<Map<String, dynamic>>> getJsonList(String url) async {
-    try {
-      final res = await http.get(Uri.parse(url));
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        final decoded = jsonDecode(res.body);
-        if (decoded is List) {
-          return decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-        }
-      }
-    } catch (_) {}
-    return [];
-  }
-
   Future<void> refreshDashboard() async {
     final loadedProducts = await loadProductsFromServer();
     final loadedOrders = await loadOrdersFromServer();
@@ -225,45 +205,42 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
+  // ---------------- FIRESTORE READS ----------------
+
   Future<List<Map<String, dynamic>>> loadOrdersFromServer() async {
     try {
-      final res = await http.get(Uri.parse(endpoint('get_submissions.php?type=orders')));
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        final raw = jsonDecode(res.body);
-        if (raw is List) {
-          final mapped = raw.map<Map<String, dynamic>>((o) {
-            final m = Map<String, dynamic>.from(o);
-            final rawId = m['order_id'] ?? m['id'] ?? '';
-            final idText = rawId.toString();
-            return {
-              'id': m['id'] == null ? '' : '#${m['id']}',
-              'orderId': idText.isEmpty ? '' : '#${idText.replaceFirst(RegExp(r'^#'), '')}',
-              'name': m['name'] ?? '',
-              'mobile': m['mobile'] ?? '',
-              'product': m['product'] ?? '',
-              'amount': num.tryParse('${m['amount'] ?? 0}') ?? 0,
-              'status': m['status'] ?? 'Ordered',
-              'date': formatDate(m['created_at']),
-              'source': m['source'] ?? 'website',
-              'measurement': m['measurement'] ?? '',
-              'voiceNote': m['voice_note'] ?? '',
-              'notes': m['notes'] ?? '',
-              'cancelReason': m['cancel_reason'] ?? '',
-              'paymentMethod': m['payment_method'] ?? 'N/A',
-              'paymentStatus': m['payment_status'] ?? 'Not Required',
-            };
-          }).toList();
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('ss_orders', jsonEncode(mapped));
-          return mapped;
-        }
-      }
-    } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    final local = prefs.getString('ss_orders');
-    if (local == null) return [];
-    try {
-      return List<Map<String, dynamic>>.from(jsonDecode(local));
+      final snap = await _db.collection('orders').get();
+      final mapped = snap.docs.map<Map<String, dynamic>>((doc) {
+        final m = doc.data();
+        final createdAt = m['created_at'];
+        DateTime? created;
+        if (createdAt is Timestamp) created = createdAt.toDate();
+        final shortId =
+            doc.id.length > 6 ? doc.id.substring(0, 6) : doc.id;
+        return {
+          'id': doc.id,
+          'orderId': '#${shortId.toUpperCase()}',
+          'name': m['name'] ?? '',
+          'mobile': m['mobile'] ?? '',
+          'product': m['product'] ?? '',
+          'amount': num.tryParse('${m['amount'] ?? 0}') ?? 0,
+          'status': m['status'] ?? 'Ordered',
+          'date': created != null
+              ? formatDate(created.toIso8601String())
+              : '',
+          'source': m['source'] ?? 'website',
+          'measurement': m['measurement'] ?? '',
+          'voiceNote': m['voice_note'] ?? '',
+          'notes': m['notes'] ?? '',
+          'cancelReason': m['cancel_reason'] ?? '',
+          'paymentMethod': m['payment_method'] ?? 'N/A',
+          'paymentStatus': m['payment_status'] ?? 'Not Required',
+        };
+      }).toList();
+      // Keep a stable order — newest last, so `.reversed` (used all over
+      // this file) shows the newest first, matching the old behaviour.
+      mapped.sort((a, b) => '${a['date']}'.compareTo('${b['date']}'));
+      return mapped;
     } catch (_) {
       return [];
     }
@@ -271,63 +248,106 @@ class _AdminPageState extends State<AdminPage> {
 
   Future<List<Map<String, dynamic>>> loadProductsFromServer() async {
     try {
-      final res = await http.get(Uri.parse(endpoint('get_products.php?admin=1')));
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        final raw = jsonDecode(res.body);
-        if (raw is Map && raw['products'] is List) {
-          return (raw['products'] as List).map<Map<String, dynamic>>((p) {
-            final m = Map<String, dynamic>.from(p);
-            return {
-              'id': int.tryParse('${m['id'] ?? 0}') ?? 0,
-              'name': m['name'] ?? '',
-              'cat': m['category'] ?? m['cat'] ?? 'Other',
-              'category': m['category'] ?? m['cat'] ?? 'Other',
-              'price': num.tryParse('${m['price'] ?? 0}') ?? 0,
-              'desc': m['description'] ?? '',
-              'description': m['description'] ?? '',
-              'stock': m['stock'] ?? m['stock_status'] ?? 'Available',
-              'visible': (m['visible'] == 'yes' ||
-                      m['visible'] == 1 ||
-                      m['visible'] == true)
-                  ? 'yes'
-                  : 'no',
-              'photos': m['photos'] is List
-                  ? List<dynamic>.from(m['photos'])
-                  : (m['photo'] == null ? [] : [m['photo']]),
-              'photo': m['photo'] ?? '',
-              'highlights': m['highlights'] is List
-                  ? List<dynamic>.from(m['highlights'])
-                  : [],
-              'priceTags': m['price_tags'] is List
-                  ? List<dynamic>.from(m['price_tags'])
-                  : [],
-            };
-          }).toList();
-        }
-      }
-    } catch (_) {}
-    return [];
+      final snap = await _db.collection('products').get();
+      return snap.docs.map<Map<String, dynamic>>((doc) {
+        final m = doc.data();
+        final photos = m['photos'] is List
+            ? List<dynamic>.from(m['photos'])
+            : (m['image_url'] != null && '${m['image_url']}'.isNotEmpty
+                ? [m['image_url']]
+                : <dynamic>[]);
+        return {
+          'id': doc.id,
+          'name': m['name'] ?? '',
+          'cat': m['category'] ?? m['cat'] ?? 'Other',
+          'category': m['category'] ?? m['cat'] ?? 'Other',
+          'price': num.tryParse('${m['price'] ?? 0}') ?? 0,
+          'desc': m['description'] ?? '',
+          'description': m['description'] ?? '',
+          'stock': m['stock'] ?? 'Available',
+          'visible': (m['visible'] == 'yes' || m['visible'] == true)
+              ? 'yes'
+              : 'no',
+          'photos': photos,
+          'photo': photos.isNotEmpty ? photos.first : '',
+          'highlights':
+              m['highlights'] is List ? List<dynamic>.from(m['highlights']) : [],
+          'priceTags': m['price_tags'] is List
+              ? List<dynamic>.from(m['price_tags'])
+              : [],
+        };
+      }).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<void> loadContacts() async {
-    contacts = await getJsonList(endpoint('get_submissions.php?type=contacts'));
+    try {
+      final snap = await _db.collection('contacts').get();
+      contacts = snap.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data());
+        m['id'] = d.id;
+        final createdAt = m['created_at'];
+        if (createdAt is Timestamp) {
+          m['created_at'] = createdAt.toDate().toIso8601String();
+        }
+        return m;
+      }).toList();
+    } catch (_) {
+      contacts = [];
+    }
     if (mounted) setState(() {});
   }
 
   Future<void> loadNotifications() async {
-    notifications = await getJsonList(endpoint('get_notifications.php'));
+    try {
+      final snap = await _db.collection('notifications').get();
+      final list = snap.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data());
+        m['id'] = d.id;
+        final createdAt = m['created_at'];
+        if (createdAt is Timestamp) {
+          m['created_at'] = createdAt.toDate().toIso8601String();
+        }
+        return m;
+      }).toList();
+      list.sort((a, b) =>
+          '${a['created_at']}'.compareTo('${b['created_at']}'));
+      notifications = list;
+    } catch (_) {
+      notifications = [];
+    }
     if (mounted) setState(() {});
   }
 
+  Future<List<Map<String, dynamic>>> _customerRequestsByType(
+    String type,
+    String dateField,
+  ) async {
+    try {
+      final snap = await _db
+          .collection('customer_requests')
+          .where('type', isEqualTo: type)
+          .get();
+      return snap.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data());
+        m['id'] = d.id;
+        final ts = m[dateField];
+        if (ts is Timestamp) m[dateField] = ts.toDate().toIso8601String();
+        return m;
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<void> loadCustomerRequests() async {
-    dataRequests =
-        await getJsonList(endpoint('get_customer_requests.php?type=data_export'));
-    grievances =
-        await getJsonList(endpoint('get_customer_requests.php?type=grievances'));
-    deactivated =
-        await getJsonList(endpoint('get_customer_requests.php?type=deactivated'));
+    dataRequests = await _customerRequestsByType('data_export', 'requested_at');
+    grievances = await _customerRequestsByType('grievance', 'created_at');
+    deactivated = await _customerRequestsByType('deactivated', 'deactivated_at');
     deletedAccounts =
-        await getJsonList(endpoint('get_customer_requests.php?type=deleted_accounts'));
+        await _customerRequestsByType('deleted_account', 'deleted_at');
     if (mounted) setState(() {});
   }
 
@@ -453,6 +473,8 @@ class _AdminPageState extends State<AdminPage> {
     return map[id] ?? 'Dashboard';
   }
 
+  // ---------------- PRODUCT UPLOAD (Firestore + Storage) ----------------
+
   Future<void> uploadProduct() async {
     final name = pName.text.trim();
     final price = pPrice.text.trim();
@@ -477,40 +499,38 @@ class _AdminPageState extends State<AdminPage> {
 
     setState(() => loading = true);
     try {
-      final req =
-          http.MultipartRequest('POST', Uri.parse(endpoint('save_product.php')));
-      req.fields.addAll({
+      // Upload every selected photo to Firebase Storage first, collecting
+      // their public download URLs.
+      final List<String> photoUrls = [];
+      for (final photo in uploadedPhotos) {
+        final bytes = await photo.readAsBytes();
+        final ref = FirebaseStorage.instance.ref(
+          'product_photos/${DateTime.now().millisecondsSinceEpoch}_${photo.name}',
+        );
+        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        photoUrls.add(await ref.getDownloadURL());
+      }
+
+      await _db.collection('products').add({
         'name': name,
+        'category': pCategory,
         'cat': pCategory,
-        'price': price,
+        'price': num.tryParse(price) ?? 0,
         'description': pDesc.text.trim(),
         'stock': pStock,
         'visible': pVisible,
-        'highlights': jsonEncode(highlights),
-        'price_tags': jsonEncode(priceTags),
+        'highlights': highlights,
+        'price_tags': priceTags,
+        'photos': photoUrls,
+        'image_url': photoUrls.isNotEmpty ? photoUrls.first : '',
+        'created_at': FieldValue.serverTimestamp(),
       });
 
-      if (uploadedPhotos.isNotEmpty) {
-        final bytes = await uploadedPhotos.first.readAsBytes();
-        req.files.add(http.MultipartFile.fromBytes(
-          'photo',
-          bytes,
-          filename: uploadedPhotos.first.name,
-        ));
-      }
-
-      final response = await req.send();
-      final body = await response.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        products = await loadProductsFromServer();
-        resetUploadForm();
-        showToast('✅ Product uploaded successfully!');
-      } else {
-        showToast('❌ ${data is Map ? (data['message'] ?? 'Upload failed') : 'Upload failed'}');
-      }
-    } catch (_) {
-      showToast('❌ Server error while uploading');
+      products = await loadProductsFromServer();
+      resetUploadForm();
+      showToast('✅ Product uploaded successfully!');
+    } catch (e) {
+      showToast('❌ Upload failed: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -539,74 +559,47 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
-  Future<void> toggleVisible(int id, String visible) async {
+  // ---------------- PRODUCT ACTIONS ----------------
+
+  Future<void> toggleVisible(String id, String visible) async {
     try {
-      final req = http.MultipartRequest(
-        'POST',
-        Uri.parse(endpoint('toggle_visible.php')),
-      );
-      req.fields['id'] = '$id';
-      req.fields['visible'] = visible;
-      final res = await req.send();
-      final body = await res.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        products = await loadProductsFromServer();
-        setState(() {});
-        showToast('✅ Visibility updated');
-      } else {
-        showToast('❌ ${data is Map ? data['message'] ?? 'Failed' : 'Failed'}');
-      }
+      await _db.collection('products').doc(id).update({'visible': visible});
+      products = await loadProductsFromServer();
+      setState(() {});
+      showToast('✅ Visibility updated');
     } catch (_) {
       showToast('❌ Server error');
     }
   }
 
-  Future<void> deleteProduct(int id) async {
+  Future<void> deleteProduct(String id) async {
     final ok = await confirmDialog('Delete this product?');
     if (!ok) return;
     try {
-      final req =
-          http.MultipartRequest('POST', Uri.parse(endpoint('delete_product.php')));
-      req.fields['id'] = '$id';
-      final res = await req.send();
-      final body = await res.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        products = await loadProductsFromServer();
-        setState(() {});
-        showToast('🗑️ Product deleted');
-      } else {
-        showToast('❌ ${data is Map ? data['message'] ?? 'Failed' : 'Failed'}');
-      }
+      await _db.collection('products').doc(id).delete();
+      products = await loadProductsFromServer();
+      setState(() {});
+      showToast('🗑️ Product deleted');
     } catch (_) {
       showToast('❌ Server error');
     }
   }
 
+  // ---------------- ORDER ACTIONS ----------------
+
   Future<void> updateStatus(String id, String status) async {
     try {
-      final req = http.MultipartRequest(
-        'POST',
-        Uri.parse(endpoint('update_order_status.php')),
-      );
-      req.fields['id'] = id.replaceAll('#', '').trim();
-      req.fields['status'] = status;
       showToast('⏳ Updating status...');
-      final res = await req.send();
-      final body = await res.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        orders = await loadOrdersFromServer();
-        setState(() {});
-        showToast('✅ Status → $status');
-      } else {
-        showToast('❌ ${data is Map ? data['message'] ?? 'Update failed' : 'Update failed'}');
-      }
+      await _db.collection('orders').doc(id).update({'status': status});
+      orders = await loadOrdersFromServer();
+      setState(() {});
+      showToast('✅ Status → $status');
     } catch (_) {
       showToast('❌ Server error while updating status');
     }
   }
+
+  // ---------------- NOTIFICATIONS ----------------
 
   Future<void> sendNotification() async {
     final title = notificationTitle.text.trim();
@@ -616,26 +609,18 @@ class _AdminPageState extends State<AdminPage> {
       return;
     }
     try {
-      final req =
-          http.MultipartRequest('POST', Uri.parse(endpoint('send_notification.php')));
-      req.fields.addAll({
+      showToast('⏳ Sending...');
+      await _db.collection('notifications').add({
         'title': title,
         'message': message,
         'type': notificationType,
+        'created_at': FieldValue.serverTimestamp(),
       });
-      showToast('⏳ Sending...');
-      final res = await req.send();
-      final body = await res.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        notificationTitle.clear();
-        notificationMessage.clear();
-        notificationType = 'general';
-        await loadNotifications();
-        showToast('✅ Notification sent to all customers!');
-      } else {
-        showToast('❌ ${data is Map ? data['message'] ?? 'Failed to send' : 'Failed'}');
-      }
+      notificationTitle.clear();
+      notificationMessage.clear();
+      notificationType = 'general';
+      await loadNotifications();
+      showToast('✅ Notification sent to all customers!');
     } catch (_) {
       showToast('❌ Server error while sending notification');
     }
@@ -645,65 +630,110 @@ class _AdminPageState extends State<AdminPage> {
     final ok = await confirmDialog('Delete this notification?');
     if (!ok) return;
     try {
-      final req =
-          http.MultipartRequest('POST', Uri.parse(endpoint('delete_notification.php')));
-      req.fields['id'] = '$id';
-      final res = await req.send();
-      final body = await res.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        await loadNotifications();
-        showToast('🗑️ Notification deleted');
-      } else {
-        showToast('❌ ${data is Map ? data['message'] ?? 'Failed' : 'Failed'}');
-      }
+      await _db.collection('notifications').doc('$id').delete();
+      await loadNotifications();
+      showToast('🗑️ Notification deleted');
     } catch (_) {
       showToast('❌ Server error');
     }
   }
 
+  // ---------------- GRIEVANCES ----------------
+
   Future<void> markGrievance(dynamic id, String status) async {
     try {
-      final req =
-          http.MultipartRequest('POST', Uri.parse(endpoint('resolve_grievance.php')));
-      req.fields['id'] = '$id';
-      req.fields['status'] = status;
-      final res = await req.send();
-      final body = await res.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        await loadCustomerRequests();
-        showToast('✅ Complaint status → $status');
-      } else {
-        showToast('❌ ${data is Map ? data['message'] ?? 'Failed to update' : 'Failed'}');
-      }
+      await _db
+          .collection('customer_requests')
+          .doc('$id')
+          .update({'status': status});
+      await loadCustomerRequests();
+      showToast('✅ Complaint status → $status');
     } catch (_) {
       showToast('❌ Server error while updating complaint');
     }
+  }
+
+  // ---------------- CLEAR DATA (batched Firestore deletes) ----------------
+
+  Future<void> _deleteAllInQuery(Query<Map<String, dynamic>> query) async {
+    final snap = await query.get();
+    if (snap.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   Future<void> clearData(String target, String message) async {
     final ok = await confirmDialog(message);
     if (!ok) return;
     try {
-      final req =
-          http.MultipartRequest('POST', Uri.parse(endpoint('clear_data.php')));
-      req.fields['target'] = target;
       showToast('⏳ Clearing...');
-      final res = await req.send();
-      final body = await res.stream.bytesToString();
-      final data = jsonDecode(body);
-      if (data is Map && data['status'] == 'success') {
-        await refreshDashboard();
-        await loadContacts();
-        await loadNotifications();
-        await loadCustomerRequests();
-        showToast('🗑️ Cleared successfully');
-      } else {
-        showToast('❌ ${data is Map ? data['message'] ?? 'clear failed' : 'clear failed'}');
+      switch (target) {
+        case 'all_demo_data':
+          await _deleteAllInQuery(_db.collection('orders'));
+          await _deleteAllInQuery(_db.collection('contacts'));
+          break;
+        case 'orders_all':
+          await _deleteAllInQuery(_db.collection('orders'));
+          break;
+        case 'orders_custom':
+          await _deleteAllInQuery(
+            _db.collection('orders').where('source', isEqualTo: 'custom-order'),
+          );
+          break;
+        case 'contacts_boutique':
+          {
+            final snap = await _db.collection('contacts').get();
+            final batch = _db.batch();
+            for (final doc in snap.docs) {
+              if (!isCatering(doc.data())) batch.delete(doc.reference);
+            }
+            await batch.commit();
+          }
+          break;
+        case 'contacts_catering':
+          {
+            final snap = await _db.collection('contacts').get();
+            final batch = _db.batch();
+            for (final doc in snap.docs) {
+              if (isCatering(doc.data())) batch.delete(doc.reference);
+            }
+            await batch.commit();
+          }
+          break;
+        case 'notifications_all':
+          await _deleteAllInQuery(_db.collection('notifications'));
+          break;
+        case 'data_requests_all':
+          await _deleteAllInQuery(
+            _db.collection('customer_requests').where('type', isEqualTo: 'data_export'),
+          );
+          break;
+        case 'grievances_all':
+          await _deleteAllInQuery(
+            _db.collection('customer_requests').where('type', isEqualTo: 'grievance'),
+          );
+          break;
+        case 'deactivated_all':
+          await _deleteAllInQuery(
+            _db.collection('customer_requests').where('type', isEqualTo: 'deactivated'),
+          );
+          break;
+        case 'deleted_accounts_all':
+          await _deleteAllInQuery(
+            _db.collection('customer_requests').where('type', isEqualTo: 'deleted_account'),
+          );
+          break;
       }
-    } catch (_) {
-      showToast('❌ Server error while clearing data');
+      await refreshDashboard();
+      await loadContacts();
+      await loadNotifications();
+      await loadCustomerRequests();
+      showToast('🗑️ Cleared successfully');
+    } catch (e) {
+      showToast('❌ Server error while clearing data: $e');
     }
   }
 
@@ -1412,7 +1442,7 @@ class _AdminPageState extends State<AdminPage> {
                               Expanded(
                                 child: OutlinedButton(
                                   onPressed: () => toggleVisible(
-                                      p['id'] as int, p['visible'] == 'yes' ? 'no' : 'yes'),
+                                      p['id'] as String, p['visible'] == 'yes' ? 'no' : 'yes'),
                                   child: Text(p['visible'] == 'yes' ? '🙈 Hide' : '👁 Show',
                                       style: const TextStyle(fontSize: 11)),
                                 ),
@@ -1421,7 +1451,7 @@ class _AdminPageState extends State<AdminPage> {
                               Expanded(
                                 child: TextButton(
                                   style: TextButton.styleFrom(foregroundColor: danger),
-                                  onPressed: () => deleteProduct(p['id'] as int),
+                                  onPressed: () => deleteProduct(p['id'] as String),
                                   child: const Text('🗑️ Delete', style: TextStyle(fontSize: 11)),
                                 ),
                               ),
