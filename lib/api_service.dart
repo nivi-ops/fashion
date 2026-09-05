@@ -235,33 +235,51 @@ class ApiService {
   /// to customers are returned. Falls back to an empty list on any
   /// error, so the UI's existing "no products" placeholder logic still
   /// applies.
-  static Future<List<Product>> fetchProducts() async {
+    static Future<List<Product>> fetchProducts() async {
     try {
-      final snap = await _db
-          .collection('products')
-          .where('visible', isEqualTo: 'yes')
-          .get();
+      // Fetch ALL products, then filter client-side so both string 'yes'
+      // and boolean true (older/inconsistent entries) count as visible —
+      // matching what the admin panel's own list already shows as
+      // "✅ Visible".
+      final snap = await _db.collection('products').get();
 
-      return snap.docs.map<Product>((doc) {
+      final visibleDocs = snap.docs.where((doc) {
+        final v = doc.data()['visible'];
+        return v == 'yes' || v == true;
+      });
+
+      return visibleDocs.map<Product>((doc) {
         final item = doc.data();
+
+        // Prefer the `photos` list (used by admin_page.dart's upload
+        // flow) and fall back to image_url/photo (used by the older
+        // uploadProduct() below), so any product — old or new — shows
+        // its image correctly.
+        final photos = item['photos'];
+        String image = '';
+        if (photos is List && photos.isNotEmpty) {
+          image = photos.first.toString();
+        } else {
+          image = item['image_url']?.toString() ??
+              item['photo']?.toString() ??
+              '';
+        }
+
         return Product(
           id: int.tryParse(doc.id) ?? doc.id.hashCode,
           name: item['name']?.toString() ?? '',
-          price: double.tryParse(item['price'].toString()) ?? 0,
-          image: item['image_url']?.toString() ??
-              item['photo']?.toString() ??
-              '',
+          price: double.tryParse('${item['price'] ?? 0}') ?? 0,
+          image: image,
           rating: double.tryParse(item['rating']?.toString() ?? '') ?? 4.5,
         );
       }).toList();
-         } catch (e) {
+    } catch (e) {
       // ignore: avoid_print
       print('❌ fetchProducts error: $e');
     }
 
     return [];
   }
-
   // ---------------- STATIC METHODS (used by notifications_page.dart) ----------------
 
   /// Fetches admin-broadcast notifications (matches admin.html broadcast

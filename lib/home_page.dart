@@ -53,8 +53,9 @@ class _HomePageState extends State<HomePage> {
 
   int _heroIndex = 0;
 
-  bool _loadingProducts = true;
+    bool _loadingProducts = true;
   List<Product> _featuredProducts = [];
+  List<Product> _suggestedProducts = [];
 
   // ---------------------------------------------------------------
   // QUICK CATEGORIES
@@ -222,24 +223,38 @@ class _HomePageState extends State<HomePage> {
   // LOAD PRODUCTS
   // ---------------------------------------------------------------
 
-       Future<void> _loadProducts() async {
+        Future<void> _loadProducts() async {
     try {
       final products = await ApiService.fetchProducts();
 
       if (!mounted) return;
 
       setState(() {
-        _featuredProducts = products; // real Firestore data only — no dummy fallback
+        _splitProducts(products);
         _loadingProducts = false;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _featuredProducts = []; // show empty state instead of dummy products
+        _featuredProducts = [];
+        _suggestedProducts = [];
         _loadingProducts = false;
       });
     }
+  }
+
+  /// Splits the fetched products between the two home-page sections so
+  /// the same product never appears twice — first 4 (or fewer) go to the
+  /// "Featured Collection" swipeable row, the rest go to "Suggested For
+  /// You". If there aren't enough products for both, the second section
+  /// simply stays empty instead of repeating items from the first.
+  void _splitProducts(List<Product> products) {
+    const featuredCount = 4;
+    _featuredProducts = products.take(featuredCount).toList();
+    _suggestedProducts = products.length > featuredCount
+        ? products.skip(featuredCount).toList()
+        : [];
   }
 
   // ---------------------------------------------------------------
@@ -1918,13 +1933,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 )
-              : _featuredProducts.isEmpty
+                           : _suggestedProducts.isEmpty
                   ? const SliverToBoxAdapter(
                       child: SizedBox(
                         height: 150,
                         child: Center(
                           child: Text(
-                            'No products yet — check back soon!',
+                            'No more products yet — check back soon!',
                             style: TextStyle(
                               fontSize: 13,
                               color: AppColors.textLight,
@@ -1948,7 +1963,7 @@ class _HomePageState extends State<HomePage> {
                       SliverChildBuilderDelegate(
                     (context, i) {
                       final product =
-                          _featuredProducts[
+                          _suggestedProducts[
                               i];
 
                       return RevealOnScroll(
@@ -1962,7 +1977,7 @@ class _HomePageState extends State<HomePage> {
                       );
                     },
                     childCount:
-                        _featuredProducts
+                        _suggestedProducts
                             .length,
                   ),
                 ),
