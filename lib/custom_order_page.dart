@@ -35,7 +35,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app_colors.dart';
 
 /// TODO: point this to your real submit_forms.php URL.
-const String kSubmitFormsUrl = 'https://YOUR_DOMAIN_HERE/submit_forms.php';
+const String kSubmitFormsUrl = 'https://fashion-production-9a4b.up.railway.app/submit_forms.php';
 
 class CustomOrderPage extends StatefulWidget {
   const CustomOrderPage({super.key});

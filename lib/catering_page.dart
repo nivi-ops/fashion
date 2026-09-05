@@ -2089,17 +2089,18 @@ class _CateringContactTabState
     setState(() => _isSubmitting = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/submit_forms.php'),
-        body: {
-          'form_type': 'catering_contact',
-          'name': _nameCtrl.text.trim(),
-          'phone': _phoneCtrl.text.trim(),
-          'email': _emailCtrl.text.trim(),
-          'service': _service ?? '',
-          'message': _messageCtrl.text.trim(),
-        },
-      );
+       final response = await http.post(
+  Uri.parse('$baseUrl/submit_forms.php'),
+  headers: {'Content-Type': 'application/json'},
+  body: jsonEncode({
+    'type': 'contact',
+    'name': _nameCtrl.text.trim(),
+    'phone': _phoneCtrl.text.trim(),
+    'email': _emailCtrl.text.trim(),
+    'service': _service ?? '',
+    'message': _messageCtrl.text.trim(),
+  }),
+);
 
       final data = jsonDecode(response.body);
 
