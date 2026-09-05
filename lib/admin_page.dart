@@ -29,7 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AdminPage extends StatefulWidget {
   const AdminPage({
     super.key,
-    this.baseUrl = '',
+    this.baseUrl = 'https://fashion-production-9a4b.up.railway.app/admin.html',
   });
 
   /// Example:
@@ -164,6 +164,7 @@ class _AdminPageState extends State<AdminPage> {
       await initDashboard();
     }
   }
+
 
   Future<void> doLogin() async {
     final e = emailController.text.trim();
