@@ -29,7 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AdminPage extends StatefulWidget {
   const AdminPage({
     super.key,
-    this.baseUrl = 'https://fashion-production-9a4b.up.railway.app/admin.html',
+    this.baseUrl = 'https://fashion-production-9a4b.up.railway.app',
   });
 
   /// Example:
