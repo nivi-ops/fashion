@@ -76,49 +76,6 @@ class ApiService {
   // ---------------- MOCK DATA (still used for services/addresses/orders
   // until those flows are wired to Firestore too) ----------------
 
-  static final List<StitchingService> _mockServices = [
-    const StitchingService(
-      id: 's1',
-      name: 'Blouse Stitching',
-      description: 'Custom-fit blouse stitching with your choice of design.',
-      price: 450,
-      imageUrl: 'https://picsum.photos/seed/blouse/400/300',
-      category: 'Blouse',
-    ),
-    const StitchingService(
-      id: 's2',
-      name: 'Saree Fall & Pico',
-      description: 'Neat fall stitching and pico edging for your saree.',
-      price: 150,
-      imageUrl: 'https://picsum.photos/seed/saree/400/300',
-      category: 'Saree',
-    ),
-    const StitchingService(
-      id: 's3',
-      name: 'Suit / Salwar Stitching',
-      description: 'Complete salwar suit stitching, made to measure.',
-      price: 700,
-      imageUrl: 'https://picsum.photos/seed/suit/400/300',
-      category: 'Suit',
-    ),
-    const StitchingService(
-      id: 's4',
-      name: 'Alterations',
-      description: 'Quick alterations for length, fit, and repairs.',
-      price: 200,
-      imageUrl: 'https://picsum.photos/seed/alter/400/300',
-      category: 'Alteration',
-    ),
-    const StitchingService(
-      id: 's5',
-      name: 'Custom Design Stitching',
-      description: 'Bring your own design or reference photo to life.',
-      price: 1200,
-      imageUrl: 'https://picsum.photos/seed/custom/400/300',
-      category: 'Custom',
-    ),
-  ];
-
   static final List<ShopAddress> _mockAddresses = [
     const ShopAddress(
       id: 'a1',
@@ -150,16 +107,78 @@ class ApiService {
 
   // ---------------- INSTANCE METHODS (used by shop_page.dart) ----------------
 
-  Future<List<StitchingService>> getServices({String? category}) async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (category == null || category == 'All') return _mockServices;
-    return _mockServices.where((s) => s.category == category).toList();
+    Future<List<StitchingService>> getServices({String? category}) async {
+    try {
+      final snap = await _db.collection('products').get();
+
+      final visibleDocs = snap.docs.where((doc) {
+        final v = doc.data()['visible'];
+        return v == 'yes' || v == true;
+      });
+
+      var services = visibleDocs.map<StitchingService>((doc) {
+        final item = doc.data();
+
+        final photos = item['photos'];
+        String image = '';
+        if (photos is List && photos.isNotEmpty) {
+          image = photos.first.toString();
+        } else {
+          image = item['image_url']?.toString() ??
+              item['photo']?.toString() ??
+              '';
+        }
+
+        return StitchingService(
+          id: doc.id,
+          name: item['name']?.toString() ?? '',
+          description: item['description']?.toString() ?? '',
+          price: double.tryParse('${item['price'] ?? 0}') ?? 0,
+          imageUrl: image,
+          category: item['category']?.toString() ??
+              item['cat']?.toString() ??
+              'Other',
+        );
+      }).toList();
+
+      if (category != null && category != 'All') {
+        services = services.where((s) => s.category == category).toList();
+      }
+
+      return services;
+    } catch (e) {
+      // ignore: avoid_print
+      print('❌ getServices error: $e');
+      return [];
+    }
   }
 
-  Future<StitchingService?> getServiceById(String id) async {
-    await Future.delayed(const Duration(milliseconds: 300));
+     Future<StitchingService?> getServiceById(String id) async {
     try {
-      return _mockServices.firstWhere((s) => s.id == id);
+      final doc = await _db.collection('products').doc(id).get();
+      if (!doc.exists) return null;
+      final item = doc.data()!;
+
+      final photos = item['photos'];
+      String image = '';
+      if (photos is List && photos.isNotEmpty) {
+        image = photos.first.toString();
+      } else {
+        image = item['image_url']?.toString() ??
+            item['photo']?.toString() ??
+            '';
+      }
+
+      return StitchingService(
+        id: doc.id,
+        name: item['name']?.toString() ?? '',
+        description: item['description']?.toString() ?? '',
+        price: double.tryParse('${item['price'] ?? 0}') ?? 0,
+        imageUrl: image,
+        category: item['category']?.toString() ??
+            item['cat']?.toString() ??
+            'Other',
+      );
     } catch (_) {
       return null;
     }
