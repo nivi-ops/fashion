@@ -508,7 +508,7 @@ class _AdminPageState extends State<AdminPage> {
       // 2) A pasted image link (free — no Storage/billing needed).
       final List<String> photoUrls = [];
 
-      for (final photo in uploadedPhotos) {
+            for (final photo in uploadedPhotos) {
         try {
           final bytes = await photo.readAsBytes();
           final ref = FirebaseStorage.instance.ref(
@@ -517,8 +517,8 @@ class _AdminPageState extends State<AdminPage> {
           await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
           photoUrls.add(await ref.getDownloadURL());
         } catch (e) {
-          // Storage may not be enabled (Spark/free plan) — skip silently
-          // so a pasted link can still be used instead.
+          debugPrint('❌ Firebase Storage upload failed: $e');
+          showToast('❌ Image upload failed: $e');
         }
       }
 
