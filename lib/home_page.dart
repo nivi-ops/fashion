@@ -1771,64 +1771,40 @@ class _HomePageState extends State<HomePage> {
   // PRODUCT IMAGE
   // ===============================================================
 
+  /// Renders the product's image with a safe fallback path:
+  /// - empty/blank image field -> fallback icon immediately, no
+  ///   network request attempted at all (fixes the case where an
+  ///   empty URL used to leave the spinner spinning forever).
+  /// - network image -> shows a spinner while loading, but if the
+  ///   request errors OR just never finishes within 8 seconds
+  ///   (bad Storage permissions, dead link, etc.) it falls back to
+  ///   the same fallback icon instead of spinning indefinitely.
+  /// - local asset -> falls back to the icon if the asset is missing.
   Widget _productImage(
     Product product, {
     double? height,
   }) {
-    if (product.isNetworkImage) {
-      return Image.network(
-        product.image,
-        width:
-            double.infinity,
-        height: height,
-        fit: BoxFit.cover,
-        alignment:
-            Alignment.topCenter,
-        loadingBuilder:
-            (
-          context,
-          child,
-          progress,
-        ) {
-          if (progress == null) {
-            return child;
-          }
+    final img = product.image.trim();
 
-          return Container(
-            height: height,
-            color:
-                AppColors.gray,
-            child:
-                const Center(
-              child:
-                  CircularProgressIndicator(
-                strokeWidth: 2,
-              ),
-            ),
-          );
-        },
-        errorBuilder:
-            (_, __, ___) {
-          return _imageError(
-            height,
-          );
-        },
+    if (img.isEmpty) {
+      return _imageError(height);
+    }
+
+    if (product.isNetworkImage) {
+      return _TimedNetworkImage(
+        url: img,
+        height: height,
       );
     }
 
     return Image.asset(
-      product.image,
-      width:
-          double.infinity,
+      img,
+      width: double.infinity,
       height: height,
       fit: BoxFit.cover,
-      alignment:
-          Alignment.topCenter,
-      errorBuilder:
-          (_, __, ___) {
-        return _imageError(
-          height,
-        );
+      alignment: Alignment.topCenter,
+      errorBuilder: (_, __, ___) {
+        return _imageError(height);
       },
     );
   }
@@ -2283,6 +2259,103 @@ class _NavItem {
     this.icon,
     this.onTap,
   );
+}
+
+// ===============================================================
+// TIMED NETWORK IMAGE
+//
+// Wraps Image.network with an 8-second safety timeout. Without this,
+// a product photo whose URL is unreachable, blocked by Storage
+// permission rules, or simply never responds would leave the
+// CircularProgressIndicator spinning forever, since Image.network's
+// errorBuilder only fires on an actual load *error* — not on a
+// request that just never completes.
+// ===============================================================
+
+class _TimedNetworkImage extends StatefulWidget {
+  final String url;
+  final double? height;
+
+  const _TimedNetworkImage({
+    required this.url,
+    this.height,
+  });
+
+  @override
+  State<_TimedNetworkImage> createState() =>
+      _TimedNetworkImageState();
+}
+
+class _TimedNetworkImageState
+    extends State<_TimedNetworkImage> {
+  bool _timedOut = false;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(const Duration(seconds: 8), () {
+      if (mounted && !_timedOut) {
+        setState(() => _timedOut = true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _cancelTimer() {
+    _timer?.cancel();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_timedOut) {
+      return _errorPlaceholder();
+    }
+
+    return Image.network(
+      widget.url,
+      width: double.infinity,
+      height: widget.height,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) {
+          // Loaded successfully — no need for the timeout anymore.
+          _cancelTimer();
+          return child;
+        }
+        return Container(
+          height: widget.height,
+          color: AppColors.gray,
+          child: const Center(
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      errorBuilder: (_, __, ___) {
+        _cancelTimer();
+        return _errorPlaceholder();
+      },
+    );
+  }
+
+  Widget _errorPlaceholder() {
+    return Container(
+      height: widget.height,
+      color: AppColors.gray,
+      child: const Center(
+        child: Icon(
+          Icons.image_not_supported,
+          color: AppColors.textLight,
+        ),
+      ),
+    );
+  }
 }
 
 // ===============================================================
