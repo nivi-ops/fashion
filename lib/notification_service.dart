@@ -1,5 +1,6 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
 /// ---------------------------------------------------------------------
@@ -16,6 +17,13 @@ import 'api_service.dart';
 ///   admin broadcast notifications show a local notification. Requires
 ///   the backend to send `"data": {"type": "order"}` (or similar) on
 ///   order-confirmation pushes so this can tell them apart.
+/// - Subscribing/unsubscribing this device to FCM TOPICS that match the
+///   toggles on the Settings > Notification Settings screen, so a push
+///   the admin sends only reaches devices that opted in to that type.
+///   This pairs with a Cloud Function (see functions/index.js) that
+///   listens for new docs in the `notifications` Firestore collection
+///   and actually sends the push to the matching topic — writing the
+///   Firestore doc alone does NOT deliver a push without that function.
 /// ---------------------------------------------------------------------
 
 /// Must be a TOP-LEVEL function (not inside a class) — this is required
@@ -25,9 +33,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // No need to manually show a notification here — FCM automatically
   // displays a system tray notification when the app is in the
   // background/terminated AND the push payload has a "notification" block
-  // (which our PHP script sends). This handler is just for any extra data
-  // processing you want to do (e.g. updating local storage) while the
-  // app is not open.
+  // (which our Cloud Function sends). This handler is just for any extra
+  // data processing you want to do (e.g. updating local storage) while
+  // the app is not open.
 }
 
 class NotificationService {
@@ -43,6 +51,16 @@ class NotificationService {
     description: 'Order status updates, offers and admin announcements.',
     importance: Importance.high,
   );
+
+  // FCM topic names — must match the TOPIC_MAP used in the Cloud
+  // Function (functions/index.js) and the keys saved by SettingsPage's
+  // notification toggles (notif_order / notif_promo / notif_class).
+  static const String topicOrder = 'order_updates';
+  static const String topicPromo = 'promotions';
+  static const String topicClass = 'class_reminders';
+  // Every device stays subscribed to this one regardless of the toggles
+  // — general admin announcements aren't optional, same as most apps.
+  static const String topicGeneral = 'general_announcements';
 
   bool _initialized = false;
 
@@ -72,13 +90,19 @@ class NotificationService {
     //    Allow/Block popup appear on first app open, like other apps.
     await requestPermissionAndRegister();
 
-    // 4. Foreground listener — show a system tray notification manually
+    // 4. Make sure this device's topic subscriptions match whatever the
+    //    user last chose on the Notification Settings screen (defaults:
+    //    order = on, promo = on, class = off), plus the always-on
+    //    general topic.
+    await syncTopicSubscriptions();
+
+    // 5. Foreground listener — show a system tray notification manually
     //    when a push arrives while the app is open. Skips order-related
     //    pushes; only admin broadcasts should show here.
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       // Only show a local notification for admin broadcasts, not order
-      // events. Backend must send "data": {"type": "order"} on
-      // order-confirmation pushes for this filter to catch them.
+      // events. The Cloud Function sends "data": {"type": "order"} on
+      // order-status pushes for this filter to catch them.
       if (message.data['type'] == 'order') return;
 
       final notification = message.notification;
@@ -104,7 +128,7 @@ class NotificationService {
 
   /// Asks for OS permission (shows native Allow/Block popup the first
   /// time) and, if granted, fetches the FCM token and saves it to the
-  /// PHP backend so the admin dashboard can send this device a push.
+  /// backend so the admin dashboard can send this device a push.
   Future<void> requestPermissionAndRegister() async {
     final messaging = FirebaseMessaging.instance;
 
@@ -129,5 +153,38 @@ class NotificationService {
     messaging.onTokenRefresh.listen((newToken) {
       ApiService.saveFcmToken(newToken);
     });
+  }
+
+  /// Reads the saved notification preferences (same SharedPreferences
+  /// keys the Settings screen writes: notif_order / notif_promo /
+  /// notif_class) and subscribes/unsubscribes this device's FCM topics
+  /// to match. Safe to call anytime — subscribe/unsubscribe are both
+  /// idempotent on the FCM side.
+  Future<void> syncTopicSubscriptions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final order = prefs.getBool('notif_order') ?? true;
+    final promo = prefs.getBool('notif_promo') ?? true;
+    final classReminders = prefs.getBool('notif_class') ?? false;
+
+    await setTopicSubscription(topicOrder, order);
+    await setTopicSubscription(topicPromo, promo);
+    await setTopicSubscription(topicClass, classReminders);
+    await setTopicSubscription(topicGeneral, true);
+  }
+
+  /// Subscribes or unsubscribes this device to/from a single FCM topic.
+  /// Call this right when a toggle on the Settings screen changes, so
+  /// the change takes effect immediately (no app restart needed).
+  Future<void> setTopicSubscription(String topic, bool subscribed) async {
+    try {
+      if (subscribed) {
+        await FirebaseMessaging.instance.subscribeToTopic(topic);
+      } else {
+        await FirebaseMessaging.instance.unsubscribeFromTopic(topic);
+      }
+    } catch (e) {
+      // Non-fatal — worst case this device misses/over-receives one
+      // category of push until the next sync. Don't crash the UI over it.
+    }
   }
 }

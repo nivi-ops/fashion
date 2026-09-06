@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
 import 'admin_page.dart';
-
+import 'app_state.dart';
+import 'login_page.dart';
+import 'shop_page.dart';
+import 'notification_service.dart';
 /// ---------------------------------------------------------------------
 /// MODELS
 /// ---------------------------------------------------------------------
@@ -93,7 +98,9 @@ class _SettingsPageState extends State<SettingsPage> {
   final _emailCtrl = TextEditingController();
   final _mobileCtrl = TextEditingController();
 
-  // Notification toggles
+  // Notification toggles (persisted locally via SharedPreferences —
+  // see _loadNotifPrefs / _setNotifPref for the backend/FCM TODOs
+  // needed to actually deliver a push when admin sends one).
   bool _notifOrder = true;
   bool _notifPromo = true;
   bool _notifClass = false;
@@ -102,13 +109,11 @@ class _SettingsPageState extends State<SettingsPage> {
   // bool _consentMarketing = true;
   // bool _consentLocation = false;
 
-  // Orders
+  // Orders — starts empty. Real orders should be loaded from your
+  // backend in _loadOrders() (see TODO there); no sample/dummy data.
   bool _loadingOrders = false;
   String _orderFilter = 'all';
-  final List<MyOrder> _orders = [
-    MyOrder(id: 'SS2026-1001', product: 'Bridal Blouse (Aari Work)', amount: 1800, status: 'Processing'),
-    MyOrder(id: 'SS2026-1002', product: 'Salwar Suit', amount: 800, status: 'Delivered'),
-  ];
+  final List<MyOrder> _orders = [];
 
   // Addresses
   final List<SavedAddress> _addresses = [
@@ -130,6 +135,10 @@ class _SettingsPageState extends State<SettingsPage> {
   // Delete account confirm
   final _deleteConfirmCtrl = TextEditingController();
   final _deactivateReasonCtrl = TextEditingController();
+
+  // Contact details used by Help Center's Call Us / Mail Us buttons.
+  static const String _supportPhone = '+918610703658';
+  static const String _supportEmail = 'sumathisstyle@gmail.com';
 
   final List<Map<String, String>> _faqData = const [
     {
@@ -155,15 +164,17 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
   final Set<int> _openFaq = {};
 
-  @override
+    @override
   void initState() {
     super.initState();
-    _user = widget.user ?? AppUser();
-    _syncControllersFromUser();
+    AppState.instance.addListener(_onAppStateChanged);
+    _syncFromAppState();
+    _loadNotifPrefs();
   }
 
   @override
   void dispose() {
+    AppState.instance.removeListener(_onAppStateChanged);
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
     _emailCtrl.dispose();
@@ -181,6 +192,24 @@ class _SettingsPageState extends State<SettingsPage> {
     super.dispose();
   }
 
+  void _onAppStateChanged() {
+    if (!mounted) return;
+    setState(_syncFromAppState);
+  }
+
+  void _syncFromAppState() {
+    final state = AppState.instance;
+    if (state.isLoggedIn) {
+      _user = AppUser(
+        name: state.userName ?? '',
+        phone: state.userId ?? '',
+        email: _user.email,
+      );
+    } else {
+      _user = AppUser();
+    }
+    _syncControllersFromUser();
+  }
   void _syncControllersFromUser() {
     final parts = _user.name.split(' ');
     _firstNameCtrl.text = parts.isNotEmpty ? parts.first : '';
@@ -195,8 +224,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadOrders() async {
-    // TODO: replace with real API call, e.g.
-    // fetch('get_submissions.php?type=orders') filtered by this._user.phone
+    // TODO: replace with a real API call, e.g.
+    // fetch('get_submissions.php?type=orders') filtered by this._user.phone,
+    // then setState(() { _orders..clear()..addAll(realOrders); }).
+    // Until that's wired up, this stays empty — no sample/dummy orders.
+    if (!_user.isLoggedIn) return;
     setState(() => _loadingOrders = true);
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
@@ -212,6 +244,62 @@ class _SettingsPageState extends State<SettingsPage> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  // ---------------------------------------------------------------
+  // NOTIFICATION PREFS (local persistence)
+  // ---------------------------------------------------------------
+  Future<void> _loadNotifPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _notifOrder = prefs.getBool('notif_order') ?? true;
+      _notifPromo = prefs.getBool('notif_promo') ?? true;
+      _notifClass = prefs.getBool('notif_class') ?? false;
+    });
+  }
+
+  // Maps the SharedPreferences key used by each toggle to the matching
+  // FCM topic name (kept in one place in NotificationService so the
+  // Cloud Function and this screen never drift apart).
+  static const Map<String, String> _notifTopicByKey = {
+    'notif_order': NotificationService.topicOrder,
+    'notif_promo': NotificationService.topicPromo,
+    'notif_class': NotificationService.topicClass,
+  };
+
+  Future<void> _setNotifPref(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+
+    // Subscribe/unsubscribe this device's FCM topic right away, so the
+    // change takes effect immediately — no app restart needed. Once the
+    // Cloud Function in functions/index.js is deployed, admin broadcasts
+    // of that type will now reach (or stop reaching) this device.
+    final topic = _notifTopicByKey[key];
+    if (topic != null) {
+      await NotificationService.instance.setTopicSubscription(topic, value);
+    }
+  }
+
+  Future<void> _callUs() async {
+    final uri = Uri(scheme: 'tel', path: _supportPhone);
+    final ok = await launchUrl(uri);
+    if (!ok && mounted) {
+      _showToast('Could not open the dialer', error: true);
+    }
+  }
+
+  Future<void> _mailUs() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _supportEmail,
+      query: 'subject=${Uri.encodeComponent("Query from Sumathi's Style App")}',
+    );
+    final ok = await launchUrl(uri);
+    if (!ok && mounted) {
+      _showToast('Could not open a mail app', error: true);
+    }
   }
 
   @override
@@ -375,9 +463,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
               ),
-              if (!_user.isLoggedIn)
+                             if (!_user.isLoggedIn)
                 ElevatedButton(
-                  onPressed: widget.onLoginRequested,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.secondary,
                     foregroundColor: AppColors.dark,
@@ -390,7 +483,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 18),
 
-        // Quick action grid
+        // Quick action grid — icons/labels centered in each cell.
         GridView.count(
           crossAxisCount: 4,
           shrinkWrap: true,
@@ -425,9 +518,16 @@ class _SettingsPageState extends State<SettingsPage> {
           _menuRow(Icons.help_outline, 'Browse FAQs', () => _openPanel(_Panel.faq)),
         ]),
 
-        // Hidden Admin Panel entry: long-press the small button to open
-        // the separate AdminPage. It stays subtle so regular customers
-        // do not accidentally open the admin dashboard.
+        // Logout sits directly under Browse FAQs, and the Admin Panel
+        // entry point sits right below Logout.
+        if (_user.isLoggedIn)
+          _menuCard(null, [
+            _menuRow(Icons.logout, 'Log Out', _doLogout, iconColor: AppColors.danger, labelColor: AppColors.danger),
+          ]),
+
+        // Admin Panel entry: tap to open the separate AdminPage. Kept
+        // subtle so regular customers don't accidentally open it, but
+        // it now lives right after Logout as requested.
         Center(
           child: GestureDetector(
             onTap: () {
@@ -454,12 +554,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         ),
-
-        // Logout
-        if (_user.isLoggedIn)
-          _menuCard(null, [
-            _menuRow(Icons.logout, 'Log Out', _doLogout, iconColor: AppColors.danger, labelColor: AppColors.danger),
-          ]),
       ],
     );
   }
@@ -475,8 +569,11 @@ class _SettingsPageState extends State<SettingsPage> {
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
         ),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        alignment: Alignment.center,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: iconColor, size: 20),
             const SizedBox(height: 6),
@@ -535,7 +632,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _doLogout() async {
+    void _doLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -547,12 +644,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
     if (confirmed != true) return;
-    setState(() {
-      _user = AppUser();
-      _syncControllersFromUser();
-    });
-    widget.onUserChanged?.call(null);
-    widget.onLogout?.call();
+    AppState.instance.logout();
     _showToast('Logged out!');
     _openPanel(_Panel.home);
   }
@@ -752,12 +844,15 @@ class _SettingsPageState extends State<SettingsPage> {
             padding: EdgeInsets.symmetric(vertical: 40),
             child: Center(child: CircularProgressIndicator()),
           )
-        else if (!_user.isLoggedIn)
-          _emptyState(Icons.inventory_2_outlined, 'Login required', 'Login to see your orders', 'Login',
-              widget.onLoginRequested)
+         else if (!_user.isLoggedIn)
+  _emptyState(Icons.inventory_2_outlined, 'Login required', 'Login to see your orders', 'Login', () {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+  })
         else if (filtered.isEmpty)
           _emptyState(Icons.inventory_2_outlined, 'No orders yet', 'Start shopping to see your orders here!',
-              'Shop Now', null)
+              'Shop Now', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
+          })
         else
           ...filtered.map(_orderCard),
       ],
@@ -939,7 +1034,9 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         _panelHeader('My Wishlist', Icons.favorite, back: _Panel.home),
         _emptyState(Icons.heart_broken_outlined, 'Your wishlist is empty', 'Save your favourite products here!',
-            'Explore Shop', null),
+    'Explore Shop', () {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
+    }),
       ],
     );
   }
@@ -1206,16 +1303,28 @@ class _SettingsPageState extends State<SettingsPage> {
         _card(
           child: Column(
             children: [
-              _toggleRow('Order Updates', 'Get notified about order status', _notifOrder,
-                  (v) => setState(() => _notifOrder = v)),
+              _toggleRow('Order Updates', 'Get notified about order status', _notifOrder, (v) {
+                setState(() => _notifOrder = v);
+                _setNotifPref('notif_order', v);
+              }),
               const Divider(height: 26),
-              _toggleRow('Promotions', 'Receive offers and discounts', _notifPromo,
-                  (v) => setState(() => _notifPromo = v)),
+              _toggleRow('Promotions', 'Receive offers and discounts', _notifPromo, (v) {
+                setState(() => _notifPromo = v);
+                _setNotifPref('notif_promo', v);
+              }),
               const Divider(height: 26),
-              _toggleRow('Class Reminders', 'Reminders for enrolled classes', _notifClass,
-                  (v) => setState(() => _notifClass = v)),
+              _toggleRow('Class Reminders', 'Reminders for enrolled classes', _notifClass, (v) {
+                setState(() => _notifClass = v);
+                _setNotifPref('notif_class', v);
+              }),
             ],
           ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'These switches control which admin announcements this device '
+          'receives as a push notification, in real time.',
+          style: TextStyle(fontSize: 11.5, color: AppColors.textLight, height: 1.5),
         ),
       ],
     );
@@ -1667,18 +1776,14 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
-                onPressed: () {
-                  // TODO: launch tel: URL via url_launcher package
-                },
+                onPressed: _callUs,
                 style: _saveBtnStyle().copyWith(minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 46))),
                 icon: const Icon(Icons.call, size: 16),
                 label: const Text('Call Us'),
               ),
               const SizedBox(height: 10),
               ElevatedButton.icon(
-                onPressed: () {
-                  // TODO: launch mailto: URL via url_launcher package
-                },
+                onPressed: _mailUs,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.secondary,
                   foregroundColor: AppColors.dark,
@@ -1705,6 +1810,8 @@ class _SettingsPageState extends State<SettingsPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 50),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, size: 56, color: const Color(0xFFDDDDDD)),
           const SizedBox(height: 14),

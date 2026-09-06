@@ -5,6 +5,8 @@ import 'register_page.dart';
 import 'home_page.dart';
 import 'otp_verify_page.dart';
 import 'forgot_password_page.dart';
+import 'app_state.dart';
+
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,6 +18,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
 
+  final nameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
@@ -34,6 +37,14 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _completeLogin() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLoggedIn', true);
+
+    // Save both name + identifier into AppState so Settings page +
+    // Home page can show the real logged-in name (not just the
+    // email/phone that was typed in).
+    final name = nameController.text.trim();
+    final identifier = emailController.text.trim();
+    await prefs.setString('userName', name);
+    AppState.instance.login(userId: identifier, userName: name);
 
     if (!mounted) return;
 
@@ -68,6 +79,7 @@ class _LoginPageState extends State<LoginPage> {
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -115,6 +127,35 @@ class _LoginPageState extends State<LoginPage> {
                         ),
 
                         const SizedBox(height: 20),
+
+                        TextFormField(
+                          controller: nameController,
+                          keyboardType: TextInputType.name,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            prefixIcon: Icon(Icons.person_outline, color: gold),
+                            hintText: "Your Name",
+                            hintStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.white.withValues(alpha: 0.06),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              borderSide: BorderSide(color: teal, width: 2),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return "Please enter your name";
+                            }
+                            return null;
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
 
                         TextFormField(
                           controller: emailController,
@@ -303,6 +344,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    nameController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
