@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -7,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 /// Flutter conversion of the supplied "Sumathi's Styles – Admin Dashboard".
 /// The login screen matches admin.html: black top bar ("Admin Login"),
@@ -32,6 +34,7 @@ import 'package:url_launcher/url_launcher.dart';
 ///   firebase_storage: ^12.3.2
 ///   image_picker: ^1.1.2
 ///   shared_preferences: ^2.5.5
+///   audioplayers: ^6.1.0
 ///
 /// Put this file at: lib/admin_page.dart
 
@@ -68,6 +71,16 @@ class _AdminPageState extends State<AdminPage> {
   final ImagePicker picker = ImagePicker();
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ---------------- Voice-note playback (admin side) ----------------
+  // Orders coming from the customer app store the recorded voice note as a
+  // Base64 string in Firestore (field `voice_note_base64`), NOT as a URL —
+  // so it must be decoded and played from memory, not opened with
+  // url_launcher. `_playingOrderId` tracks which row's audio is currently
+  // playing so the Play/Pause icon updates for the right row only.
+  final AudioPlayer _voicePlayer = AudioPlayer();
+  String? _playingOrderId;
+  bool _voiceLoading = false;
 
   bool loggedIn = false;
   bool loading = false;
@@ -125,6 +138,12 @@ class _AdminPageState extends State<AdminPage> {
   void initState() {
     super.initState();
     _restoreLogin();
+    // Reset the playing-row indicator once a voice note finishes so the
+    // icon flips back from "pause" to "play" automatically.
+    _voicePlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() => _playingOrderId = null);
+    });
   }
 
   @override
@@ -151,6 +170,7 @@ class _AdminPageState extends State<AdminPage> {
     }
     for (final c in highlightControllers) c.dispose();
     for (final c in priceTagControllers) c.dispose();
+    _voicePlayer.dispose();
     super.dispose();
   }
 
@@ -231,7 +251,11 @@ class _AdminPageState extends State<AdminPage> {
               : '',
           'source': m['source'] ?? 'website',
           'measurement': m['measurement'] ?? '',
-          'voiceNote': m['voice_note'] ?? '',
+          // The customer app now stores the recorded voice note as a
+          // Base64 string under `voice_note_base64`. Older records (or a
+          // different source) may still have a plain URL under
+          // `voice_note`, so fall back to that if present.
+          'voiceNote': m['voice_note_base64'] ?? m['voice_note'] ?? '',
           'notes': m['notes'] ?? '',
           'cancelReason': m['cancel_reason'] ?? '',
           'paymentMethod': m['payment_method'] ?? 'N/A',
@@ -493,6 +517,65 @@ class _AdminPageState extends State<AdminPage> {
       return 'https://drive.google.com/uc?export=view&id=${m2.group(1)}';
     }
     return url;
+  }
+
+  // ---------------- VOICE NOTE PLAYBACK HELPER ----------------
+
+  /// Plays (or pauses) a voice note stored as a Base64 string, straight
+  /// from memory — no temp file, no URL needed. Tapping the same row's
+  /// button again stops playback; tapping a different row stops whatever
+  /// was playing and starts the new one.
+  Future<void> _toggleVoicePlayback(String orderId, String base64Data) async {
+    if (base64Data.trim().isEmpty) {
+      showToast('⚠️ No voice note for this order');
+      return;
+    }
+
+    if (_playingOrderId == orderId) {
+      await _voicePlayer.stop();
+      if (mounted) setState(() => _playingOrderId = null);
+      return;
+    }
+
+    try {
+      setState(() => _voiceLoading = true);
+      await _voicePlayer.stop();
+      final bytes = Uint8List.fromList(base64Decode(base64Data));
+      await _voicePlayer.play(BytesSource(bytes));
+      if (!mounted) return;
+      setState(() {
+        _playingOrderId = orderId;
+        _voiceLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _playingOrderId = null;
+        _voiceLoading = false;
+      });
+      showToast('❌ Could not play voice note: $e');
+    }
+  }
+
+  /// Small reusable Play/Pause button for a Voice Note table cell.
+  Widget voiceNoteButton(String orderId, String base64Data) {
+    if (base64Data.trim().isEmpty) {
+      return Text('—', style: TextStyle(color: muted));
+    }
+    final isThisPlaying = _playingOrderId == orderId;
+    return TextButton.icon(
+      onPressed: () => _toggleVoicePlayback(orderId, base64Data),
+      icon: (isThisPlaying && _voiceLoading)
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(isThisPlaying ? Icons.pause_circle : Icons.play_circle,
+              size: 18, color: teal),
+      label: Text(isThisPlaying ? 'Pause' : 'Play',
+          style: const TextStyle(fontSize: 12)),
+    );
   }
 
   // ---------------- PRODUCT UPLOAD (Firestore + Storage) ----------------
@@ -1576,17 +1659,9 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(Text('${o['paymentMethod']}\n${o['paymentStatus']}')),
                   DataCell(Text('${o['measurement'] ?? '—'}')),
                   DataCell(Text('${o['notes'] ?? '—'}')),
-                                    DataCell(
-                    ('${o['voiceNote'] ?? ''}').isNotEmpty
-                        ? TextButton(
-                            onPressed: () => launchUrl(
-                              Uri.parse('${o['voiceNote']}'),
-                              mode: LaunchMode.externalApplication,
-                            ),
-                            child: const Text('▶️ Play'),
-                          )
-                        : const Text('—'),
-                  ),
+                  // Voice note is stored as Base64 audio, not a URL — play
+                  // it in-place from memory instead of trying to launch it.
+                  DataCell(voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}')),
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
                   DataCell(
@@ -1699,7 +1774,9 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(Text('${o['product']}')),
                   DataCell(Text('${o['measurement'] ?? '—'}')),
                   DataCell(Text('${o['notes'] ?? '—'}')),
-                  DataCell(Text('${o['voiceNote'] ?? '—'}')),
+                  // Was showing the raw Base64 text before — now a proper
+                  // Play/Pause button, same as the main Orders table.
+                  DataCell(voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}')),
                   DataCell(Text('${o['date']}')),
                   DataCell(TextButton(onPressed: () => openWhatsApp('${o['mobile']}', '${o['name']}'), child: const Text('💬'))),
                 ])).toList(),
