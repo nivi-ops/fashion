@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'app_colors.dart';
 import 'app_state.dart';
@@ -67,9 +68,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _addressCtrl = TextEditingController();
   final TextEditingController _pincodeCtrl = TextEditingController();
 
-  PaymentMethod _payment = PaymentMethod.upi;
+    PaymentMethod _payment = PaymentMethod.upi;
 
   bool _placingOrder = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = AppState.instance;
+    if (state.isLoggedIn) {
+      _nameCtrl.text = state.userName ?? '';
+      _phoneCtrl.text = state.userId ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -181,34 +192,45 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    setState(() {
+         setState(() {
       _placingOrder = true;
     });
 
     // Store total before changing cart state.
     final double orderTotal = _total;
+    final phone = _phoneCtrl.text.trim();
+    final year = DateTime.now().year;
 
     try {
-      // ---------------------------------------------------------------
-      // TODO:
-      // Replace this delay with your real backend/API order request.
-      //
-      // Example:
-      //
-      // await ApiService.placeOrder(
-      //   name: _nameCtrl.text.trim(),
-      //   phone: _phoneCtrl.text.trim(),
-      //   address: _addressCtrl.text.trim(),
-      //   pincode: _pincodeCtrl.text.trim(),
-      //   paymentMethod: _payment.name,
-      //   items: widget.items,
-      //   total: orderTotal,
-      // );
-      // ---------------------------------------------------------------
+      final db = FirebaseFirestore.instance;
 
-      await Future.delayed(
-        const Duration(milliseconds: 900),
-      );
+      // Count this year's orders so far to build the sequence number:
+      // SS<year><3-digit sequence><last 3 digits of mobile>
+      final yearStart = DateTime(year, 1, 1);
+      final snap = await db
+          .collection('orders')
+          .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart))
+          .get();
+      final sequence = (snap.docs.length + 1).toString().padLeft(3, '0');
+      final last3 = phone.length >= 3 ? phone.substring(phone.length - 3) : phone;
+      final orderId = 'SS$year$sequence$last3';
+
+      final productNames = widget.items.map((p) => p.name).join(', ');
+
+      await db.collection('orders').add({
+        'order_id': orderId,
+        'name': _nameCtrl.text.trim(),
+        'mobile': phone,
+        'address': _addressCtrl.text.trim(),
+        'pincode': _pincodeCtrl.text.trim(),
+        'product': productNames,
+        'amount': orderTotal,
+        'status': 'Ordered',
+        'source': 'website',
+        'payment_method': _payment == PaymentMethod.upi ? 'UPI' : 'COD',
+        'payment_status': _payment == PaymentMethod.upi ? 'Paid' : 'Not Required',
+        'created_at': FieldValue.serverTimestamp(),
+      });
 
       final state = AppState.instance;
 
@@ -268,15 +290,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
         _placingOrder = false;
       });
 
-      _showMessage(
-        'Something went wrong. Please try again.',
+                 _showMessage(
+        'Something went wrong: $e',
       );
     }
   }
 
   // -------------------------------------------------------------------
   // MESSAGE
-  // -------------------------------------------------------------------
+  // ------------------------------------------------------------------- -----------------------------------------------------------------
 
   void _showMessage(String message) {
     if (!mounted) {

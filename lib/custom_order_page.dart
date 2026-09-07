@@ -272,8 +272,11 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
         SettableMetadata(contentType: 'audio/m4a'),
       );
       return await ref.getDownloadURL();
-    } catch (e) {
-      // Upload failed — order will still submit, just without the voice note.
+         } catch (e) {
+      debugPrint('❌ Voice note upload failed: $e');
+      if (mounted) {
+        _showSnack('Voice note upload failed: $e', isError: true);
+      }
       return '';
     }
   }
@@ -311,9 +314,16 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
         await _audioPlayer.stop();
       }
 
-      final voiceNoteUrl = await _uploadVoiceNote();
+            final voiceNoteUrl = await _uploadVoiceNote();
 
-      await FirebaseFirestore.instance.collection('orders').add({
+      final db = FirebaseFirestore.instance;
+
+      // Simple running sequence number across ALL orders — 1, 2, 3...
+      final snap = await db.collection('orders').get();
+      final orderNumber = snap.docs.length + 1;
+
+      await db.collection('orders').add({
+        'order_id': '$orderNumber',
         'name': _nameController.text.trim(),
         'mobile': _phoneController.text.trim(),
         'product': _orderType,
@@ -341,8 +351,8 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
       _notesController.clear();
       _discardRecording();
       setState(() => _orderType = null);
-    } catch (e) {
-      _showSnack('Unable to save custom order right now', isError: true);
+         } catch (e) {
+      _showSnack('Unable to save custom order right now: $e', isError: true);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

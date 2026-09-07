@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'login_page.dart';
 import 'shop_page.dart';
 import 'notification_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 /// ---------------------------------------------------------------------
 /// MODELS
 /// ---------------------------------------------------------------------
@@ -223,16 +224,34 @@ class _SettingsPageState extends State<SettingsPage> {
     if (p == _Panel.orders) _loadOrders();
   }
 
-  Future<void> _loadOrders() async {
-    // TODO: replace with a real API call, e.g.
-    // fetch('get_submissions.php?type=orders') filtered by this._user.phone,
-    // then setState(() { _orders..clear()..addAll(realOrders); }).
-    // Until that's wired up, this stays empty — no sample/dummy orders.
+      Future<void> _loadOrders() async {
     if (!_user.isLoggedIn) return;
     setState(() => _loadingOrders = true);
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    setState(() => _loadingOrders = false);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('mobile', isEqualTo: _user.phone)
+          .get();
+      final loaded = snap.docs.map((doc) {
+        final m = doc.data();
+        return MyOrder(
+          id: doc.id.length > 6 ? doc.id.substring(0, 6).toUpperCase() : doc.id,
+          product: '${m['product'] ?? ''}',
+          amount: (num.tryParse('${m['amount'] ?? 0}') ?? 0).toDouble(),
+          status: '${m['status'] ?? 'Ordered'}',
+        );
+      }).toList();
+      if (!mounted) return;
+      setState(() {
+        _orders
+          ..clear()
+          ..addAll(loaded);
+      });
+    } catch (e) {
+      if (mounted) _showToast('Could not load orders: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _loadingOrders = false);
+    }
   }
 
   void _showToast(String msg, {bool error = false}) {

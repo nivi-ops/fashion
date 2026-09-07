@@ -215,14 +215,12 @@ class _AdminPageState extends State<AdminPage> {
       final snap = await _db.collection('orders').get();
       final mapped = snap.docs.map<Map<String, dynamic>>((doc) {
         final m = doc.data();
-        final createdAt = m['created_at'];
+                 final createdAt = m['created_at'];
         DateTime? created;
         if (createdAt is Timestamp) created = createdAt.toDate();
-        final shortId =
-            doc.id.length > 6 ? doc.id.substring(0, 6) : doc.id;
         return {
           'id': doc.id,
-          'orderId': '#${shortId.toUpperCase()}',
+          'orderId': '#${m['order_id'] ?? doc.id.toUpperCase()}',
           'name': m['name'] ?? '',
           'mobile': m['mobile'] ?? '',
           'product': m['product'] ?? '',
@@ -1578,7 +1576,17 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(Text('${o['paymentMethod']}\n${o['paymentStatus']}')),
                   DataCell(Text('${o['measurement'] ?? '—'}')),
                   DataCell(Text('${o['notes'] ?? '—'}')),
-                  DataCell(Text('${o['voiceNote'] ?? '—'}')),
+                                    DataCell(
+                    ('${o['voiceNote'] ?? ''}').isNotEmpty
+                        ? TextButton(
+                            onPressed: () => launchUrl(
+                              Uri.parse('${o['voiceNote']}'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: const Text('▶️ Play'),
+                          )
+                        : const Text('—'),
+                  ),
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
                   DataCell(
