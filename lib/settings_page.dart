@@ -651,21 +651,51 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-    void _doLogout() async {
+  // -----------------------------------------------------------------
+  // LOGOUT
+  // -----------------------------------------------------------------
+  // Logs the user out and notifies the parent page. The parent should
+  // switch the bottom navigation index to Home (index 0).
+  Future<void> _doLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Log out of your account?'),
+        content: const Text('Are you sure you want to log out?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log Out')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Log Out',
+              style: TextStyle(color: AppColors.danger),
+            ),
+          ),
         ],
       ),
     );
+
     if (confirmed != true) return;
+
+    // Clear the logged-in user from the app state.
     AppState.instance.logout();
-    _showToast('Logged out!');
-    _openPanel(_Panel.home);
+
+    if (!mounted) return;
+
+    // Keep this Settings page in its default state.
+    setState(() {
+      _user = AppUser();
+      _panel = _Panel.home;
+      _syncControllersFromUser();
+    });
+
+    // IMPORTANT: the parent/home page uses this callback to switch
+    // the bottom navigation from Profile back to Home.
+    widget.onUserChanged?.call(null);
+    widget.onLogout?.call();
   }
 
   // ---------------------------------------------------------------
