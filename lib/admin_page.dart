@@ -476,6 +476,27 @@ class _AdminPageState extends State<AdminPage> {
     return map[id] ?? 'Dashboard';
   }
 
+  // ---------------- IMAGE URL HELPER ----------------
+
+  /// Converts a Google Drive "share" link into a direct-viewable image
+  /// URL. Share links (drive.google.com/file/d/XXXX/view or
+  /// drive.google.com/open?id=XXXX) return an HTML preview page, not raw
+  /// image bytes, so Image.network() can never load them. This extracts
+  /// the file ID and rewrites it into the format that actually serves
+  /// the image directly. Any other URL (Imgur, Firebase Storage, etc.)
+  /// is returned unchanged.
+  String _normalizeImageUrl(String url) {
+    final m1 = RegExp(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (m1 != null) {
+      return 'https://drive.google.com/uc?export=view&id=${m1.group(1)}';
+    }
+    final m2 = RegExp(r'drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)').firstMatch(url);
+    if (m2 != null) {
+      return 'https://drive.google.com/uc?export=view&id=${m2.group(1)}';
+    }
+    return url;
+  }
+
   // ---------------- PRODUCT UPLOAD (Firestore + Storage) ----------------
 
   Future<void> uploadProduct() async {
@@ -524,7 +545,7 @@ class _AdminPageState extends State<AdminPage> {
 
       final pastedUrl = pImageUrl.text.trim();
       if (pastedUrl.isNotEmpty) {
-        photoUrls.add(pastedUrl);
+        photoUrls.add(_normalizeImageUrl(pastedUrl));
       }
 
       await _db.collection('products').add({
@@ -1229,7 +1250,7 @@ class _AdminPageState extends State<AdminPage> {
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.network(
-                pImageUrl.text.trim(),
+                _normalizeImageUrl(pImageUrl.text.trim()),
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
                   color: tealLight,
@@ -1455,7 +1476,8 @@ class _AdminPageState extends State<AdminPage> {
               itemBuilder: (_, i) {
                 final p = list[i];
                 final photos = p['photos'] is List ? List.from(p['photos']) : <dynamic>[];
-                final image = photos.isNotEmpty ? '${photos.first}' : '${p['photo'] ?? ''}';
+                final rawImage = photos.isNotEmpty ? '${photos.first}' : '${p['photo'] ?? ''}';
+                final image = rawImage.isNotEmpty ? _normalizeImageUrl(rawImage) : '';
                 final stockColor = p['stock'] == 'Available'
                     ? success
                     : p['stock'] == 'Limited'
