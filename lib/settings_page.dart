@@ -537,12 +537,16 @@ class _SettingsPageState extends State<SettingsPage> {
           _menuRow(Icons.help_outline, 'Browse FAQs', () => _openPanel(_Panel.faq)),
         ]),
 
-        // Logout sits directly under Browse FAQs, and the Admin Panel
-        // entry point sits right below Logout.
-        if (_user.isLoggedIn)
-          _menuCard(null, [
-            _menuRow(Icons.logout, 'Log Out', _doLogout, iconColor: AppColors.danger, labelColor: AppColors.danger),
-          ]),
+        // Logout button — always visible directly below Browse FAQs.
+        _menuCard(null, [
+          _menuRow(
+            Icons.logout,
+            'Log Out',
+            _doLogout,
+            iconColor: AppColors.danger,
+            labelColor: AppColors.danger,
+          ),
+        ]),
 
         // Admin Panel entry: tap to open the separate AdminPage. Kept
         // subtle so regular customers don't accidentally open it, but
@@ -651,12 +655,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // -----------------------------------------------------------------
-  // LOGOUT
-  // -----------------------------------------------------------------
-  // Logs the user out and notifies the parent page. The parent should
-  // switch the bottom navigation index to Home (index 0).
-  Future<void> _doLogout() async {
+    Future<void> _doLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -680,22 +679,25 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (confirmed != true) return;
 
-    // Clear the logged-in user from the app state.
+    // Clear the current login state.
     AppState.instance.logout();
 
-    if (!mounted) return;
+    // Update this SettingsPage immediately.
+    if (mounted) {
+      setState(() {
+        _user = AppUser();
+        _syncControllersFromUser();
+        _panel = _Panel.home;
+      });
+    }
 
-    // Keep this Settings page in its default state.
-    setState(() {
-      _user = AppUser();
-      _panel = _Panel.home;
-      _syncControllersFromUser();
-    });
-
-    // IMPORTANT: the parent/home page uses this callback to switch
-    // the bottom navigation from Profile back to Home.
+    // Tell the parent/main page to switch to the Home tab.
     widget.onUserChanged?.call(null);
     widget.onLogout?.call();
+
+    if (mounted) {
+      _showToast('Logged out successfully!');
+    }
   }
 
   // ---------------------------------------------------------------
