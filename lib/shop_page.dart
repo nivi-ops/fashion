@@ -15,8 +15,10 @@
 import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'app_colors.dart';
-
-
+import 'app_state.dart';
+import 'models.dart';
+import 'checkout.dart';
+import 'cart_page.dart';
 
 class ShopPage extends StatefulWidget {
   final String? initialFilter;
@@ -29,10 +31,6 @@ class ShopPage extends StatefulWidget {
 
 class _CategoryDef {
   final String label;
-
-  // Image shown in the sidebar (from assets/images/). Null for
-  // categories without a dedicated photo (e.g. "All"), which fall
-  // back to [icon] instead.
   final String? imagePath;
   final IconData icon;
 
@@ -49,65 +47,20 @@ class _ShopPageState extends State<ShopPage> {
   late Future<List<StitchingService>> _servicesFuture;
   late String _selectedCategory;
 
-  // Wishlist kept in-memory for this session (mirrors shop.html's
-  // localStorage-backed wishlist, minus persistence).
   final Set<String> _wishlist = {};
 
-  // Matches the shop.html sidebar list/order. Image paths point at
-  // the actual files in assets/images/ (case-sensitive filenames,
-  // matched exactly as they exist on disk).
   static const List<_CategoryDef> _categories = [
     _CategoryDef('All', icon: Icons.grid_view_rounded),
-    _CategoryDef(
-      'Kids',
-      imagePath: 'assets/images/kids.png',
-      icon: Icons.child_care,
-    ),
-    _CategoryDef(
-      'Uniform',
-      imagePath: 'assets/images/unifrom.png',
-      icon: Icons.school,
-    ),
-    _CategoryDef(
-      'Modern',
-      imagePath: 'assets/images/modern.png',
-      icon: Icons.checkroom,
-    ),
-    _CategoryDef(
-      'Salwar',
-      imagePath: 'assets/images/salwar.png',
-      icon: Icons.checkroom,
-    ),
-    _CategoryDef(
-      'Blouse',
-      imagePath: 'assets/images/Blouse.png',
-      icon: Icons.dry_cleaning,
-    ),
-    _CategoryDef(
-      'Aari',
-      imagePath: 'assets/images/Aari wrk.png',
-      icon: Icons.brush,
-    ),
-    _CategoryDef(
-      'Saree',
-      imagePath: 'assets/images/ss.jpg',
-      icon: Icons.woman,
-    ),
-    _CategoryDef(
-      'Frock',
-      imagePath: 'assets/images/Frocks.png',
-      icon: Icons.girl,
-    ),
-    _CategoryDef(
-      'Lehenga',
-      imagePath: 'assets/images/leng.jpg',
-      icon: Icons.diamond,
-    ),
-    _CategoryDef(
-      'Kurthi',
-      imagePath: 'assets/images/kurthi.png',
-      icon: Icons.checkroom,
-    ),
+    _CategoryDef('Kids', imagePath: 'assets/images/kids.png', icon: Icons.child_care),
+    _CategoryDef('Uniform', imagePath: 'assets/images/unifrom.png', icon: Icons.school),
+    _CategoryDef('Modern', imagePath: 'assets/images/modern.png', icon: Icons.checkroom),
+    _CategoryDef('Salwar', imagePath: 'assets/images/salwar.png', icon: Icons.checkroom),
+    _CategoryDef('Blouse', imagePath: 'assets/images/Blouse.png', icon: Icons.dry_cleaning),
+    _CategoryDef('Aari', imagePath: 'assets/images/Aari wrk.png', icon: Icons.brush),
+    _CategoryDef('Saree', imagePath: 'assets/images/ss.jpg', icon: Icons.woman),
+    _CategoryDef('Frock', imagePath: 'assets/images/Frocks.png', icon: Icons.girl),
+    _CategoryDef('Lehenga', imagePath: 'assets/images/leng.jpg', icon: Icons.diamond),
+    _CategoryDef('Kurthi', imagePath: 'assets/images/kurthi.png', icon: Icons.checkroom),
   ];
 
   @override
@@ -139,10 +92,39 @@ class _ShopPageState extends State<ShopPage> {
   }
 
   double _ratingFor(String id) {
-    // Deterministic pseudo-rating per item, same spirit as
-    // ApiService.fetchProducts()'s 4.3 + (i % 3) * 0.2 pattern.
     final seed = id.codeUnits.fold<int>(0, (a, b) => a + b);
     return 4.3 + (seed % 3) * 0.2;
+  }
+
+  // ---------------------------------------------------------------
+  // CART HELPERS
+  // ---------------------------------------------------------------
+  // Product.id is derived the same way everywhere (service.id.hashCode)
+  // so cart lookups and Buy Now stay consistent.
+
+  int _productIdFor(StitchingService service) => service.id.hashCode;
+
+  bool _isInCart(StitchingService service) {
+    final pid = _productIdFor(service);
+    return AppState.instance.cartItems.any((p) => p.id == pid);
+  }
+
+  Product _productFrom(StitchingService service, int qty) {
+    return Product(
+      id: _productIdFor(service),
+      name: service.name,
+      price: service.price,
+      image: service.imageUrl,
+      rating: _ratingFor(service.id),
+      qty: qty,
+    );
+  }
+
+  void _goToCart() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CartPage()),
+    );
   }
 
   Future<void> _openProductDetail(StitchingService service) async {
@@ -155,6 +137,7 @@ class _ShopPageState extends State<ShopPage> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final isWishlisted = _wishlist.contains(service.id);
+            final inCart = _isInCart(service);
             return DraggableScrollableSheet(
               initialChildSize: 0.85,
               minChildSize: 0.5,
@@ -182,7 +165,6 @@ class _ShopPageState extends State<ShopPage> {
                           controller: scrollController,
                           padding: EdgeInsets.zero,
                           children: [
-                            // ---- Image + wishlist heart (pd-left) ----
                             Stack(
                               children: [
                                 AspectRatio(
@@ -212,19 +194,12 @@ class _ShopPageState extends State<ShopPage> {
                                         color: Colors.white,
                                         shape: BoxShape.circle,
                                         boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black26,
-                                            blurRadius: 6,
-                                          ),
+                                          BoxShadow(color: Colors.black26, blurRadius: 6),
                                         ],
                                       ),
                                       child: Icon(
-                                        isWishlisted
-                                            ? Icons.favorite
-                                            : Icons.favorite_border,
-                                        color: isWishlisted
-                                            ? const Color(0xFFE53935)
-                                            : Colors.grey,
+                                        isWishlisted ? Icons.favorite : Icons.favorite_border,
+                                        color: isWishlisted ? const Color(0xFFE53935) : Colors.grey,
                                         size: 18,
                                       ),
                                     ),
@@ -232,8 +207,6 @@ class _ShopPageState extends State<ShopPage> {
                                 ),
                               ],
                             ),
-
-                            // ---- Right panel (pd-right) ----
                             Padding(
                               padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                               child: Column(
@@ -251,19 +224,13 @@ class _ShopPageState extends State<ShopPage> {
                                   const SizedBox(height: 6),
                                   Text(
                                     service.name,
-                                    style: const TextStyle(
-                                      fontSize: 19,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
                                   ),
                                   const SizedBox(height: 10),
                                   Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 3,
-                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFF388E3C),
                                           borderRadius: BorderRadius.circular(4),
@@ -272,8 +239,7 @@ class _ShopPageState extends State<ShopPage> {
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
-                                              _ratingFor(service.id)
-                                                  .toStringAsFixed(1),
+                                              _ratingFor(service.id).toStringAsFixed(1),
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.bold,
@@ -281,35 +247,25 @@ class _ShopPageState extends State<ShopPage> {
                                               ),
                                             ),
                                             const SizedBox(width: 3),
-                                            const Icon(Icons.star,
-                                                color: Colors.white, size: 11),
+                                            const Icon(Icons.star, color: Colors.white, size: 11),
                                           ],
                                         ),
                                       ),
                                       const SizedBox(width: 10),
                                       const Text(
                                         'New Listing',
-                                        style: TextStyle(
-                                          color: AppColors.textLight,
-                                          fontSize: 12,
-                                        ),
+                                        style: TextStyle(color: AppColors.textLight, fontSize: 12),
                                       ),
                                     ],
                                   ),
                                   const Divider(height: 26),
                                   Text(
                                     '₹${service.price.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                                   ),
                                   const SizedBox(height: 6),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFE8F5E9),
                                       borderRadius: BorderRadius.circular(4),
@@ -324,31 +280,23 @@ class _ShopPageState extends State<ShopPage> {
                                     ),
                                   ),
                                   const SizedBox(height: 16),
-
-                                  // Qty stepper
                                   Row(
                                     children: [
-                                      const Text('Qty:',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600)),
+                                      const Text('Qty:', style: TextStyle(fontWeight: FontWeight.w600)),
                                       const SizedBox(width: 12),
                                       Container(
                                         decoration: BoxDecoration(
-                                          border: Border.all(
-                                              color: const Color(0xFFE0E0E0)),
+                                          border: Border.all(color: const Color(0xFFE0E0E0)),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Row(
                                           children: [
                                             IconButton(
                                               onPressed: () {
-                                                if (qty > 1) {
-                                                  setSheetState(() => qty--);
-                                                }
+                                                if (qty > 1) setSheetState(() => qty--);
                                               },
                                               icon: const Icon(Icons.remove, size: 16),
-                                              constraints: const BoxConstraints(
-                                                  minWidth: 34, minHeight: 34),
+                                              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
                                               padding: EdgeInsets.zero,
                                             ),
                                             SizedBox(
@@ -356,19 +304,15 @@ class _ShopPageState extends State<ShopPage> {
                                               child: Text(
                                                 '$qty',
                                                 textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                    fontWeight: FontWeight.w600),
+                                                style: const TextStyle(fontWeight: FontWeight.w600),
                                               ),
                                             ),
                                             IconButton(
                                               onPressed: () {
-                                                if (qty < 10) {
-                                                  setSheetState(() => qty++);
-                                                }
+                                                if (qty < 10) setSheetState(() => qty++);
                                               },
                                               icon: const Icon(Icons.add, size: 16),
-                                              constraints: const BoxConstraints(
-                                                  minWidth: 34, minHeight: 34),
+                                              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
                                               padding: EdgeInsets.zero,
                                             ),
                                           ],
@@ -378,7 +322,7 @@ class _ShopPageState extends State<ShopPage> {
                                   ),
                                   const SizedBox(height: 18),
 
-                                  // Add to Cart / Buy Now
+                                  // Add to Cart / View Cart + Buy Now
                                   Row(
                                     children: [
                                       Expanded(
@@ -389,17 +333,24 @@ class _ShopPageState extends State<ShopPage> {
                                               backgroundColor: AppColors.primary,
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
+                                                borderRadius: BorderRadius.circular(8),
                                               ),
                                             ),
                                             onPressed: () {
-                                              Navigator.pop(context);
-                                              _addToCartAndConfirm(service, qty);
+                                              if (inCart) {
+                                                Navigator.pop(context);
+                                                _goToCart();
+                                              } else {
+                                                _addToCart(service, qty);
+                                                setSheetState(() {}); // flips this sheet's button
+                                                setState(() {}); // keeps grid/other state in sync
+                                              }
                                             },
-                                            icon: const Icon(
-                                                Icons.shopping_cart, size: 16),
-                                            label: const Text('Add to Cart'),
+                                            icon: Icon(
+                                              inCart ? Icons.shopping_cart_checkout : Icons.shopping_cart,
+                                              size: 16,
+                                            ),
+                                            label: Text(inCart ? 'View Cart' : 'Add to Cart'),
                                           ),
                                         ),
                                       ),
@@ -409,12 +360,10 @@ class _ShopPageState extends State<ShopPage> {
                                           height: 46,
                                           child: ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  AppColors.secondary,
+                                              backgroundColor: AppColors.secondary,
                                               foregroundColor: Colors.white,
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
+                                                borderRadius: BorderRadius.circular(8),
                                               ),
                                             ),
                                             onPressed: () {
@@ -430,36 +379,28 @@ class _ShopPageState extends State<ShopPage> {
                                   ),
                                   const SizedBox(height: 20),
 
-                                  // Delivery section (static, matches pd-delivery)
                                   Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      border: Border.all(
-                                          color: const Color(0xFFE0E0E0)),
+                                      border: Border.all(color: const Color(0xFFE0E0E0)),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         const Text(
                                           'Delivery details',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15),
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                         ),
                                         const SizedBox(height: 10),
                                         Row(
                                           children: const [
-                                            Icon(Icons.local_shipping_outlined,
-                                                size: 18),
+                                            Icon(Icons.local_shipping_outlined, size: 18),
                                             SizedBox(width: 10),
                                             Expanded(
                                               child: Text(
                                                 'Custom stitched — delivered within 10–15 days',
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 13),
+                                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                                               ),
                                             ),
                                           ],
@@ -471,16 +412,12 @@ class _ShopPageState extends State<ShopPage> {
 
                                   const Text(
                                     'Description',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold, fontSize: 15),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
                                     service.description,
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textLight,
-                                        height: 1.5),
+                                    style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.5),
                                   ),
                                 ],
                               ),
@@ -499,44 +436,31 @@ class _ShopPageState extends State<ShopPage> {
     );
   }
 
-  Future<void> _addToCartAndConfirm(StitchingService service, int qty) async {
+  void _addToCart(StitchingService service, int qty) {
+    AppState.instance.addToCart(_productFrom(service, qty));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${service.name} added to cart! 🛒')),
+      SnackBar(
+        content: Text('${service.name} added to cart! 🛒'),
+        action: SnackBarAction(label: 'VIEW CART', onPressed: _goToCart),
+      ),
     );
   }
 
   Future<void> _bookService(StitchingService service, {int qty = 1}) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(service.name),
-        content: Text(
-          '${service.description}\n\nQty: $qty\nTotal: ₹${(service.price * qty).toStringAsFixed(0)}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Place Order'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    await _api.placeOrder(
-      serviceName: service.name,
-      amount: service.price * qty,
-    );
-
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${service.name} booked successfully! 🎉')),
+
+    final product = _productFrom(service, qty);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CheckoutPage(
+          items: [product],
+          fromCart: false,
+          quantities: {product.id: qty},
+        ),
+      ),
     );
   }
 
@@ -558,8 +482,6 @@ class _ShopPageState extends State<ShopPage> {
       ),
     );
   }
-
-  // ---------------- SIDEBAR (matches .shop-cat-sidebar) ----------------
 
   Widget _buildCategorySidebar() {
     return Container(
@@ -598,17 +520,9 @@ class _ShopPageState extends State<ShopPage> {
                         ? Image.asset(
                             cat.imagePath!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(
-                              cat.icon,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
+                            errorBuilder: (_, __, ___) => Icon(cat.icon, size: 18, color: AppColors.primary),
                           )
-                        : Icon(
-                            cat.icon,
-                            size: 18,
-                            color: AppColors.primary,
-                          ),
+                        : Icon(cat.icon, size: 18, color: AppColors.primary),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -617,9 +531,7 @@ class _ShopPageState extends State<ShopPage> {
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                      color: isActive
-                          ? AppColors.secondary
-                          : AppColors.text,
+                      color: isActive ? AppColors.secondary : AppColors.text,
                     ),
                   ),
                 ],
@@ -630,8 +542,6 @@ class _ShopPageState extends State<ShopPage> {
       ),
     );
   }
-
-  // ---------------- PRODUCT GRID (matches .products-grid / .product-card) ----------------
 
   Widget _buildProductArea() {
     return Padding(
@@ -734,16 +644,12 @@ class _ProductCard extends StatelessWidget {
                       decoration: const BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black26, blurRadius: 4),
-                        ],
+                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
                       ),
                       child: Icon(
                         isWishlisted ? Icons.favorite : Icons.favorite_border,
                         size: 14,
-                        color: isWishlisted
-                            ? const Color(0xFFE53935)
-                            : Colors.grey,
+                        color: isWishlisted ? const Color(0xFFE53935) : Colors.grey,
                       ),
                     ),
                   ),
@@ -756,20 +662,14 @@ class _ProductCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFF388E3C),
                       borderRadius: BorderRadius.circular(4),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 4),
-                      ],
+                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(width: 2),
                         const Icon(Icons.star, size: 10, color: Colors.white),
@@ -793,11 +693,7 @@ class _ProductCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '₹${service.price.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
                   ),
                 ],
               ),

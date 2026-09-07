@@ -1699,7 +1699,17 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(Text('${o['product']}')),
                   DataCell(Text('${o['measurement'] ?? '—'}')),
                   DataCell(Text('${o['notes'] ?? '—'}')),
-                  DataCell(Text('${o['voiceNote'] ?? '—'}')),
+                  DataCell(
+                    ('${o['voiceNote'] ?? ''}').isNotEmpty
+                        ? TextButton(
+                            onPressed: () => launchUrl(
+                              Uri.parse('${o['voiceNote']}'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: const Text('▶️ Play'),
+                          )
+                        : const Text('—'),
+                  ),
                   DataCell(Text('${o['date']}')),
                   DataCell(TextButton(onPressed: () => openWhatsApp('${o['mobile']}', '${o['name']}'), child: const Text('💬'))),
                 ])).toList(),
