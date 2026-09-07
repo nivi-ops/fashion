@@ -3,11 +3,11 @@
 // (id="custom"). Mobile-first: feature strip + heading on top, form below —
 // same content/behaviour as the website's .custom-order block.
 //
-// NOW CONNECTED TO FIREBASE (Firestore + Storage) instead of the
+// NOW CONNECTED TO FIREBASE (Firestore) instead of the
 // Railway/PHP submit_forms.php endpoint.
 //
 // SETUP:
-//   1. flutter pub add cloud_firestore firebase_storage record path_provider audioplayers
+//   1. flutter pub add cloud_firestore record path_provider audioplayers
 //      (permission is handled internally by the `record` package on both
 //      Android and iOS, so you do NOT need permission_handler separately —
 //      but you DO need to declare the mic permission in your platform
@@ -15,10 +15,10 @@
 //   2. Make sure Firebase.initializeApp() is already called in main.dart
 //      (it should be, since firebase_options.dart exists in this project).
 //   3. Voice recording is REAL — it uses the device microphone via the
-//      `record` package, saves an .m4a file, and uploads it to Firebase
-//      Storage. The download URL is saved in the Firestore order document
-//      (instead of embedding a big base64 string, which is safer for
-//      Firestore's 1MB-per-document limit).
+//      `record` package, saves an .m4a file temporarily, converts the audio
+//      bytes to Base64, and saves the Base64 string in the Firestore order.
+//      Keep recordings short (for example, under about 30 seconds) so the
+//      Firestore document stays within its 1MB document-size limit.
 //   4. Voice PLAYBACK is REAL too — uses `audioplayers` to let the user
 //      listen back to their own recording (play/pause + seek bar) before
 //      submitting the order.
@@ -33,9 +33,9 @@
 //     about your custom order.</string>
 
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
@@ -253,29 +253,30 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
     });
   }
 
-  /// Uploads the recorded voice note (if any) to Firebase Storage and
-  /// returns its public download URL. Returns an empty string when there
-  /// is no recording, so the Firestore field is simply blank.
+  /// Converts the recorded voice note to Base64 so it can be stored
+  /// directly in the Firestore order document.
+  ///
+  /// Returns an empty string when there is no recording or the temporary
+  /// recording file no longer exists.
   Future<String> _uploadVoiceNote() async {
     final path = _recordedFilePath;
     if (path == null || !_hasRecording) return '';
+
     final file = File(path);
     if (!await file.exists()) return '';
 
     try {
-      final fileName =
-          'voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      final ref =
-          FirebaseStorage.instance.ref('custom_order_voice_notes/$fileName');
-      await ref.putFile(
-        file,
-        SettableMetadata(contentType: 'audio/m4a'),
-      );
-      return await ref.getDownloadURL();
-         } catch (e) {
-      debugPrint('❌ Voice note upload failed: $e');
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return '';
+
+      return base64Encode(bytes);
+    } catch (e) {
+      debugPrint('❌ Voice note Base64 conversion failed: $e');
       if (mounted) {
-        _showSnack('Voice note upload failed: $e', isError: true);
+        _showSnack(
+          'Voice note could not be prepared. Please try again.',
+          isError: true,
+        );
       }
       return '';
     }
@@ -332,7 +333,7 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
             ? 'None'
             : _notesController.text.trim(),
         'measurement': measurements,
-        'voice_note': voiceNoteUrl,
+        'voice_note_base64': voiceNoteUrl,
         'source': 'custom-order',
         'status': 'Ordered',
         'payment_method': 'N/A',
