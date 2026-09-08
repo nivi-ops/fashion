@@ -429,6 +429,7 @@ class _AdminPageState extends State<AdminPage> {
     if (id == 'contactform2') loadContacts();
     if (id == 'notifications') loadNotifications();
     if (id == 'datarequests') loadCustomerRequests();
+    if (id == 'grievances') loadCustomerRequests();
   }
 
   Future<void> loadProductsAndSet() async {
@@ -492,7 +493,8 @@ class _AdminPageState extends State<AdminPage> {
       'contactform': 'Customers',
       'contactform2': 'Catering Contact Form',
       'notifications': 'Send Notification',
-      'datarequests': 'Request My Data / Grievance / De-act & Delete Acc',
+      'datarequests': 'Cancellation Msg',
+      'grievances': 'Complaints',
       'revenue': 'Revenue',
     };
     return map[id] ?? 'Dashboard';
@@ -2026,6 +2028,13 @@ class _AdminPageState extends State<AdminPage> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget dataRequestsPage() {
+    return Column(
+      children: [
         sectionCard(
           '❌ Recent Cancellations',
           Column(
@@ -2052,144 +2061,45 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Widget dataRequestsPage() {
-    return Column(
-      children: [
-        sectionCard(
-          '📥 Request My Data Submissions',
-          Column(children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: actionButton(
-                '🗑️ Clear Data Requests',
-                () => clearData('data_requests_all',
-                    '⚠️ This will delete ALL "Request My Data" submissions. Do you want to continue?'),
-                color: danger,
-              ),
+  /// New "Complaints" page — wired up to the previously-unused
+  /// _grievanceTable(). Same layout pattern as the other list pages:
+  /// search + status filter on top, a Clear-all danger button, then the
+  /// table itself.
+  Widget grievancesPage() {
+    return sectionCard(
+      '⚖️ Customer Complaints',
+      Column(
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: actionButton(
+              '🗑️ Clear All Complaints',
+              () => clearData('grievances_all',
+                  '⚠️ This will delete ALL customer complaints. Do you want to continue?'),
+              color: danger,
             ),
-            const SizedBox(height: 14),
-            field('', dataSearch, hint: '🔍 Search by name / phone / email...'),
-            const SizedBox(height: 14),
-            _simpleDataTable(
-              dataRequests.where((r) {
-                final s = dataSearch.text.toLowerCase();
-                return s.isEmpty ||
-                    '${r['name'] ?? ''}'.toLowerCase().contains(s) ||
-                    '${r['phone'] ?? ''}'.contains(s) ||
-                    '${r['email'] ?? ''}'.toLowerCase().contains(s);
-              }).toList(),
-              ['Name', 'Phone', 'Email', 'Requested On'],
-              (r) => [
-                '${r['name'] ?? 'Guest'}',
-                '${r['phone'] ?? '—'}',
-                '${r['email'] ?? '—'}',
-                formatDateTime(r['requested_at']),
-              ],
-              '📥',
-              'No data export requests yet',
-            ),
-          ]),
-        ),
-        sectionCard(
-          '⚖️ Grievance Redressal Complaints',
-          Column(children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: actionButton(
-                '🗑️ Clear Grievances',
-                () => clearData('grievances_all',
-                    '⚠️ This will delete ALL Grievance complaints. Do you want to continue?'),
-                color: danger,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(children: [
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
               Expanded(child: field('', grievanceSearch, hint: '🔍 Search by name / phone / subject...')),
               const SizedBox(width: 10),
               SizedBox(
-                width: 150,
-                child: dropdownField('Status', grievanceStatus, ['', 'Open', 'Resolved'],
+                width: 170,
+                child: dropdownField('Status', grievanceStatus,
+                    ['', 'Open', 'Resolved'],
                     (v) => setState(() => grievanceStatus = v ?? '')),
               ),
-            ]),
-            const SizedBox(height: 14),
-            _grievanceTable(),
-          ]),
-        ),
-        sectionCard(
-          '👤 De-activated Accounts',
-          Column(children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: actionButton(
-                '🗑️ Clear De-activated',
-                () => clearData('deactivated_all',
-                    '⚠️ This will delete ALL De-activated account records. Do you want to continue?'),
-                color: danger,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _simpleDataTable(
-              deactivated,
-              ['Phone', 'Reason', 'De-activated On', 'WhatsApp'],
-              (r) => [
-                '${r['phone'] ?? ''}',
-                '${r['reason'] ?? '—'}',
-                formatDateTime(r['deactivated_at']),
-                '💬',
-              ],
-              '👤',
-              'No de-activated accounts',
-            ),
-          ]),
-        ),
-        sectionCard(
-          '🗑️ Deleted Accounts',
-          Column(children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: actionButton(
-                '🗑️ Clear Deleted',
-                () => clearData('deleted_accounts_all',
-                    '⚠️ This will delete ALL Deleted account records. Do you want to continue?'),
-                color: danger,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _simpleDataTable(
-              deletedAccounts,
-              ['Phone', 'Deleted On'],
-              (r) => ['${r['phone'] ?? ''}', formatDateTime(r['deleted_at'])],
-              '🗑️',
-              'No deleted accounts',
-            ),
-          ]),
-        ),
-      ],
-    );
-  }
-
-  Widget _simpleDataTable(
-    List<Map<String, dynamic>> list,
-    List<String> columns,
-    List<String> Function(Map<String, dynamic>) values,
-    String emptyIcon,
-    String emptyText,
-  ) {
-    if (list.isEmpty) return EmptyState(icon: emptyIcon, text: emptyText);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: WidgetStatePropertyAll(tealLight),
-        columns: columns.map((c) => DataColumn(label: Text(c))).toList(),
-        rows: list.reversed.map((r) {
-          final vals = values(r);
-          return DataRow(cells: vals.map((v) => DataCell(Text(v))).toList());
-        }).toList(),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _grievanceTable(),
+        ],
       ),
     );
   }
 
+ 
   Widget _grievanceTable() {
     final s = grievanceSearch.text.trim().toLowerCase();
     final list = grievances.where((g) {
@@ -2379,6 +2289,8 @@ class _AdminPageState extends State<AdminPage> {
         return notificationsPage();
       case 'datarequests':
         return dataRequestsPage();
+      case 'grievances':
+        return grievancesPage();
       case 'revenue':
         return revenuePage();
       case 'dashboard':
@@ -2598,7 +2510,7 @@ class _AdminPageState extends State<AdminPage> {
       ('contactform', '👤', 'Customers'),
       ('contactform2', '🍽️', 'Catering Contact'),
       ('notifications', '🔔', 'Notifications'),
-      ('datarequests', '📥', 'Data Requests'),
+      ('datarequests', '❌', 'Cancellation Msg'),
       ('revenue', '💰', 'Revenue'),
     ];
 
@@ -2696,8 +2608,9 @@ class _AdminPageState extends State<AdminPage> {
         ('contactform2', '🍽️', 'Catering Contact Form'),
       ]),
       ('Engagement', [
-        ('notifications', '🔔', 'Notification / Cancellation msg'),
-        ('datarequests', '📥', 'Request My Data / Grievance / De-act & Delete Acc'),
+        ('notifications', '🔔', 'Send Notification'),
+        ('datarequests', '❌', 'Cancellation Msg'),
+        
       ]),
       ('Finance', [('revenue', '💰', 'Revenue')]),
     ];
