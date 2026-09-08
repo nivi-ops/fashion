@@ -166,7 +166,7 @@ class _SettingsPageState extends State<SettingsPage> {
     },
     {
       'q': 'What payment methods are accepted?',
-      'a': 'UPI (GPay, PhonePe, Paytm) and Cash on Delivery. Card/EMI coming soon.',
+      'a': 'UPI (GPay, PhonePe, Paytm), Card, and Cash on Delivery.',
     },
     {
       'q': 'How do Super Coins work?',
@@ -244,7 +244,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _openPanel(_Panel p) {
     setState(() => _panel = p);
-    if (p == _Panel.orders) _loadOrders();
+    if (p == _Panel.orders || p == _Panel.coins) _loadOrders();
     if (p == _Panel.reviews) _loadReviews();
   }
 
@@ -342,55 +342,163 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     _reviewProductCtrl.clear();
     _reviewCommentCtrl.clear();
-    _reviewRating = 5;
+    _reviewRating = 0;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
         return StatefulBuilder(
           builder: (ctx, setSheet) => Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Write a Review', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 14),
-                _textField(_reviewProductCtrl, 'Product / Order name'),
-                const SizedBox(height: 12),
-                Row(
-                  children: List.generate(5, (i) {
-                    final filled = i < _reviewRating;
-                    return IconButton(
-                      onPressed: () => setSheet(() => _reviewRating = i + 1),
-                      icon: Icon(filled ? Icons.star : Icons.star_border, color: AppColors.secondary),
-                    );
-                  }),
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.light,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text('Write a review',
+                              style: TextStyle(
+                                  fontFamily: 'PlayfairDisplay',
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryDark)),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(sheetCtx),
+                          icon: const Icon(Icons.close, color: AppColors.primaryDark),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text("Share your experience with Sumathi's Style",
+                        style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+                    const SizedBox(height: 20),
+
+                    // Logged-in user preview
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 23,
+                            backgroundColor: AppColors.primary,
+                            child: Text(
+                              _user.name.isNotEmpty ? _user.name[0].toUpperCase() : '?',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_user.name.isNotEmpty ? _user.name : 'You',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                                const SizedBox(height: 3),
+                                Text('+91${_user.phone}',
+                                    style: const TextStyle(fontSize: 11.5, color: AppColors.textLight)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.verified_user_outlined, color: AppColors.primary, size: 20),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+                    _textField(_reviewProductCtrl, 'Product / Order name'),
+                    const SizedBox(height: 18),
+                    const Text('Your Rating',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.text)),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (i) {
+                        final starNumber = i + 1;
+                        final selected = starNumber <= _reviewRating;
+                        return IconButton(
+                          tooltip: '$starNumber star',
+                          onPressed: () => setSheet(() => _reviewRating = starNumber),
+                          iconSize: 38,
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          icon: Icon(
+                            selected ? Icons.star_rounded : Icons.star_border_rounded,
+                            color: selected ? AppColors.secondary : Colors.grey.shade500,
+                          ),
+                        );
+                      }),
+                    ),
+                    Center(
+                      child: Text(
+                        _reviewRating == 0 ? 'Tap a star to rate' : '$_reviewRating out of 5 stars',
+                        style: const TextStyle(fontSize: 11.5, color: AppColors.textLight),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+                    const Text('Your Review',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.text)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _reviewCommentCtrl,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Tell us about your experience...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          if (_reviewRating == 0) {
+                            _showToast('Please select a star rating!', error: true);
+                            return;
+                          }
+                          if (_reviewProductCtrl.text.trim().isEmpty) {
+                            _showToast('Please enter the product name!', error: true);
+                            return;
+                          }
+                          Navigator.pop(sheetCtx);
+                          await _submitReview();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.send_rounded, size: 17),
+                        label: const Text('Post', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
                 ),
-                TextField(
-                  controller: _reviewCommentCtrl,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'Share your experience...',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    await _submitReview();
-                  },
-                  style: _saveBtnStyle().copyWith(minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 46))),
-                  child: const Text('Submit Review'),
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -846,6 +954,13 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) {
       _showToast('Logged out successfully!');
     }
+
+    // If Settings was opened as a pushed page (e.g. from the drawer or
+    // the account icon on Home), pop all the way back so the user
+    // actually lands on the Home page instead of staying here.
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   // ---------------------------------------------------------------
@@ -1249,10 +1364,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // SUPER COINS PANEL
+  // SUPER COINS PANEL — like Flipkart SuperCoins: a wallet balance up
+  // top, then a per-order "+coins earned" history list below.
   // ---------------------------------------------------------------
   Widget _buildCoinsPanel() {
-    final totalSpent = _orders.where((o) => o.status != 'Cancelled').fold<double>(0, (s, o) => s + o.amount);
+    final eligibleOrders = _orders.where((o) => o.status != 'Cancelled').toList();
+    final totalSpent = eligibleOrders.fold<double>(0, (s, o) => s + o.amount);
     final coins = (totalSpent / 500).floor() * 10;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1286,15 +1403,67 @@ class _SettingsPageState extends State<SettingsPage> {
               const Divider(height: 24),
               _coinsInfoRow(Icons.card_giftcard, 'Redeem for discounts',
                   'Use your coins to get discounts on your next custom order. Coming soon!'),
-              const Divider(height: 24),
-              _coinsInfoRow(Icons.history, 'Coins History',
-                  coins > 0
-                      ? "You've earned $coins coins from ${_orders.length} order(s) so far!"
-                      : 'No coins earned yet — place an order to start earning!'),
             ],
           ),
         ),
+        const SizedBox(height: 4),
+        const Text('COINS HISTORY',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textLight, letterSpacing: 0.5)),
+        const SizedBox(height: 10),
+        if (_loadingOrders)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 30),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (!_user.isLoggedIn)
+          _emptyState(Icons.monetization_on_outlined, 'Login required', 'Login to see your Super Coins', 'Login', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+          })
+        else if (eligibleOrders.isEmpty)
+          _emptyState(Icons.monetization_on_outlined, 'No coins yet',
+              'Place an order to start earning Super Coins!', 'Shop Now', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
+          })
+        else
+          ...eligibleOrders.map(_coinHistoryRow),
       ],
+    );
+  }
+
+  Widget _coinHistoryRow(MyOrder o) {
+    final earned = (o.amount / 500).floor() * 10;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.12), shape: BoxShape.circle),
+            child: const Icon(Icons.monetization_on, size: 18, color: AppColors.secondary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(o.product, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                const SizedBox(height: 2),
+                Text('Order #${o.id} • ₹${o.amount.toStringAsFixed(0)}',
+                    style: const TextStyle(fontSize: 11.5, color: AppColors.textLight)),
+              ],
+            ),
+          ),
+          Text(earned > 0 ? '+$earned' : '0',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.secondary)),
+        ],
+      ),
     );
   }
 
@@ -2011,9 +2180,22 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // MY REVIEWS PANEL
+  // MY REVIEWS PANEL — styled like the Catering "Reviews" tab:
+  // rating summary + star breakdown, a "write a review" prompt card
+  // with the logged-in user's avatar, and review cards below.
   // ---------------------------------------------------------------
+  double get _averageRating {
+    if (_reviews.isEmpty) return 0;
+    final total = _reviews.fold<int>(0, (sum, r) => sum + ((r['rating'] as int?) ?? 0));
+    return total / _reviews.length;
+  }
+
+  int _countForRating(int stars) => _reviews.where((r) => (r['rating'] as int?) == stars).length;
+
   Widget _buildReviewsPanel() {
+    final average = _averageRating;
+    final ratingText = average == 0 ? '0.0' : average.toStringAsFixed(1);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2028,65 +2210,199 @@ class _SettingsPageState extends State<SettingsPage> {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()));
           })
         else ...[
+          // Rating summary card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2))],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Column(
+                  children: [
+                    Text(ratingText,
+                        style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    const SizedBox(height: 2),
+                    const Text('★★★★★', style: TextStyle(color: AppColors.secondary, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text('${_reviews.length} review${_reviews.length == 1 ? '' : 's'}',
+                        style: const TextStyle(fontSize: 10, color: AppColors.textLight)),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    children: [5, 4, 3, 2, 1].map((stars) {
+                      final count = _countForRating(stars);
+                      final percent = _reviews.isEmpty ? 0.0 : count / _reviews.length;
+                      return _reviewRatingBar('$stars★', percent);
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Write-a-review prompt card, with the logged-in user's avatar
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppColors.primary,
+                      child: Text(
+                        _user.name.isNotEmpty ? _user.name[0].toUpperCase() : '?',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_user.name.isNotEmpty ? 'Hi, ${_user.name}' : 'Hi there',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                          const SizedBox(height: 3),
+                          Text('+91${_user.phone}',
+                              style: const TextStyle(fontSize: 11, color: AppColors.textLight)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 14),
+                const Text('How was your experience?',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    5,
+                    (i) => const Icon(Icons.star_border_rounded, color: AppColors.secondary, size: 34),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    onPressed: _openReviewForm,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.edit_outlined, size: 17),
+                    label: const Text('Write a review', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
           if (_reviews.isEmpty)
             _emptyState(Icons.star_outline, 'No reviews yet',
                 'Share your experience about a product you ordered!', 'Write a Review', _openReviewForm)
-          else ...[
+          else
             ..._reviews.map(_reviewCard),
-            const SizedBox(height: 4),
-            OutlinedButton.icon(
-              onPressed: _openReviewForm,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: BorderSide(color: AppColors.primaryLight, width: 2),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('Write a Review'),
-            ),
-          ],
         ],
       ],
+    );
+  }
+
+  Widget _reviewRatingBar(String label, double percent) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(width: 22, child: Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textLight))),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: percent,
+                minHeight: 7,
+                backgroundColor: AppColors.gray,
+                valueColor: const AlwaysStoppedAnimation(AppColors.secondary),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 30,
+            child: Text('${(percent * 100).round()}%', style: const TextStyle(fontSize: 10.5, color: AppColors.textLight)),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _reviewCard(Map<String, dynamic> r) {
     final rating = (r['rating'] as int?) ?? 5;
     final comment = (r['comment'] as String?) ?? '';
+    final product = (r['product'] as String?) ?? '';
+    final name = ((r['name'] as String?) ?? '').trim().isNotEmpty ? (r['name'] as String) : _user.name;
+    final displayName = name.isNotEmpty ? name : 'You';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
+        borderRadius: BorderRadius.circular(14),
+        border: const Border(left: BorderSide(color: AppColors.secondary, width: 4)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text((r['product'] as String?) ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              CircleAvatar(
+                radius: 19,
+                backgroundColor: AppColors.primary,
+                child: Text(displayName[0].toUpperCase(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
-              Row(
-                children: List.generate(
-                  5,
-                  (i) => Icon(
-                    i < rating ? Icons.star : Icons.star_border,
-                    size: 15,
-                    color: AppColors.secondary,
-                  ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(displayName,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.text)),
+                    if (product.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(product, style: const TextStyle(fontSize: 10.5, color: AppColors.textLight)),
+                    ],
+                  ],
                 ),
               ),
+              const SizedBox(width: 8),
+              Text('★' * rating + '☆' * (5 - rating),
+                  style: const TextStyle(color: AppColors.secondary, fontSize: 13)),
             ],
           ),
           if (comment.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(comment, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.5)),
+            const SizedBox(height: 10),
+            Text(comment, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6)),
           ],
         ],
       ),
