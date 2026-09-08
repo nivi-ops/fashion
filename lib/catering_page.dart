@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
+import 'app_state.dart';
+import 'login_page.dart';
 
 // ---------------------------------------------------------------------
 // CATERING PAGE
@@ -104,10 +106,7 @@ class _CateringPageState extends State<CateringPage>
           const _CateringServicesTab(),
           const _CateringGalleryTab(),
           const _CateringContactTab(),
-          _CateringReviewsTab(
-            userName: widget.userName,
-            userEmail: widget.userEmail,
-          ),
+          const _CateringReviewsTab(),
         ],
       ),
     );
@@ -2635,31 +2634,22 @@ InputDecoration _inputDecoration(
 // =======================================================================
 
 class _CateringReviewsTab extends StatefulWidget {
-  final String? userName;
-  final String? userEmail;
-
-  const _CateringReviewsTab({
-    this.userName,
-    this.userEmail,
-  });
+  const _CateringReviewsTab();
 
   @override
-  State<_CateringReviewsTab> createState() =>
-      _CateringReviewsTabState();
+  State<_CateringReviewsTab> createState() => _CateringReviewsTabState();
 }
 
 class _CateringReviewsTabState extends State<_CateringReviewsTab> {
   final _reviewCtrl = TextEditingController();
 
   int _rating = 0;
-  String _loggedInName = '';
-  String _loggedInEmail = '';
-  bool _loadingProfile = true;
+  bool _loadingLocal = true;
 
   final List<Map<String, dynamic>> _reviews = [
     {
       'name': 'Priya & Rajesh',
-      'email': '',
+      'phone': '',
       'event': 'Wedding Event',
       'stars': 5,
       'text':
@@ -2668,7 +2658,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
     },
     {
       'name': 'Lakshmi Family',
-      'email': '',
+      'phone': '',
       'event': 'T. Nagar, Chennai',
       'stars': 5,
       'text':
@@ -2677,7 +2667,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
     },
     {
       'name': 'Karthik',
-      'email': '',
+      'phone': '',
       'event': 'House Warming',
       'stars': 4,
       'text':
@@ -2686,7 +2676,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
     },
     {
       'name': 'Anand',
-      'email': '',
+      'phone': '',
       'event': 'Corporate Event',
       'stars': 5,
       'text':
@@ -2695,7 +2685,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
     },
     {
       'name': 'Sundar & Meena',
-      'email': '',
+      'phone': '',
       'event': 'Engagement Ceremony',
       'stars': 5,
       'text':
@@ -2704,32 +2694,37 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
     },
   ];
 
+  // ---------------------------------------------------------------
+  // Login state now comes straight from AppState — the exact same
+  // source of truth settings_page.dart uses. No more guessing at
+  // SharedPreferences keys; if AppState says logged in, we're logged in.
+  // ---------------------------------------------------------------
+  bool get _isLoggedIn => AppState.instance.isLoggedIn;
+  String get _loggedInName => AppState.instance.userName ?? '';
+  String get _loggedInPhone => AppState.instance.userId ?? '';
+
   @override
   void initState() {
     super.initState();
-    _loadProfileAndReviews();
+    AppState.instance.addListener(_onAppStateChanged);
+    _loadLocalReviews();
   }
 
-  Future<void> _loadProfileAndReviews() async {
-    String name = widget.userName?.trim() ?? '';
-    String email = widget.userEmail?.trim() ?? '';
+  @override
+  void dispose() {
+    AppState.instance.removeListener(_onAppStateChanged);
+    _reviewCtrl.dispose();
+    super.dispose();
+  }
 
+  void _onAppStateChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _loadLocalReviews() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
-      if (name.isEmpty) {
-        name = prefs.getString('user_name') ??
-            prefs.getString('name') ??
-            prefs.getString('username') ??
-            '';
-      }
-
-      if (email.isEmpty) {
-        email = prefs.getString('user_email') ??
-            prefs.getString('email') ??
-            '';
-      }
-
       final savedReviews = prefs.getString('sumathi_catering_reviews');
 
       if (savedReviews != null && savedReviews.isNotEmpty) {
@@ -2740,35 +2735,20 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
             ..removeWhere((review) => review['local'] == true)
             ..insertAll(
               0,
-              decoded
-                  .whereType<Map>()
-                  .map(
-                    (review) => Map<String, dynamic>.from(review),
-                  )
-                  .map((review) {
-                    review['local'] = true;
-                    return review;
-                  }),
+              decoded.whereType<Map>().map((review) {
+                final m = Map<String, dynamic>.from(review);
+                m['local'] = true;
+                return m;
+              }),
             );
         }
       }
     } catch (e) {
-      debugPrint('Review/profile load error: $e');
+      debugPrint('Review load error: $e');
     }
 
     if (!mounted) return;
-
-    setState(() {
-      _loggedInName = name;
-      _loggedInEmail = email;
-      _loadingProfile = false;
-    });
-  }
-
-  @override
-  void dispose() {
-    _reviewCtrl.dispose();
-    super.dispose();
+    setState(() => _loadingLocal = false);
   }
 
   Future<void> _saveReviews() async {
@@ -2780,7 +2760,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
           .map(
             (review) => {
               'name': review['name'],
-              'email': review['email'],
+              'phone': review['phone'],
               'event': review['event'],
               'stars': review['stars'],
               'text': review['text'],
@@ -2797,21 +2777,12 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
     }
   }
 
-  void _showLoginRequired() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Please login with your name and email to post a review.',
-        ),
-      ),
-    );
-  }
-
   void _openWriteReview() {
-    if (_loadingProfile) return;
-
-    if (_loggedInName.isEmpty || _loggedInEmail.isEmpty) {
-      _showLoginRequired();
+    if (!_isLoggedIn) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
       return;
     }
 
@@ -2915,7 +2886,9 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _loggedInName,
+                                    _loggedInName.isNotEmpty
+                                        ? _loggedInName
+                                        : 'You',
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
@@ -2924,7 +2897,9 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
                                   ),
                                   const SizedBox(height: 3),
                                   Text(
-                                    _loggedInEmail,
+                                    _loggedInPhone.isNotEmpty
+                                        ? '+91$_loggedInPhone'
+                                        : '',
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 11.5,
@@ -3030,7 +3005,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
 
                             final newReview = <String, dynamic>{
                               'name': _loggedInName,
-                              'email': _loggedInEmail,
+                              'phone': _loggedInPhone,
                               'event': 'Catering Review',
                               'stars': _rating,
                               'text': reviewText,
@@ -3202,105 +3177,205 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
                     ),
                     child: Column(
                       children: [
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor: AppColors.primary,
-                              child: Text(
-                                _loggedInName.isNotEmpty
-                                    ? _loggedInName[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
+                        if (_loadingLocal)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        else if (!_isLoggedIn) ...[
+                          Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.person_outline,
                                   color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Sign in to write a review',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.text,
+                                      ),
+                                    ),
+                                    SizedBox(height: 3),
+                                    Text(
+                                      'Login required',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(height: 1),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'How was your experience?',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              5,
+                              (index) => const Icon(
+                                Icons.star_border_rounded,
+                                color: AppColors.secondary,
+                                size: 34,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const LoginPage(),
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              icon: const Icon(Icons.login, size: 17),
+                              label: const Text(
+                                'Login',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: AppColors.primary,
+                                child: Text(
+                                  _loggedInName.isNotEmpty
+                                      ? _loggedInName[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _loggedInName.isNotEmpty
+                                          ? 'Hi, $_loggedInName'
+                                          : 'Hi there',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.text,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _loggedInPhone.isNotEmpty
+                                          ? '+91$_loggedInPhone'
+                                          : '',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(height: 1),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'How was your experience?',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              5,
+                              (index) => const Icon(
+                                Icons.star_border_rounded,
+                                color: AppColors.secondary,
+                                size: 34,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              onPressed: _openWriteReview,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: 17,
+                              ),
+                              label: const Text(
+                                'Write a review',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _loadingProfile
-                                        ? 'Checking your account...'
-                                        : _loggedInName.isNotEmpty
-                                            ? 'Hi, $_loggedInName'
-                                            : 'Sign in to write a review',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.text,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    _loggedInEmail.isNotEmpty
-                                        ? _loggedInEmail
-                                        : 'Login required',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        const Divider(height: 1),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'How was your experience?',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            5,
-                            (index) => const Icon(
-                              Icons.star_border_rounded,
-                              color: AppColors.secondary,
-                              size: 34,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 44,
-                          child: OutlinedButton.icon(
-                            onPressed:
-                                _loadingProfile ? null : _openWriteReview,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(
-                                color: AppColors.primary,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.edit_outlined,
-                              size: 17,
-                            ),
-                            label: const Text(
-                              'Write a review',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -3310,7 +3385,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
                   ..._reviews.map(
                     (r) => _ReviewCard(
                       name: r['name']?.toString() ?? 'Customer',
-                      email: r['email']?.toString() ?? '',
+                      phone: r['phone']?.toString() ?? '',
                       event: r['event']?.toString() ?? 'Catering Review',
                       stars: (r['stars'] as num?)?.toInt() ?? 5,
                       text: r['text']?.toString() ?? '',
@@ -3401,14 +3476,14 @@ class _RatingBar extends StatelessWidget {
 
 class _ReviewCard extends StatelessWidget {
   final String name;
-  final String email;
+  final String phone;
   final String event;
   final int stars;
   final String text;
 
   const _ReviewCard({
     required this.name,
-    required this.email,
+    required this.phone,
     required this.event,
     required this.stars,
     required this.text,
@@ -3466,19 +3541,19 @@ class _ReviewCard extends StatelessWidget {
                         color: AppColors.text,
                       ),
                     ),
-                    if (email.isNotEmpty) ...[
+                    if (phone.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Row(
                         children: [
                           const Icon(
-                            Icons.email_outlined,
+                            Icons.phone_outlined,
                             size: 11,
                             color: AppColors.textLight,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              email,
+                              '+91$phone',
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 10.5,
