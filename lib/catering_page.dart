@@ -2676,7 +2676,7 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
   Future<void> _loadLocalReviews() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedReviews = prefs.getString('sumathi_catering_reviews');
+      final savedReviews = prefs.getString('sumathi_catering_reviews_v2');
 
       if (savedReviews != null && savedReviews.isNotEmpty) {
         final decoded = jsonDecode(savedReviews);
@@ -2716,12 +2716,254 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
           .toList();
 
       await prefs.setString(
-        'sumathi_catering_reviews',
+        'sumathi_catering_reviews_v2',
         jsonEncode(localReviews),
       );
     } catch (e) {
       debugPrint('Review save error: $e');
     }
+  }
+
+  void _openEditReview(int index) {
+    if (!_isLoggedIn || index < 0 || index >= _reviews.length) return;
+
+    final review = _reviews[index];
+    _rating = (review['stars'] as num?)?.toInt() ?? 5;
+    _reviewCtrl.text = review['text']?.toString() ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.light,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Edit your review',
+                              style: TextStyle(
+                                fontFamily: 'PlayfairDisplay',
+                                fontSize: 21,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryDark,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: const Icon(
+                              Icons.close,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Update your rating and review',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Your Rating',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (i) {
+                          final starNumber = i + 1;
+                          return IconButton(
+                            onPressed: () {
+                              setSheetState(() => _rating = starNumber);
+                            },
+                            iconSize: 38,
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            icon: Icon(
+                              starNumber <= _rating
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
+                              color: starNumber <= _rating
+                                  ? AppColors.secondary
+                                  : Colors.grey.shade500,
+                            ),
+                          );
+                        }),
+                      ),
+                      Center(
+                        child: Text(
+                          '$_rating out of 5 stars',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Your Review',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _reviewCtrl,
+                        maxLines: 5,
+                        decoration: InputDecoration(
+                          hintText: 'Tell us about your experience...',
+                          hintStyle: const TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.textLight,
+                          ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final reviewText = _reviewCtrl.text.trim();
+
+                            if (_rating == 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please select a star rating.'),
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (reviewText.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please write your review.'),
+                                ),
+                              );
+                              return;
+                            }
+
+                            setState(() {
+                              _reviews[index]['stars'] = _rating;
+                              _reviews[index]['text'] = reviewText;
+                            });
+
+                            await _saveReviews();
+
+                            if (!mounted) return;
+                            Navigator.pop(sheetContext);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Review updated successfully! ⭐'),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.check_rounded, size: 18),
+                          label: const Text(
+                            'Save changes',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteReview(int index) async {
+    if (index < 0 || index >= _reviews.length) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete review?'),
+        content: const Text(
+          'Are you sure you want to delete your review? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppColors.danger),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _reviews.removeAt(index));
+    await _saveReviews();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Review deleted.')),
+    );
   }
 
   void _openWriteReview() {
@@ -3352,13 +3594,17 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
                     ),
                   ),
                 ] else ...[
-                  ..._reviews.map(
-                    (r) => _ReviewCard(
-                      name: r['name']?.toString() ?? 'Customer',
-                      phone: r['phone']?.toString() ?? '',
-                      event: r['event']?.toString() ?? 'Catering Review',
-                      stars: (r['stars'] as num?)?.toInt() ?? 5,
-                      text: r['text']?.toString() ?? '',
+                  ..._reviews.asMap().entries.map(
+                    (entry) => _ReviewCard(
+                      name: entry.value['name']?.toString() ?? 'Customer',
+                      phone: entry.value['phone']?.toString() ?? '',
+                      event: entry.value['event']?.toString() ?? 'Catering Review',
+                      stars: (entry.value['stars'] as num?)?.toInt() ?? 5,
+                      text: entry.value['text']?.toString() ?? '',
+                      canEdit: entry.value['local'] == true &&
+                          entry.value['phone']?.toString() == _loggedInPhone,
+                      onEdit: () => _openEditReview(entry.key),
+                      onDelete: () => _deleteReview(entry.key),
                     ),
                   ),
                 ],
@@ -3465,6 +3711,9 @@ class _ReviewCard extends StatelessWidget {
   final String event;
   final int stars;
   final String text;
+  final bool canEdit;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const _ReviewCard({
     required this.name,
@@ -3472,6 +3721,9 @@ class _ReviewCard extends StatelessWidget {
     required this.event,
     required this.stars,
     required this.text,
+    this.canEdit = false,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -3561,12 +3813,55 @@ class _ReviewCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '★' * stars + '☆' * (5 - stars),
-                style: const TextStyle(
-                  color: AppColors.secondary,
-                  fontSize: 13,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '★' * stars + '☆' * (5 - stars),
+                    style: const TextStyle(
+                      color: AppColors.secondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (canEdit)
+                    PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      iconSize: 20,
+                      icon: const Icon(
+                        Icons.more_vert,
+                        color: AppColors.textLight,
+                      ),
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          onEdit?.call();
+                        } else if (value == 'delete') {
+                          onDelete?.call();
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem<String>(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 18),
+                              SizedBox(width: 10),
+                              Text('Edit review'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, size: 18),
+                              SizedBox(width: 10),
+                              Text('Delete review'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
             ],
           ),
