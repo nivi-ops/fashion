@@ -335,6 +335,137 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _editReview(Map<String, dynamic> review) async {
+    if (!_user.isLoggedIn) {
+      _showToast('Please login first!', error: true);
+      return;
+    }
+
+    final reviewId = review['id']?.toString() ?? '';
+    if (reviewId.isEmpty) {
+      _showToast('Unable to edit this review.', error: true);
+      return;
+    }
+
+    final commentCtrl = TextEditingController(
+      text: review['comment']?.toString() ?? '',
+    );
+    int rating = (review['rating'] as num?)?.toInt() ?? 5;
+
+    try {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: const Text(
+                  'Edit your review',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Your rating',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (index) {
+                          final star = index + 1;
+                          return IconButton(
+                            tooltip: '$star star',
+                            onPressed: () => setDialogState(() => rating = star),
+                            icon: Icon(
+                              star <= rating
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
+                              color: AppColors.secondary,
+                              size: 30,
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Your review',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: commentCtrl,
+                        maxLines: 5,
+                        textInputAction: TextInputAction.newline,
+                        decoration: InputDecoration(
+                          hintText: 'Share your experience...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (result != true) return;
+
+      final comment = commentCtrl.text.trim();
+      await FirebaseFirestore.instance
+          .collection('reviews')
+          .doc(reviewId)
+          .update({
+        'rating': rating,
+        'comment': comment,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+      _showToast('Review updated successfully!');
+      await _loadReviews();
+    } catch (e) {
+      if (mounted) {
+        _showToast('Could not update review: $e', error: true);
+      }
+    } finally {
+      commentCtrl.dispose();
+    }
+  }
+
   void _openReviewForm() {
     if (!_user.isLoggedIn) {
       _showToast('Please login to write a review!', error: true);
@@ -2180,17 +2311,22 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // MY REVIEWS PANEL — styled like the Catering "Reviews" tab:
-  // rating summary + star breakdown, a "write a review" prompt card
-  // with the logged-in user's avatar, and review cards below.
+  // MY REVIEWS PANEL — matches the Catering Reviews UI style.
   // ---------------------------------------------------------------
   double get _averageRating {
     if (_reviews.isEmpty) return 0;
-    final total = _reviews.fold<int>(0, (sum, r) => sum + ((r['rating'] as int?) ?? 0));
+    final total = _reviews.fold<int>(
+      0,
+      (sum, review) => sum + ((review['rating'] as num?)?.toInt() ?? 0),
+    );
     return total / _reviews.length;
   }
 
-  int _countForRating(int stars) => _reviews.where((r) => (r['rating'] as int?) == stars).length;
+  int _countForRating(int stars) {
+    return _reviews.where((review) {
+      return (review['rating'] as num?)?.toInt() == stars;
+    }).length;
+  }
 
   Widget _buildReviewsPanel() {
     final average = _averageRating;
@@ -2200,36 +2336,70 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('My Reviews', Icons.star_outline),
+
         if (_loadingReviews)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
             child: Center(child: CircularProgressIndicator()),
           )
         else if (!_user.isLoggedIn)
-          _emptyState(Icons.star_outline, 'Login required', 'Login to see and write your reviews', 'Login', () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()));
-          })
+          _emptyState(
+            Icons.star_outline,
+            'Login required',
+            'Login to see and write your reviews',
+            'Login',
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+              );
+            },
+          )
         else ...[
-          // Rating summary card
+          // Rating summary — same layout as Catering Reviews.
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Column(
                   children: [
-                    Text(ratingText,
-                        style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    Text(
+                      ratingText,
+                      style: const TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    const Text('★★★★★', style: TextStyle(color: AppColors.secondary, fontSize: 16)),
+                    const Text(
+                      '★★★★★',
+                      style: TextStyle(
+                        color: AppColors.secondary,
+                        fontSize: 16,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('${_reviews.length} review${_reviews.length == 1 ? '' : 's'}',
-                        style: const TextStyle(fontSize: 10, color: AppColors.textLight)),
+                    Text(
+                      '${_reviews.length} reviews',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textLight,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(width: 20),
@@ -2237,7 +2407,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   child: Column(
                     children: [5, 4, 3, 2, 1].map((stars) {
                       final count = _countForRating(stars);
-                      final percent = _reviews.isEmpty ? 0.0 : count / _reviews.length;
+                      final percent = _reviews.isEmpty
+                          ? 0.0
+                          : count / _reviews.length;
+
                       return _reviewRatingBar('$stars★', percent);
                     }).toList(),
                   ),
@@ -2245,17 +2418,26 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+
           const SizedBox(height: 16),
 
-          // Write-a-review prompt card, with the logged-in user's avatar
+          // Logged-in user review prompt — same Catering style.
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))],
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.08),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Column(
               children: [
@@ -2265,8 +2447,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       radius: 20,
                       backgroundColor: AppColors.primary,
                       child: Text(
-                        _user.name.isNotEmpty ? _user.name[0].toUpperCase() : '?',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        _user.name.isNotEmpty
+                            ? _user.name[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2274,11 +2461,27 @@ class _SettingsPageState extends State<SettingsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_user.name.isNotEmpty ? 'Hi, ${_user.name}' : 'Hi there',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                          Text(
+                            _user.name.isNotEmpty
+                                ? 'Hi, ${_user.name}'
+                                : 'Hi there',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.text,
+                            ),
+                          ),
                           const SizedBox(height: 3),
-                          Text('+91${_user.phone}',
-                              style: const TextStyle(fontSize: 11, color: AppColors.textLight)),
+                          Text(
+                            _user.phone.isNotEmpty
+                                ? '+91${_user.phone}'
+                                : '',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textLight,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -2287,14 +2490,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 16),
                 const Divider(height: 1),
                 const SizedBox(height: 14),
-                const Text('How was your experience?',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text)),
+                const Text(
+                  'How was your experience?',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
                     5,
-                    (i) => const Icon(Icons.star_border_rounded, color: AppColors.secondary, size: 34),
+                    (index) => const Icon(
+                      Icons.star_border_rounded,
+                      color: AppColors.secondary,
+                      size: 34,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -2306,20 +2519,31 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
                       side: const BorderSide(color: AppColors.primary),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     icon: const Icon(Icons.edit_outlined, size: 17),
-                    label: const Text('Write a review', style: TextStyle(fontWeight: FontWeight.w700)),
+                    label: const Text(
+                      'Write a review',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+
           const SizedBox(height: 18),
 
           if (_reviews.isEmpty)
-            _emptyState(Icons.star_outline, 'No reviews yet',
-                'Share your experience about a product you ordered!', 'Write a Review', _openReviewForm)
+            _emptyState(
+              Icons.star_outline,
+              'No reviews yet',
+              'Share your experience about a product you ordered!',
+              'Write a Review',
+              _openReviewForm,
+            )
           else
             ..._reviews.map(_reviewCard),
         ],
@@ -2332,7 +2556,16 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          SizedBox(width: 22, child: Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textLight))),
+          SizedBox(
+            width: 22,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textLight,
+              ),
+            ),
+          ),
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -2340,34 +2573,56 @@ class _SettingsPageState extends State<SettingsPage> {
                 value: percent,
                 minHeight: 7,
                 backgroundColor: AppColors.gray,
-                valueColor: const AlwaysStoppedAnimation(AppColors.secondary),
+                valueColor: const AlwaysStoppedAnimation(
+                  AppColors.secondary,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 8),
           SizedBox(
             width: 30,
-            child: Text('${(percent * 100).round()}%', style: const TextStyle(fontSize: 10.5, color: AppColors.textLight)),
+            child: Text(
+              '${(percent * 100).round()}%',
+              style: const TextStyle(
+                fontSize: 10.5,
+                color: AppColors.textLight,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _reviewCard(Map<String, dynamic> r) {
-    final rating = (r['rating'] as int?) ?? 5;
-    final comment = (r['comment'] as String?) ?? '';
-    final product = (r['product'] as String?) ?? '';
-    final name = ((r['name'] as String?) ?? '').trim().isNotEmpty ? (r['name'] as String) : _user.name;
-    final displayName = name.isNotEmpty ? name : 'You';
+  Widget _reviewCard(Map<String, dynamic> review) {
+    final rating = (review['rating'] as num?)?.toInt() ?? 5;
+    final comment = review['comment']?.toString() ?? '';
+    final product = review['product']?.toString() ?? '';
+    final rawName = review['name']?.toString().trim() ?? '';
+    final displayName = rawName.isNotEmpty
+        ? rawName
+        : (_user.name.isNotEmpty ? _user.name : 'You');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: const Border(left: BorderSide(color: AppColors.secondary, width: 4)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        border: const Border(
+          left: BorderSide(
+            color: AppColors.secondary,
+            width: 4,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2378,31 +2633,72 @@ class _SettingsPageState extends State<SettingsPage> {
               CircleAvatar(
                 radius: 19,
                 backgroundColor: AppColors.primary,
-                child: Text(displayName[0].toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text(
+                  displayName[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(displayName,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.text)),
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppColors.text,
+                      ),
+                    ),
                     if (product.isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(product, style: const TextStyle(fontSize: 10.5, color: AppColors.textLight)),
+                      Text(
+                        product,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: AppColors.textLight,
+                        ),
+                      ),
                     ],
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Text('★' * rating + '☆' * (5 - rating),
-                  style: const TextStyle(color: AppColors.secondary, fontSize: 13)),
+              Text(
+                '★' * rating + '☆' * (5 - rating),
+                style: const TextStyle(
+                  color: AppColors.secondary,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 2),
+              IconButton(
+                tooltip: 'Edit review',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                onPressed: () => _editReview(review),
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: AppColors.textLight,
+                ),
+              ),
             ],
           ),
           if (comment.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text(comment, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6)),
+            Text(
+              comment,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: AppColors.textLight,
+                height: 1.6,
+              ),
+            ),
           ],
         ],
       ),
@@ -2412,7 +2708,13 @@ class _SettingsPageState extends State<SettingsPage> {
   // ---------------------------------------------------------------
   // shared empty state
   // ---------------------------------------------------------------
-  Widget _emptyState(IconData icon, String title, String subtitle, String btnLabel, VoidCallback? onTap) {
+  Widget _emptyState(
+    IconData icon,
+    String title,
+    String subtitle,
+    String btnLabel,
+    VoidCallback? onTap,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 50),
       child: Column(
@@ -2421,17 +2723,33 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Icon(icon, size: 56, color: const Color(0xFFDDDDDD)),
           const SizedBox(height: 14),
-          Text(title, style: const TextStyle(color: AppColors.textLight, fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppColors.textLight,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(subtitle, style: const TextStyle(color: AppColors.textLight, fontSize: 13), textAlign: TextAlign.center),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: AppColors.textLight,
+              fontSize: 13,
+            ),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 18),
-          ElevatedButton(onPressed: onTap, style: _saveBtnStyle(), child: Text(btnLabel)),
+          ElevatedButton(
+            onPressed: onTap,
+            style: _saveBtnStyle(),
+            child: Text(btnLabel),
+          ),
         ],
       ),
     );
   }
 }
-
 class _PolicySection extends StatelessWidget {
   final String title;
   final String body;
