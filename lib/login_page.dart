@@ -6,6 +6,7 @@ import 'home_page.dart';
 import 'otp_verify_page.dart';
 import 'forgot_password_page.dart';
 import 'app_state.dart';
+import 'admin_page.dart';
 
 
 class LoginPage extends StatefulWidget {
@@ -87,10 +88,41 @@ class _LoginPageState extends State<LoginPage> {
       body: Stack(
         children: [
 
-          Positioned.fill(
+                   Positioned.fill(
             child: Image.asset(
               "assets/images/lgn_bg.png",
               fit: BoxFit.cover,
+            ),
+          ),
+
+          // Small admin-access icon — tap to open Admin Panel
+          Positioned(
+            top: 40,
+            right: 16,
+            child: SafeArea(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(30),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AdminPage(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.admin_panel_settings_outlined,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                ),
+              ),
             ),
           ),
 

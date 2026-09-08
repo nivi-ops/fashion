@@ -202,23 +202,36 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
                       const Divider(height: 32),
 
-                      // HIGHLIGHTS (static — edit freely, or wire to a
-                      // `description` field on Product once you add one)
+                                            // HIGHLIGHTS (from admin panel description/highlights)
                       const Text(
                         'Highlights',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        '• Custom tailored to your measurements\n'
-                        '• Premium quality fabric\n'
-                        '• 30 years of craftsmanship\n'
-                        '• Handmade with attention to detail',
-                        style: TextStyle(
-                          color: AppColors.textLight,
-                          height: 1.6,
+                      if (product.highlights.isNotEmpty)
+                        Text(
+                          product.highlights.map((h) => '• $h').join('\n'),
+                          style: const TextStyle(
+                            color: AppColors.textLight,
+                            height: 1.6,
+                          ),
+                        )
+                      else if (product.description.isNotEmpty)
+                        Text(
+                          product.description,
+                          style: const TextStyle(
+                            color: AppColors.textLight,
+                            height: 1.6,
+                          ),
+                        )
+                      else
+                        const Text(
+                          'No additional details available for this product.',
+                          style: TextStyle(
+                            color: AppColors.textLight,
+                            height: 1.6,
+                          ),
                         ),
-                      ),
 
                       const SizedBox(height: 80),
                     ],

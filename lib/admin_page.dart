@@ -9,6 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 /// Flutter conversion of the supplied "Sumathi's Styles – Admin Dashboard".
 /// The login screen matches admin.html: black top bar ("Admin Login"),
@@ -35,6 +38,8 @@ import 'package:audioplayers/audioplayers.dart';
 ///   image_picker: ^1.1.2
 ///   shared_preferences: ^2.5.5
 ///   audioplayers: ^6.1.0
+///   pdf: ^3.11.1
+///   printing: ^5.13.1
 ///
 /// Put this file at: lib/admin_page.dart
 
@@ -89,6 +94,10 @@ class _AdminPageState extends State<AdminPage> {
   String loginError = '';
   String toastMessage = '';
   DateTime? toastUntil;
+
+  // ---------------- Revenue dashboard: period filter + PDF/Analysis ----------------
+  String revenuePeriod = 'month'; // 'week' | 'month' | 'year'
+  bool pdfGenerating = false;
 
   List<Map<String, dynamic>> products = [];
   List<Map<String, dynamic>> orders = [];
@@ -430,6 +439,7 @@ class _AdminPageState extends State<AdminPage> {
     if (id == 'notifications') loadNotifications();
     if (id == 'datarequests') loadCustomerRequests();
     if (id == 'grievances') loadCustomerRequests();
+    if (id == 'revenue' || id == 'analysis') loadOrdersAndSet();
   }
 
   Future<void> loadProductsAndSet() async {
@@ -483,6 +493,135 @@ class _AdminPageState extends State<AdminPage> {
   num get revenue =>
       deliveredOrders.fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
 
+  // ---------------- Revenue period filter helpers ----------------
+
+  /// Parses the 'dd/MM/yyyy' strings produced by formatDate() back into
+  /// a DateTime, so orders can be filtered by week/month/year.
+  DateTime? _parseOrderDate(String s) {
+    final parts = s.split('/');
+    if (parts.length != 3) return null;
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(parts[2]);
+    if (d == null || m == null || y == null) return null;
+    return DateTime(y, m, d);
+  }
+
+  /// Delivered orders falling inside the selected period ('week' = last 7
+  /// days, 'month' = current calendar month, 'year' = current calendar
+  /// year).
+  List<Map<String, dynamic>> ordersForPeriod(String period) {
+    final now = DateTime.now();
+    return deliveredOrders.where((o) {
+      final d = _parseOrderDate('${o['date']}');
+      if (d == null) return false;
+      switch (period) {
+        case 'week':
+          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+          final weekStart = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+          return !d.isBefore(weekStart) && !d.isAfter(now);
+        case 'year':
+          return d.year == now.year;
+        case 'month':
+        default:
+          return d.year == now.year && d.month == now.month;
+      }
+    }).toList();
+  }
+
+  String periodLabel(String period) {
+    switch (period) {
+      case 'week':
+        return 'THIS WEEK';
+      case 'year':
+        return 'THIS YEAR';
+      case 'month':
+      default:
+        return 'THIS MONTH';
+    }
+  }
+
+  // ---------------- PDF export ----------------
+
+  Future<void> downloadRevenuePdf() async {
+    final periodOrders = ordersForPeriod(revenuePeriod)..sort((a, b) => '${a['date']}'.compareTo('${b['date']}'));
+    if (periodOrders.isEmpty) {
+      showToast('⚠️ No delivered orders in this period to export');
+      return;
+    }
+    setState(() => pdfGenerating = true);
+    try {
+      final total = periodOrders.fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+      final doc = pw.Document();
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          build: (ctx) => [
+            pw.Text(
+              "Sumathi's Styles — Revenue Report",
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text('Period: ${periodLabel(revenuePeriod)}   |   Generated: ${formatDate(DateTime.now().toIso8601String())}'),
+            pw.SizedBox(height: 16),
+            pw.Table.fromTextArray(
+              headers: ['Order ID', 'Customer', 'Product', 'Amount (₹)', 'Date'],
+              data: periodOrders
+                  .map((o) => [
+                        '${o['orderId']}',
+                        '${o['name']}',
+                        '${o['product']}',
+                        '${o['amount']}',
+                        '${o['date']}',
+                      ])
+                  .toList(),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              cellAlignment: pw.Alignment.centerLeft,
+            ),
+            pw.SizedBox(height: 16),
+            pw.Divider(),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Total Orders: ${periodOrders.length}',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                pw.Text('Total Revenue: ₹${total.toStringAsFixed(0)}',
+                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      final bytes = await doc.save();
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'revenue_${revenuePeriod}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      showToast('✅ PDF ready');
+    } catch (e) {
+      showToast('❌ Could not generate PDF: $e');
+    } finally {
+      if (mounted) setState(() => pdfGenerating = false);
+    }
+  }
+
+  // ---------------- Product purchase analysis ----------------
+
+  /// How many DELIVERED orders each product name appears in — used to
+  /// compute "most bought products" percentages on the Analysis page.
+  Map<String, int> productPurchaseCounts(List<Map<String, dynamic>> source) {
+    final map = <String, int>{};
+    for (final o in source) {
+      final name = '${o['product'] ?? ''}'.trim();
+      if (name.isEmpty) continue;
+      map[name] = (map[name] ?? 0) + 1;
+    }
+    return map;
+  }
+
   String titleFor(String id) {
     const map = {
       'dashboard': 'Dashboard',
@@ -496,6 +635,7 @@ class _AdminPageState extends State<AdminPage> {
       'datarequests': 'Cancellation Msg',
       'grievances': 'Complaints',
       'revenue': 'Revenue',
+      'analysis': 'Product Analysis',
     };
     return map[id] ?? 'Dashboard';
   }
@@ -2152,16 +2292,10 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget revenuePage() {
-    final delivered = deliveredOrders;
+    final periodOrders = ordersForPeriod(revenuePeriod);
     final total = revenue;
-    final avg = delivered.isEmpty ? 0 : total / delivered.length;
-    final now = DateTime.now();
-    final month = delivered.where((o) {
-      final parts = '${o['date']}'.split('/');
-      return parts.length >= 3 &&
-          int.tryParse(parts[1]) == now.month &&
-          int.tryParse(parts[2]) == now.year;
-    }).fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+    final periodTotal = periodOrders.fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+    final avg = deliveredOrders.isEmpty ? 0 : total / deliveredOrders.length;
 
     return Column(
       children: [
@@ -2175,6 +2309,38 @@ class _AdminPageState extends State<AdminPage> {
           ),
         ),
         const SizedBox(height: 14),
+
+        // ---------------- Week / Month / Year filter ----------------
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final entry in {'week': '📅 Week', 'month': '🗓️ Month', 'year': '📆 Year'}.entries)
+              ChoiceChip(
+                label: Text(entry.value),
+                selected: revenuePeriod == entry.key,
+                selectedColor: teal,
+                labelStyle: TextStyle(
+                  color: revenuePeriod == entry.key ? Colors.white : tealDark,
+                  fontWeight: FontWeight.w600,
+                ),
+                backgroundColor: tealLight,
+                onSelected: (_) => setState(() => revenuePeriod = entry.key),
+              ),
+            actionButton(
+              pdfGenerating ? '⏳ Generating...' : '📄 Download PDF',
+              pdfGenerating ? () {} : downloadRevenuePdf,
+              color: copper,
+            ),
+            actionButton(
+              '📊 Analysis',
+              () => showPage('analysis'),
+              color: tealDark,
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 20),
         LayoutBuilder(builder: (_, c) {
           final cols = c.maxWidth > 700 ? 3 : 1;
           return GridView.count(
@@ -2186,7 +2352,7 @@ class _AdminPageState extends State<AdminPage> {
             childAspectRatio: 2.8,
             children: [
               RevenueCard(label: 'TOTAL REVENUE', value: '₹${total.toStringAsFixed(0)}', sub: 'All delivered orders', color1: tealDark, color2: teal),
-              RevenueCard(label: 'THIS MONTH', value: '₹${month.toStringAsFixed(0)}', sub: '${now.month}/${now.year}', color1: const Color(0xFF9C6024), color2: copper),
+              RevenueCard(label: periodLabel(revenuePeriod), value: '₹${periodTotal.toStringAsFixed(0)}', sub: '${periodOrders.length} delivered orders', color1: const Color(0xFF9C6024), color2: copper),
               RevenueCard(label: 'AVG ORDER VALUE', value: '₹${avg.toStringAsFixed(0)}', sub: 'Per delivered order', color1: const Color(0xFF2E7D32), color2: success),
             ],
           );
@@ -2195,16 +2361,97 @@ class _AdminPageState extends State<AdminPage> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: sectionCard('📊 Monthly Revenue Chart', SizedBox(height: 260, child: SimpleChart(data: monthlyRevenue(delivered), bar: false, color: teal)))),
+            Expanded(child: sectionCard('📊 ${periodLabel(revenuePeriod)} Revenue Chart', SizedBox(height: 260, child: SimpleChart(data: monthlyRevenue(deliveredOrders), bar: false, color: teal)))),
             const SizedBox(width: 20),
-            Expanded(child: sectionCard('🏆 Top Products by Revenue', topProducts(delivered))),
+            Expanded(child: sectionCard('🏆 Top Products by Revenue', topProducts(periodOrders))),
           ],
         ),
         sectionCard(
-          '📋 Delivered Orders',
-          orderTable(delivered.reversed.toList(), compact: true),
+          '📋 ${periodLabel(revenuePeriod)} Delivered Orders',
+          orderTable(periodOrders.reversed.toList(), compact: true),
         ),
       ],
+    );
+  }
+
+  /// Product-purchase-percentage page opened via the "📊 Analysis" button
+  /// on the Revenue page. Shows what percentage of delivered orders each
+  /// product accounts for, so the admin can see what customers buy most.
+  Widget analysisPage() {
+    final periodOrders = ordersForPeriod(revenuePeriod);
+    final counts = productPurchaseCounts(periodOrders);
+    final totalOrders = counts.values.fold<int>(0, (a, b) => a + b);
+    final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+
+    return sectionCard(
+      '📊 Most Bought Products — ${periodLabel(revenuePeriod)}',
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: () => showPage('revenue'),
+                child: const Text('← Back to Revenue'),
+              ),
+              const Spacer(),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final entry in {'week': 'Week', 'month': 'Month', 'year': 'Year'}.entries)
+                    ChoiceChip(
+                      label: Text(entry.value),
+                      selected: revenuePeriod == entry.key,
+                      selectedColor: teal,
+                      labelStyle: TextStyle(
+                        color: revenuePeriod == entry.key ? Colors.white : tealDark,
+                        fontSize: 12,
+                      ),
+                      backgroundColor: tealLight,
+                      onSelected: (_) => setState(() => revenuePeriod = entry.key),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (totalOrders == 0)
+            const EmptyState(icon: '📊', text: 'No delivered orders in this period yet')
+          else
+            ...List.generate(sorted.length, (i) {
+              final e = sorted[i];
+              final pct = (e.value / totalOrders) * 100;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text('${i + 1}. ${e.key}',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        ),
+                        Text('${pct.toStringAsFixed(1)}%  (${e.value} orders)',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: tealDark)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        minHeight: 10,
+                        value: pct / 100,
+                        backgroundColor: const Color(0xFFE0E0E0),
+                        valueColor: AlwaysStoppedAnimation(teal),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
     );
   }
 
@@ -2293,6 +2540,8 @@ class _AdminPageState extends State<AdminPage> {
         return grievancesPage();
       case 'revenue':
         return revenuePage();
+      case 'analysis':
+        return analysisPage();
       case 'dashboard':
       default:
         return dashboardPage(mobile);
@@ -2512,6 +2761,7 @@ class _AdminPageState extends State<AdminPage> {
       ('notifications', '🔔', 'Notifications'),
       ('datarequests', '❌', 'Cancellation Msg'),
       ('revenue', '💰', 'Revenue'),
+      ('analysis', '📊', 'Analysis'),
     ];
 
     return Scaffold(
@@ -2612,7 +2862,7 @@ class _AdminPageState extends State<AdminPage> {
         ('datarequests', '❌', 'Cancellation Msg'),
         
       ]),
-      ('Finance', [('revenue', '💰', 'Revenue')]),
+      ('Finance', [('revenue', '💰', 'Revenue'), ('analysis', '📊', 'Analysis')]),
     ];
 
     return Container(

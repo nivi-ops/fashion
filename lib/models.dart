@@ -14,6 +14,8 @@ class Product {
   final String image; // can be asset path OR network url (see isNetworkImage)
   final double rating;
   final int qty; // used inside cart only
+  final String description; // admin-entered product description
+  final List<String> highlights; // admin-entered highlight bullet points
   const Product({
     required this.id,
     required this.name,
@@ -21,6 +23,8 @@ class Product {
     required this.image,
     this.rating = 4.5,
     this.qty = 1,
+    this.description = '',
+    this.highlights = const [],
   });
 
   bool get isNetworkImage => image.startsWith('http');
@@ -32,6 +36,8 @@ class Product {
         image: image,
         rating: rating,
         qty: qty ?? this.qty,
+        description: description,
+        highlights: highlights,
       );
 }
 
