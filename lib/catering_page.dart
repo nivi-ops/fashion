@@ -117,6 +117,13 @@ class _CateringPageState extends State<CateringPage>
 // SHARED HELPERS
 // =======================================================================
 
+// Only prefix +91 when it's an actual 10-digit phone number.
+// Prevents "+91someone@gmail.com" when the stored value is an email.
+String _formatContact(String value) {
+  final isPhone = RegExp(r'^\d{10}$').hasMatch(value);
+  return isPhone ? '+91$value' : value;
+}
+
 Future<void> _launch(String url) async {
   final uri = Uri.parse(url);
 
@@ -3084,9 +3091,9 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
                                     ),
                                   ),
                                   const SizedBox(height: 3),
-                                  Text(
+                                                                   Text(
                                     _loggedInPhone.isNotEmpty
-                                        ? '+91$_loggedInPhone'
+                                        ? _formatContact(_loggedInPhone)
                                         : '',
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -3777,9 +3784,9 @@ class _ReviewCard extends StatelessWidget {
                             color: AppColors.textLight,
                           ),
                           const SizedBox(width: 4),
-                          Flexible(
+                                                    Flexible(
                             child: Text(
-                              '+91$phone',
+                              _formatContact(phone),
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 10.5,

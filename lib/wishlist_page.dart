@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_colors.dart';
 import '../app_state.dart';
 import '../models.dart';
+import 'product_details_page.dart';
 
 class WishlistPage extends StatelessWidget {
   const WishlistPage({super.key});
@@ -48,6 +49,15 @@ class WishlistPage extends StatelessWidget {
   }
 
   Widget _wishlistCard(BuildContext context, AppState state, Product product) {
+    void openDetails() {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProductDetailsPage(product: product),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -57,58 +67,67 @@ class WishlistPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                child: product.isNetworkImage
-                    ? Image.network(product.image, width: double.infinity, height: 130, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(height: 130, color: AppColors.gray))
-                    : Image.asset(product.image, width: double.infinity, height: 130, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(height: 130, color: AppColors.gray)),
-              ),
-              Positioned(
-                top: 6,
-                right: 6,
-                child: InkWell(
-                  onTap: () => state.toggleWishlist(product),
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: const Icon(Icons.favorite, size: 14, color: AppColors.danger),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          GestureDetector(
+            onTap: openDetails,
+            child: Stack(
               children: [
-                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-                const SizedBox(height: 4),
-                Text('₹${product.price.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      state.addToCart(product);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${product.name} moved to cart'), duration: const Duration(seconds: 1)),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      textStyle: const TextStyle(fontSize: 11),
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                  child: product.isNetworkImage
+                      ? Image.network(product.image, width: double.infinity, height: 130, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(height: 130, color: AppColors.gray))
+                      : Image.asset(product.image, width: double.infinity, height: 130, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(height: 130, color: AppColors.gray)),
+                ),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: InkWell(
+                    onTap: () => state.toggleWishlist(product),
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                      child: const Icon(Icons.favorite, size: 14, color: AppColors.danger),
                     ),
-                    child: const Text('Add to Cart'),
                   ),
                 ),
               ],
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: openDetails,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Text('₹${product.price.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          state.addToCart(product);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('${product.name} moved to cart'), duration: const Duration(seconds: 1)),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          textStyle: const TextStyle(fontSize: 11),
+                        ),
+                        child: const Text('Add to Cart'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

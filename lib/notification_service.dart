@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,12 +79,26 @@ class NotificationService {
     //    foreground — we have to do that ourselves.
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidInit);
-    await _localNotifications.initialize(initSettings);
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (response) {
+        // TODO: navigate to a specific page using response.payload
+        // (e.g. Navigator.pushNamed(context, '/orders') using a
+        // navigatorKey — wire this up once you have one in main.dart).
+      },
+    );
 
-    await _localNotifications
+    final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(_channel);
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    await androidPlugin?.createNotificationChannel(_channel);
+
+    // 2b. Explicitly request the Android 13+ POST_NOTIFICATIONS runtime
+    //     permission via flutter_local_notifications as well — some
+    //     OEM/Android versions need this asked separately from the
+    //     Firebase Messaging permission request below.
+    await androidPlugin?.requestNotificationsPermission();
 
     // 3. Ask the OS for permission RIGHT NOW (app-start), not only when
     //    the user opens the Notifications page. This makes the native
@@ -117,11 +132,22 @@ class NotificationService {
             _channel.id,
             _channel.name,
             channelDescription: _channel.description,
-            importance: Importance.high,
-            priority: Priority.high,
+            importance: Importance.max,
+            priority: Priority.max,
             icon: '@mipmap/ic_launcher',
+            color: const Color(0xFF7A1F3D), // brand color for the icon accent
+            styleInformation: BigTextStyleInformation(
+              notification.body ?? '',
+              contentTitle: notification.title,
+              summaryText: 'Sumathi\'s Style',
+            ),
+            ticker: notification.title,
+            playSound: true,
+            enableVibration: true,
+            visibility: NotificationVisibility.public,
           ),
         ),
+        payload: message.data['route'], // optional deep-link target
       );
     });
   }
@@ -152,6 +178,7 @@ class NotificationService {
     // Keep the backend updated if the token ever changes/refreshes.
     messaging.onTokenRefresh.listen((newToken) {
       ApiService.saveFcmToken(newToken);
+
     });
   }
 
@@ -188,3 +215,76 @@ class NotificationService {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

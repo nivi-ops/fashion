@@ -574,10 +574,10 @@ class _SettingsPageState extends State<SettingsPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(_user.name.isNotEmpty ? _user.name : 'You',
+                                                            Text(_user.name.isNotEmpty ? _user.name : 'You',
                                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
                                 const SizedBox(height: 3),
-                                Text('+91${_user.phone}',
+                                Text(_formatContact(_user.phone),
                                     style: const TextStyle(fontSize: 11.5, color: AppColors.textLight)),
                               ],
                             ),
@@ -658,6 +658,13 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       },
     );
+  }
+
+     // Only prefix +91 when it's an actual 10-digit phone number.
+  // Prevents "+91someone@gmail.com" when phone field holds an email.
+  String _formatContact(String value) {
+    final isPhone = RegExp(r'^\d{10}$').hasMatch(value);
+    return isPhone ? '+91$value' : value;
   }
 
   void _showToast(String msg, {bool error = false}) {

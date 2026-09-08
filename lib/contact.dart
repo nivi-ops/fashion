@@ -23,6 +23,8 @@ class ContactPage extends StatelessWidget {
       'https://www.instagram.com/_bridal__designer_/';
   static const String youtubeUrl =
       'https://www.youtube.com/@sumathicateringserviceoffi4046/featured';
+  static const String mapsUrl =
+      'https://maps.app.goo.gl/RYJZnmMLKigTTSd47';
 
   /// ---------------------------------------------------------------
   /// LAUNCH HELPERS
@@ -82,6 +84,10 @@ class ContactPage extends StatelessWidget {
 
   void _openYoutube(BuildContext context) {
     _launch(context, Uri.parse(youtubeUrl));
+  }
+
+  void _openMaps(BuildContext context) {
+    _launch(context, Uri.parse(mapsUrl));
   }
 
   /// ---------------------------------------------------------------
@@ -164,7 +170,7 @@ class ContactPage extends StatelessWidget {
                   icon: Icons.location_on,
                   title: 'Address',
                   subtitle: address,
-                  onTap: null,
+                  onTap: () => _openMaps(context),
                 ),
 
                 _ContactItem(
@@ -253,34 +259,124 @@ class ContactPage extends StatelessWidget {
           const SizedBox(height: 20),
 
           // -----------------------------------------------------
-          // MAP
+          // MAP (tap to open live location in Google Maps)
           // -----------------------------------------------------
 
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 180,
-              width: double.infinity,
-              color: AppColors.gray,
-              child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                children: const [
-                  Icon(
-                    Icons.map,
-                    color: AppColors.primary,
-                    size: 34,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Injambakkam, Chennai',
-                    style: TextStyle(
-                      color: AppColors.textLight,
-                      fontSize: 13,
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                InkWell(
+                  onTap: () => _openMaps(context),
+                  child: Container(
+                    height: 170,
+                    width: double.infinity,
+                    color: const Color(0xFFE8E3D9),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Column(
+                            mainAxisAlignment:
+                                MainAxisAlignment.center,
+                            children: const [
+                              Icon(
+                                Icons.location_on,
+                                color: AppColors.primary,
+                                size: 44,
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                "Sumathi's Style",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primaryDark,
+                                ),
+                              ),
+                              SizedBox(height: 3),
+                              Text(
+                                'Injambakkam, Chennai',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppColors.textLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.my_location, size: 12, color: AppColors.primary),
+                                SizedBox(width: 4),
+                                Text(
+                                  'View live map',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _openMaps(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 46),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      icon: const Icon(Icons.directions, size: 17),
+                      label: const Text(
+                        'Get Directions',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
