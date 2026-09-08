@@ -122,7 +122,6 @@ class _SettingsPageState extends State<SettingsPage> {
   // Reviews
   bool _loadingReviews = false;
   final List<Map<String, dynamic>> _reviews = [];
-  final _reviewProductCtrl = TextEditingController();
   final _reviewCommentCtrl = TextEditingController();
   int _reviewRating = 5;
 
@@ -200,7 +199,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _grievanceDescCtrl.dispose();
     _deleteConfirmCtrl.dispose();
     _deactivateReasonCtrl.dispose();
-    _reviewProductCtrl.dispose();
     _reviewCommentCtrl.dispose();
     super.dispose();
   }
@@ -294,7 +292,7 @@ class _SettingsPageState extends State<SettingsPage> {
         final m = doc.data();
         return {
           'id': doc.id,
-          'product': '${m['product'] ?? ''}',
+          'name': '${m['name'] ?? ''}',
           'rating': (num.tryParse('${m['rating'] ?? 5}') ?? 5).toInt(),
           'comment': '${m['comment'] ?? ''}',
         };
@@ -313,23 +311,21 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _submitReview() async {
-    final product = _reviewProductCtrl.text.trim();
-    if (product.isEmpty) {
-      _showToast('Please enter the product name!', error: true);
+    if (!_user.isLoggedIn) {
+      _showToast('Please login to write a review!', error: true);
       return;
     }
     try {
       await FirebaseFirestore.instance.collection('reviews').add({
         'mobile': _user.phone,
         'name': _user.name,
-        'product': product,
         'rating': _reviewRating,
         'comment': _reviewCommentCtrl.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
       _showToast('Thank you for your review!');
-      _loadReviews();
+      await _loadReviews();
     } catch (e) {
       if (mounted) _showToast('Could not submit review: $e', error: true);
     }
@@ -370,10 +366,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     children: [
                       const Text(
                         'Your rating',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -384,9 +377,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             tooltip: '$star star',
                             onPressed: () => setDialogState(() => rating = star),
                             icon: Icon(
-                              star <= rating
-                                  ? Icons.star_rounded
-                                  : Icons.star_border_rounded,
+                              star <= rating ? Icons.star_rounded : Icons.star_border_rounded,
                               color: AppColors.secondary,
                               size: 30,
                             ),
@@ -396,10 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       const SizedBox(height: 10),
                       const Text(
                         'Your review',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 8),
                       TextField(
@@ -413,9 +401,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: AppColors.primary,
-                            ),
+                            borderSide: const BorderSide(color: AppColors.primary),
                           ),
                         ),
                       ),
@@ -444,13 +430,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (result != true) return;
 
-      final comment = commentCtrl.text.trim();
-      await FirebaseFirestore.instance
-          .collection('reviews')
-          .doc(reviewId)
-          .update({
+      await FirebaseFirestore.instance.collection('reviews').doc(reviewId).update({
         'rating': rating,
-        'comment': comment,
+        'comment': commentCtrl.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -458,11 +440,59 @@ class _SettingsPageState extends State<SettingsPage> {
       _showToast('Review updated successfully!');
       await _loadReviews();
     } catch (e) {
-      if (mounted) {
-        _showToast('Could not update review: $e', error: true);
-      }
+      if (mounted) _showToast('Could not update review: $e', error: true);
     } finally {
       commentCtrl.dispose();
+    }
+  }
+
+  Future<void> _deleteReview(Map<String, dynamic> review) async {
+    if (!_user.isLoggedIn) {
+      _showToast('Please login first!', error: true);
+      return;
+    }
+
+    final reviewId = review['id']?.toString() ?? '';
+    if (reviewId.isEmpty) {
+      _showToast('Unable to delete this review.', error: true);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Delete your review?',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: const Text(
+          'Are you sure you want to delete this review? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('reviews').doc(reviewId).delete();
+      if (!mounted) return;
+      _showToast('Review deleted successfully!');
+      await _loadReviews();
+    } catch (e) {
+      if (mounted) _showToast('Could not delete review: $e', error: true);
     }
   }
 
@@ -471,7 +501,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _showToast('Please login to write a review!', error: true);
       return;
     }
-    _reviewProductCtrl.clear();
     _reviewCommentCtrl.clear();
     _reviewRating = 0;
     showModalBottomSheet(
@@ -559,8 +588,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
 
                     const SizedBox(height: 20),
-                    _textField(_reviewProductCtrl, 'Product / Order name'),
-                    const SizedBox(height: 18),
                     const Text('Your Rating',
                         style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.text)),
                     const SizedBox(height: 8),
@@ -609,10 +636,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         onPressed: () async {
                           if (_reviewRating == 0) {
                             _showToast('Please select a star rating!', error: true);
-                            return;
-                          }
-                          if (_reviewProductCtrl.text.trim().isEmpty) {
-                            _showToast('Please enter the product name!', error: true);
                             return;
                           }
                           Navigator.pop(sheetCtx);
@@ -2598,7 +2621,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _reviewCard(Map<String, dynamic> review) {
     final rating = (review['rating'] as num?)?.toInt() ?? 5;
     final comment = review['comment']?.toString() ?? '';
-    final product = review['product']?.toString() ?? '';
     final rawName = review['name']?.toString().trim() ?? '';
     final displayName = rawName.isNotEmpty
         ? rawName
@@ -2654,16 +2676,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         color: AppColors.text,
                       ),
                     ),
-                    if (product.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        product,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: AppColors.textLight,
-                        ),
-                      ),
-                    ],
+
                   ],
                 ),
               ),
@@ -2675,17 +2688,46 @@ class _SettingsPageState extends State<SettingsPage> {
                   fontSize: 13,
                 ),
               ),
-              const SizedBox(width: 2),
-              IconButton(
-                tooltip: 'Edit review',
+              PopupMenuButton<String>(
+                tooltip: 'Review options',
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                onPressed: () => _editReview(review),
                 icon: const Icon(
-                  Icons.edit_outlined,
-                  size: 18,
+                  Icons.more_vert,
+                  size: 20,
                   color: AppColors.textLight,
                 ),
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _editReview(review);
+                  } else if (value == 'delete') {
+                    _deleteReview(review);
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 10),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                        SizedBox(width: 10),
+                        Text(
+                          'Delete',
+                          style: TextStyle(color: AppColors.danger),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
