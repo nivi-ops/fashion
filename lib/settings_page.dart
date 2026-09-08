@@ -38,11 +38,13 @@ class SavedAddress {
 
 class MyOrder {
   final String id;
+  final String docId;
   final String product;
   final double amount;
   String status; // Ordered, Processing, Delivered, Cancelled
   MyOrder({
     required this.id,
+    required this.docId,
     required this.product,
     required this.amount,
     this.status = 'Ordered',
@@ -66,6 +68,7 @@ enum _Panel {
   terms,
   faq,
   help,
+  reviews,
 }
 
 /// ---------------------------------------------------------------------
@@ -91,7 +94,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   _Panel _panel = _Panel.home;
-  late AppUser _user;
+  AppUser _user = AppUser();
 
   // Profile edit controllers
   final _firstNameCtrl = TextEditingController();
@@ -116,6 +119,13 @@ class _SettingsPageState extends State<SettingsPage> {
   String _orderFilter = 'all';
   final List<MyOrder> _orders = [];
 
+  // Reviews
+  bool _loadingReviews = false;
+  final List<Map<String, dynamic>> _reviews = [];
+  final _reviewProductCtrl = TextEditingController();
+  final _reviewCommentCtrl = TextEditingController();
+  int _reviewRating = 5;
+
   // Addresses
   final List<SavedAddress> _addresses = [
     SavedAddress(name: 'Home', door: '12', street: 'Kamaraj Street', city: 'Chennai', pin: '600117'),
@@ -139,7 +149,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Contact details used by Help Center's Call Us / Mail Us buttons.
   static const String _supportPhone = '+918610703658';
-  static const String _supportEmail = 'sumathisstyle@gmail.com';
+  static const String _supportEmail = 'sumathisstyles@gmail.com';
 
   final List<Map<String, String>> _faqData = const [
     {
@@ -190,6 +200,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _grievanceDescCtrl.dispose();
     _deleteConfirmCtrl.dispose();
     _deactivateReasonCtrl.dispose();
+    _reviewProductCtrl.dispose();
+    _reviewCommentCtrl.dispose();
     super.dispose();
   }
 
@@ -200,6 +212,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _syncFromAppState() {
     final state = AppState.instance;
+    final newPhone = state.isLoggedIn ? (state.userId ?? '') : '';
+    // Only true when the logged-in identity itself changed (login,
+    // logout, or switched account) — not on every unrelated AppState
+    // notification.
+    final identityChanged = newPhone != _user.phone;
     if (state.isLoggedIn) {
       _user = AppUser(
         name: state.userName ?? '',
@@ -209,7 +226,13 @@ class _SettingsPageState extends State<SettingsPage> {
     } else {
       _user = AppUser();
     }
-    _syncControllersFromUser();
+    // Refresh the Edit Profile text fields ONLY when identity changed.
+    // Otherwise, if the user is mid-typing in Edit Profile, a routine
+    // AppState notification (e.g. from elsewhere in the app) would wipe
+    // out what they just typed before they hit Save.
+    if (identityChanged) {
+      _syncControllersFromUser();
+    }
   }
   void _syncControllersFromUser() {
     final parts = _user.name.split(' ');
@@ -222,6 +245,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _openPanel(_Panel p) {
     setState(() => _panel = p);
     if (p == _Panel.orders) _loadOrders();
+    if (p == _Panel.reviews) _loadReviews();
   }
 
       Future<void> _loadOrders() async {
@@ -236,6 +260,7 @@ class _SettingsPageState extends State<SettingsPage> {
         final m = doc.data();
         return MyOrder(
           id: doc.id.length > 6 ? doc.id.substring(0, 6).toUpperCase() : doc.id,
+          docId: doc.id,
           product: '${m['product'] ?? ''}',
           amount: (num.tryParse('${m['amount'] ?? 0}') ?? 0).toDouble(),
           status: '${m['status'] ?? 'Ordered'}',
@@ -252,6 +277,125 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) setState(() => _loadingOrders = false);
     }
+  }
+
+  // ---------------------------------------------------------------
+  // REVIEWS (Firestore-backed, shown under Privacy Center)
+  // ---------------------------------------------------------------
+  Future<void> _loadReviews() async {
+    if (!_user.isLoggedIn) return;
+    setState(() => _loadingReviews = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('reviews')
+          .where('mobile', isEqualTo: _user.phone)
+          .get();
+      final loaded = snap.docs.map((doc) {
+        final m = doc.data();
+        return {
+          'id': doc.id,
+          'product': '${m['product'] ?? ''}',
+          'rating': (num.tryParse('${m['rating'] ?? 5}') ?? 5).toInt(),
+          'comment': '${m['comment'] ?? ''}',
+        };
+      }).toList();
+      if (!mounted) return;
+      setState(() {
+        _reviews
+          ..clear()
+          ..addAll(loaded);
+      });
+    } catch (e) {
+      if (mounted) _showToast('Could not load reviews: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _loadingReviews = false);
+    }
+  }
+
+  Future<void> _submitReview() async {
+    final product = _reviewProductCtrl.text.trim();
+    if (product.isEmpty) {
+      _showToast('Please enter the product name!', error: true);
+      return;
+    }
+    try {
+      await FirebaseFirestore.instance.collection('reviews').add({
+        'mobile': _user.phone,
+        'name': _user.name,
+        'product': product,
+        'rating': _reviewRating,
+        'comment': _reviewCommentCtrl.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      _showToast('Thank you for your review!');
+      _loadReviews();
+    } catch (e) {
+      if (mounted) _showToast('Could not submit review: $e', error: true);
+    }
+  }
+
+  void _openReviewForm() {
+    if (!_user.isLoggedIn) {
+      _showToast('Please login to write a review!', error: true);
+      return;
+    }
+    _reviewProductCtrl.clear();
+    _reviewCommentCtrl.clear();
+    _reviewRating = 5;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) => Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Write a Review', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 14),
+                _textField(_reviewProductCtrl, 'Product / Order name'),
+                const SizedBox(height: 12),
+                Row(
+                  children: List.generate(5, (i) {
+                    final filled = i < _reviewRating;
+                    return IconButton(
+                      onPressed: () => setSheet(() => _reviewRating = i + 1),
+                      icon: Icon(filled ? Icons.star : Icons.star_border, color: AppColors.secondary),
+                    );
+                  }),
+                ),
+                TextField(
+                  controller: _reviewCommentCtrl,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Share your experience...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _submitReview();
+                  },
+                  style: _saveBtnStyle().copyWith(minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 46))),
+                  child: const Text('Submit Review'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showToast(String msg, {bool error = false}) {
@@ -368,6 +512,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return _buildFaqPanel();
       case _Panel.help:
         return _buildHelpPanel();
+      case _Panel.reviews:
+        return _buildReviewsPanel();
     }
   }
 
@@ -530,6 +676,8 @@ class _SettingsPageState extends State<SettingsPage> {
               iconColor: AppColors.secondary),
           _menuRow(Icons.shield_outlined, 'Privacy Center', () => _openPanel(_Panel.privacyMenu),
               iconColor: AppColors.success),
+          _menuRow(Icons.star_outline, 'My Reviews', () => _openPanel(_Panel.reviews),
+              iconColor: AppColors.secondary),
         ]),
 
         _menuCard('FEEDBACK & INFORMATION', [
@@ -1070,9 +1218,17 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     );
     if (reason == null) return;
-    // TODO: call update_order_status.php with { id: o.id, status: 'Cancelled', cancel_reason: reason }
-    setState(() => o.status = 'Cancelled');
-    _showToast('Order cancelled successfully');
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(o.docId).update({
+        'status': 'Cancelled',
+        'cancel_reason': reason,
+      });
+      if (!mounted) return;
+      setState(() => o.status = 'Cancelled');
+      _showToast('Order cancelled successfully');
+    } catch (e) {
+      if (mounted) _showToast('Could not cancel order: $e', error: true);
+    }
   }
 
   // ---------------------------------------------------------------
@@ -1455,7 +1611,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               _PolicySection(
                 title: '6. Contact Us',
-                body: 'For privacy questions, contact sumathisstyle@gmail.com or WhatsApp +91 86107 03658.',
+                body: 'For privacy questions, contact sumathisstyles@gmail.com or WhatsApp +91 86107 03658.',
               ),
             ],
           ),
@@ -1515,7 +1671,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text('Grievance Officer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               SizedBox(height: 8),
               Text(
-                'Name: Sumathi.M\nDesignation: Proprietor, Sumathi\'s Style\nEmail: sumathisstyle@gmail.com\nPhone: +91 86107 03658',
+                'Name: Sumathi.M\nDesignation: Proprietor, Sumathi\'s Style\nEmail: sumathisstyles@gmail.com\nPhone: +91 86107 03658',
                 style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.7),
               ),
             ],
@@ -1851,6 +2007,89 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // MY REVIEWS PANEL
+  // ---------------------------------------------------------------
+  Widget _buildReviewsPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _panelHeader('My Reviews', Icons.star_outline),
+        if (_loadingReviews)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (!_user.isLoggedIn)
+          _emptyState(Icons.star_outline, 'Login required', 'Login to see and write your reviews', 'Login', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+          })
+        else ...[
+          if (_reviews.isEmpty)
+            _emptyState(Icons.star_outline, 'No reviews yet',
+                'Share your experience about a product you ordered!', 'Write a Review', _openReviewForm)
+          else ...[
+            ..._reviews.map(_reviewCard),
+            const SizedBox(height: 4),
+            OutlinedButton.icon(
+              onPressed: _openReviewForm,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(color: AppColors.primaryLight, width: 2),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Write a Review'),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _reviewCard(Map<String, dynamic> r) {
+    final rating = (r['rating'] as int?) ?? 5;
+    final comment = (r['comment'] as String?) ?? '';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text((r['product'] as String?) ?? '',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              ),
+              Row(
+                children: List.generate(
+                  5,
+                  (i) => Icon(
+                    i < rating ? Icons.star : Icons.star_border,
+                    size: 15,
+                    color: AppColors.secondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(comment, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.5)),
+          ],
+        ],
+      ),
     );
   }
 
