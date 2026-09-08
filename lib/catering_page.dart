@@ -3485,17 +3485,6 @@ class _CateringReviewsTabState extends State<_CateringReviewsTab> {
                                               color: AppColors.text,
                                             ),
                                           ),
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            _loggedInPhone.isNotEmpty
-                                                ? '+91$_loggedInPhone'
-                                                : '',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 11.5,
-                                              color: AppColors.textLight,
-                                            ),
-                                          ),
                                         ],
                                       ),
                                     ),

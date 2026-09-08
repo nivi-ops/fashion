@@ -2494,17 +2494,6 @@ class _SettingsPageState extends State<SettingsPage> {
                               color: AppColors.text,
                             ),
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            _user.phone.isNotEmpty
-                                ? '+91${_user.phone}'
-                                : '',
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textLight,
-                            ),
-                          ),
                         ],
                       ),
                     ),
