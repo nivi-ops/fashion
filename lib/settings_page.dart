@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'login_page.dart';
 import 'shop_page.dart';
 import 'notification_service.dart';
+import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 /// ---------------------------------------------------------------------
 /// MODELS
@@ -104,6 +105,11 @@ class _SettingsPageState extends State<SettingsPage> {
   final _emailCtrl = TextEditingController();
   final _mobileCtrl = TextEditingController();
 
+  // Profile edit lock states. Fields are locked until the user taps Edit.
+  bool _editingPersonalInfo = false;
+  bool _editingEmail = false;
+  bool _editingMobile = false;
+
   // Notification toggles (persisted locally via SharedPreferences —
   // see _loadNotifPrefs / _setNotifPref for the backend/FCM TODOs
   // needed to actually deliver a push when admin sends one).
@@ -137,9 +143,7 @@ class _SettingsPageState extends State<SettingsPage> {
   int _reviewRating = 5;
 
   // Addresses
-  final List<SavedAddress> _addresses = [
-    SavedAddress(name: 'Home', door: '12', street: 'Kamaraj Street', city: 'Chennai', pin: '600117'),
-  ];
+    final List<SavedAddress> _addresses = [];
   int _addrEditIndex = -1;
   bool _showAddrForm = false;
   final _addrNameCtrl = TextEditingController();
@@ -180,7 +184,7 @@ class _SettingsPageState extends State<SettingsPage> {
     },
     {
       'q': 'How do Super Coins work?',
-      'a': 'Earn 10 coins for every ₹500 spent on completed orders. 1 coin = ₹1. Redemption launching soon!',
+      'a': 'Earn 2 Super Coins with every completed order. Unlock exciting discounts at 12 coins.',
     },
   ];
   final Set<int> _openFaq = {};
@@ -241,6 +245,9 @@ class _SettingsPageState extends State<SettingsPage> {
     // out what they just typed before they hit Save.
     if (identityChanged) {
       _syncControllersFromUser();
+      _editingPersonalInfo = false;
+      _editingEmail = false;
+      _editingMobile = false;
     }
   }
   void _syncControllersFromUser() {
@@ -1166,99 +1173,261 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // PROFILE PANEL
+  // PROFILE PANEL — Flipkart-style locked fields
   // ---------------------------------------------------------------
   Widget _buildProfilePanel() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Profile Information', Icons.edit),
+
+        // -----------------------------------------------------------
+        // PERSONAL INFORMATION
+        // -----------------------------------------------------------
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.badge_outlined, size: 16, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text('Personal Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Icon(
+                    Icons.badge_outlined,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Personal Information',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _editingPersonalInfo = true);
+                    },
+                    child: const Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 14),
               Row(
                 children: [
-                  Expanded(child: _textField(_firstNameCtrl, 'First Name')),
+                  Expanded(
+                    child: _textField(
+                      _firstNameCtrl,
+                      'First Name',
+                      readOnly: !_editingPersonalInfo,
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: _textField(_lastNameCtrl, 'Last Name')),
+                  Expanded(
+                    child: _textField(
+                      _lastNameCtrl,
+                      'Last Name',
+                      readOnly: !_editingPersonalInfo,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 14),
-              ElevatedButton(
-                onPressed: _savePersonalInfo,
-                style: _saveBtnStyle(),
-                child: const Text('Save'),
-              ),
+              if (_editingPersonalInfo) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: _savePersonalInfo,
+                      style: _saveBtnStyle(),
+                      child: const Text('Save'),
+                    ),
+                    const SizedBox(width: 10),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _syncControllersFromUser();
+                          _editingPersonalInfo = false;
+                        });
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
+
+        // -----------------------------------------------------------
+        // EMAIL ADDRESS
+        // -----------------------------------------------------------
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.email_outlined, size: 16, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text('Email Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Icon(
+                    Icons.email_outlined,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Email Address',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _editingEmail = true);
+                    },
+                    child: const Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 14),
-              _textField(_emailCtrl, 'Enter email address'),
-              const SizedBox(height: 12),
-              // NOTE: real OTP verification flow (Send OTP -> 6-digit input -> Verify)
-              // wires up the same way as mobile below — call your backend OTP endpoint here.
-              ElevatedButton.icon(
-                onPressed: () {
-                  final email = _emailCtrl.text.trim();
-                  if (!email.contains('@') || !email.contains('.')) {
-                    _showToast('Enter a valid email address!', error: true);
-                    return;
-                  }
-                  setState(() => _user.email = email);
-                  widget.onUserChanged?.call(_user);
-                  _showToast('Email updated!');
-                },
-                style: _saveBtnStyle(),
-                icon: const Icon(Icons.save, size: 16),
-                label: const Text('Save Email'),
+              _textField(
+                _emailCtrl,
+                'Enter email address',
+                keyboardType: TextInputType.emailAddress,
+                readOnly: !_editingEmail,
               ),
+              if (_editingEmail) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        final email = _emailCtrl.text.trim();
+                        if (!email.contains('@') || !email.contains('.')) {
+                          _showToast(
+                            'Enter a valid email address!',
+                            error: true,
+                          );
+                          return;
+                        }
+                        setState(() {
+                          _user.email = email;
+                          _editingEmail = false;
+                        });
+                        widget.onUserChanged?.call(_user);
+                        _showToast('Email updated!');
+                      },
+                      style: _saveBtnStyle(),
+                      icon: const Icon(Icons.save, size: 16),
+                      label: const Text('Save Email'),
+                    ),
+                    const SizedBox(width: 10),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _emailCtrl.text = _user.email;
+                          _editingEmail = false;
+                        });
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
+
+        // -----------------------------------------------------------
+        // MOBILE NUMBER
+        // -----------------------------------------------------------
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.phone_android, size: 16, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text('Mobile Number', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Icon(
+                    Icons.phone_android,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Mobile Number',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _editingMobile = true);
+                    },
+                    child: const Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 14),
-              _textField(_mobileCtrl, '10-digit number', keyboardType: TextInputType.phone, maxLength: 10),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _saveMobileNumber,
-                style: _saveBtnStyle(),
-                icon: const Icon(Icons.save, size: 16),
-                label: const Text('Save Mobile'),
+              _textField(
+                _mobileCtrl,
+                '10-digit number',
+                keyboardType: TextInputType.phone,
+                maxLength: 10,
+                readOnly: !_editingMobile,
               ),
+              if (_editingMobile) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _saveMobileNumber,
+                      style: _saveBtnStyle(),
+                      icon: const Icon(Icons.save, size: 16),
+                      label: const Text('Save Mobile'),
+                    ),
+                    const SizedBox(width: 10),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _mobileCtrl.text = _user.phone;
+                          _editingMobile = false;
+                        });
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 8),
               const Text(
                 "Note: changing mobile number here won't move your past orders — those stay linked to the number you logged in with.",
-                style: TextStyle(fontSize: 11.5, color: AppColors.textLight),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: AppColors.textLight,
+                ),
               ),
             ],
           ),
@@ -1274,20 +1443,38 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
       );
 
-  Widget _textField(TextEditingController ctrl, String hint,
-      {TextInputType? keyboardType, int? maxLength}) {
+  Widget _textField(
+    TextEditingController ctrl,
+    String hint, {
+    TextInputType? keyboardType,
+    int? maxLength,
+    bool readOnly = false,
+  }) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
       maxLength: maxLength,
+      readOnly: readOnly,
+      enableInteractiveSelection: !readOnly,
       decoration: InputDecoration(
         hintText: hint,
         counterText: '',
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        filled: readOnly,
+        fillColor: readOnly ? const Color(0xFFF5F5F5) : Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+          borderSide: BorderSide(
+            color: readOnly
+                ? const Color(0xFFE8E8E8)
+                : const Color(0xFFE0E0E0),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -1300,23 +1487,43 @@ class _SettingsPageState extends State<SettingsPage> {
   void _savePersonalInfo() {
     final first = _firstNameCtrl.text.trim();
     final last = _lastNameCtrl.text.trim();
+
     if (first.isEmpty) {
-      _showToast('Please enter your first name!', error: true);
+      _showToast(
+        'Please enter your first name!',
+        error: true,
+      );
       return;
     }
-    setState(() => _user.name = [first, last].where((s) => s.isNotEmpty).join(' '));
+
+    setState(() {
+      _user.name = [first, last]
+          .where((s) => s.isNotEmpty)
+          .join(' ');
+      _editingPersonalInfo = false;
+    });
+
     widget.onUserChanged?.call(_user);
     _showToast('Name updated!');
   }
 
   void _saveMobileNumber() {
     final mobile = _mobileCtrl.text.trim();
+
     if (mobile.length != 10 || int.tryParse(mobile) == null) {
-      _showToast('Enter a valid 10-digit number!', error: true);
+      _showToast(
+        'Enter a valid 10-digit number!',
+        error: true,
+      );
       return;
     }
+
     // TODO: trigger real OTP verification via your backend before saving
-    setState(() => _user.phone = mobile);
+    setState(() {
+      _user.phone = mobile;
+      _editingMobile = false;
+    });
+
     widget.onUserChanged?.call(_user);
     _showToast('Mobile number updated!');
   }
@@ -1569,17 +1776,72 @@ class _SettingsPageState extends State<SettingsPage> {
   // ---------------------------------------------------------------
   // WISHLIST PANEL (data comes from your product store — hook up onLoad)
   // ---------------------------------------------------------------
-  Widget _buildWishlistPanel() {
-    // TODO: replace with real wishlist product data (see home_page.dart Product model)
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _panelHeader('My Wishlist', Icons.favorite, back: _Panel.home),
-        _emptyState(Icons.heart_broken_outlined, 'Your wishlist is empty', 'Save your favourite products here!',
-    'Explore Shop', () {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
-    }),
-      ],
+     Widget _buildWishlistPanel() {
+    return AnimatedBuilder(
+      animation: AppState.instance,
+      builder: (context, _) {
+        final items = AppState.instance.wishlistItems;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _panelHeader('My Wishlist', Icons.favorite, back: _Panel.home),
+            if (items.isEmpty)
+              _emptyState(Icons.heart_broken_outlined, 'Your wishlist is empty',
+                  'Save your favourite products here!', 'Explore Shop', () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
+              })
+            else
+              ...items.map(_wishlistCard),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _wishlistCard(Product p) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              p.image,
+              width: 56,
+              height: 56,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 56,
+                height: 56,
+                color: AppColors.gray,
+                child: const Icon(Icons.checkroom, color: AppColors.primary),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 4),
+                Text('₹${p.price.toStringAsFixed(0)}',
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+            onPressed: () => AppState.instance.toggleWishlist(p),
+          ),
+        ],
+      ),
     );
   }
 

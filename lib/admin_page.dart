@@ -696,6 +696,15 @@ class _AdminPageState extends State<AdminPage> {
     }
     return url;
   }
+    String _productImageFor(String productName) {
+    final match = products.firstWhere(
+      (p) => '${p['name']}' == productName,
+      orElse: () => {},
+    );
+    final photos = match['photos'] is List ? List.from(match['photos']) : <dynamic>[];
+    final raw = photos.isNotEmpty ? '${photos.first}' : '${match['photo'] ?? ''}';
+    return raw.isNotEmpty ? _normalizeImageUrl(raw) : '';
+  }
 
   // ---------------- VOICE NOTE PLAYBACK HELPER ----------------
 
@@ -2502,23 +2511,19 @@ class _AdminPageState extends State<AdminPage> {
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
+                                            Expanded(
+                                  child: OutlinedButton(
                                     onPressed: () => editProduct(p),
-                                    icon: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 15,
-                                    ),
-                                    label: const Text(
-                                      'Edit',
-                                      style: TextStyle(fontSize: 11),
-                                    ),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: tealDark,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 4,
                                         vertical: 10,
                                       ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 16,
                                     ),
                                   ),
                                 ),
@@ -2530,10 +2535,8 @@ class _AdminPageState extends State<AdminPage> {
                                       p['visible'] == 'yes' ? 'no' : 'yes',
                                     ),
                                     child: Text(
-                                      p['visible'] == 'yes'
-                                          ? '🙈 Hide'
-                                          : '👁 Show',
-                                      style: const TextStyle(fontSize: 10),
+                                      p['visible'] == 'yes' ? '🙈' : '👁',
+                                      style: const TextStyle(fontSize: 15),
                                     ),
                                   ),
                                 ),
@@ -2981,34 +2984,76 @@ class _AdminPageState extends State<AdminPage> {
             ],
           ),
           const SizedBox(height: 14),
-          if (custOrders.isEmpty)
+               if (custOrders.isEmpty)
             const EmptyState(icon: '📦', text: 'No products ordered yet')
           else
             ...custOrders.map((o) {
+              final image = _productImageFor('${o['product']}');
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: pageBg,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: border),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${o['product']}',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 4),
-                          Text('₹${o['amount']}  •  ${o['date']}',
-                              style: TextStyle(fontSize: 12, color: muted)),
-                        ],
-                      ),
+                child: Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: const EdgeInsets.all(14),
+                    childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: image.isNotEmpty
+                          ? Image.network(
+                              image,
+                              width: 48,
+                              height: 48,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 48,
+                                height: 48,
+                                color: tealLight,
+                                child: const Center(child: Text('👗')),
+                              ),
+                            )
+                          : Container(
+                              width: 48,
+                              height: 48,
+                              color: tealLight,
+                              child: const Center(child: Text('👗')),
+                            ),
                     ),
-                    StatusBadge(status: '${o['status']}'),
-                  ],
+                    title: Text('${o['product']}',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                    subtitle: Text('₹${o['amount']}  •  ${o['date']}',
+                        style: TextStyle(fontSize: 12, color: muted)),
+                    trailing: StatusBadge(status: '${o['status']}'),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Order ID: ${o['orderId']}', style: TextStyle(fontSize: 12, color: muted)),
+                            const SizedBox(height: 4),
+                            Text('Payment: ${o['paymentMethod']} • ${o['paymentStatus']}', style: TextStyle(fontSize: 12, color: muted)),
+                            if ('${o['measurement'] ?? ''}'.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text('Measurement: ${o['measurement']}', style: TextStyle(fontSize: 12, color: muted)),
+                            ],
+                            if ('${o['notes'] ?? ''}'.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text('Notes: ${o['notes']}', style: TextStyle(fontSize: 12, color: muted)),
+                            ],
+                            if ('${o['status']}' == 'Cancelled' && '${o['cancelReason'] ?? ''}'.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text('Cancel Reason: ${o['cancelReason']}', style: TextStyle(fontSize: 12, color: danger)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }),
@@ -3179,6 +3224,42 @@ class _AdminPageState extends State<AdminPage> {
       ],
     );
   }
+    Widget cancellationTable(List<Map<String, dynamic>> list) {
+    if (list.isEmpty) return const EmptyState(icon: '❌', text: 'No cancellations yet');
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowColor: WidgetStatePropertyAll(tealLight),
+        columns: const [
+          DataColumn(label: Text('Order ID')),
+          DataColumn(label: Text('Customer')),
+          DataColumn(label: Text('Mobile')),
+          DataColumn(label: Text('Product')),
+          DataColumn(label: Text('Amount')),
+          DataColumn(label: Text('Reason')),
+          DataColumn(label: Text('Date')),
+          DataColumn(label: Text('WhatsApp')),
+        ],
+        rows: list.map((o) {
+          return DataRow(cells: [
+            DataCell(Text('${o['orderId']}')),
+            DataCell(Text('${o['name']}')),
+            DataCell(Text('📞 ${o['mobile']}')),
+            DataCell(Text('${o['product']}')),
+            DataCell(Text('₹${o['amount']}')),
+            DataCell(Text('${o['cancelReason'] ?? '—'}')),
+            DataCell(Text('${o['date']}')),
+            DataCell(
+              TextButton(
+                onPressed: () => openWhatsApp('${o['mobile']}', '${o['name']}'),
+                child: const Text('💬'),
+              ),
+            ),
+          ]);
+        }).toList(),
+      ),
+    );
+  }
 
   Widget dataRequestsPage() {
     return Column(
@@ -3209,7 +3290,7 @@ class _AdminPageState extends State<AdminPage> {
                       icon: '❌',
                       text: 'No cancellations yet',
                     );
-                  return orderTable(cancelled.reversed.toList(), compact: true);
+                                 return cancellationTable(cancelled.reversed.toList());
                 },
               ),
             ],

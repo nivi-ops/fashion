@@ -129,6 +129,7 @@ class _LocationMapPickerPageState
   bool _resolvingAddress = false;
   bool _fetchingCurrentLocation = false;
   bool _entryChoicePending = false;
+  bool _suppressNextAutoResolve = false;
 
   // -------------------------------------------------------------------------
   // NEW ADDRESS CHECK
@@ -185,8 +186,9 @@ class _LocationMapPickerPageState
     // NEW ADDRESS
     // -------------------------------------------------------------
 
-    if (_isBrandNewAddress) {
+         if (_isBrandNewAddress) {
       _entryChoicePending = true;
+      _suppressNextAutoResolve = true;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -329,12 +331,15 @@ class _LocationMapPickerPageState
       _entryChoicePending = false;
     });
 
-    if (useCurrentLocation == true) {
+        if (useCurrentLocation == true) {
       await _centerOnDeviceLocation(
         showErrors: true,
       );
     } else {
-      await _resolveAddressForPin();
+      setState(() {
+        _shortLabel = 'Move the map to select your location';
+        _pinLabel = '';
+      });
     }
   }
 
@@ -350,8 +355,13 @@ class _LocationMapPickerPageState
     _debounce?.cancel();
   }
 
-  void _onCameraIdle() {
+    void _onCameraIdle() {
     _debounce?.cancel();
+
+    if (_suppressNextAutoResolve) {
+      _suppressNextAutoResolve = false;
+      return;
+    }
 
     _debounce = Timer(
       const Duration(milliseconds: 500),

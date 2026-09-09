@@ -47,7 +47,7 @@ class _ShopPageState extends State<ShopPage> {
   late Future<List<StitchingService>> _servicesFuture;
   late String _selectedCategory;
 
-  final Set<String> _wishlist = {};
+
 
   static const List<_CategoryDef> _categories = [
     _CategoryDef('All', icon: Icons.grid_view_rounded),
@@ -81,15 +81,7 @@ class _ShopPageState extends State<ShopPage> {
     });
   }
 
-  void _toggleWishlist(String id) {
-    setState(() {
-      if (_wishlist.contains(id)) {
-        _wishlist.remove(id);
-      } else {
-        _wishlist.add(id);
-      }
-    });
-  }
+ 
 
   double _ratingFor(String id) {
     final seed = id.codeUnits.fold<int>(0, (a, b) => a + b);
@@ -136,7 +128,7 @@ class _ShopPageState extends State<ShopPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final isWishlisted = _wishlist.contains(service.id);
+            final isWishlisted = AppState.instance.wishlistIds.contains(_productIdFor(service));
             final inCart = _isInCart(service);
             return DraggableScrollableSheet(
               initialChildSize: 0.85,
@@ -183,8 +175,8 @@ class _ShopPageState extends State<ShopPage> {
                                   top: 12,
                                   right: 12,
                                   child: InkWell(
-                                    onTap: () {
-                                      _toggleWishlist(service.id);
+                                                                      onTap: () {
+                                      AppState.instance.toggleWishlist(_productFrom(service, 1));
                                       setSheetState(() {});
                                     },
                                     child: Container(
@@ -478,21 +470,24 @@ class _ShopPageState extends State<ShopPage> {
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.light,
-      appBar: AppBar(
-        title: const Text('Shop Collection'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildCategorySidebar(),
-          Expanded(child: _buildProductArea()),
-        ],
+    return AnimatedBuilder(
+      animation: AppState.instance,
+      builder: (context, _) => Scaffold(
+        backgroundColor: AppColors.light,
+        appBar: AppBar(
+          title: const Text('Shop Collection'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCategorySidebar(),
+            Expanded(child: _buildProductArea()),
+          ],
+        ),
       ),
     );
   }
@@ -582,12 +577,12 @@ class _ShopPageState extends State<ShopPage> {
             ),
             itemCount: services.length,
             itemBuilder: (context, index) {
-              return _ProductCard(
+                            return _ProductCard(
                 service: services[index],
                 rating: _ratingFor(services[index].id),
-                isWishlisted: _wishlist.contains(services[index].id),
+                isWishlisted: AppState.instance.wishlistIds.contains(_productIdFor(services[index])),
                 onTap: () => _openProductDetail(services[index]),
-                onWishlistTap: () => _toggleWishlist(services[index].id),
+                onWishlistTap: () => AppState.instance.toggleWishlist(_productFrom(services[index], 1)),
               );
             },
           );

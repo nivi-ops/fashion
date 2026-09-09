@@ -78,7 +78,7 @@ class ApiService {
   // ---------------- MOCK DATA (still used for services/addresses/orders
   // until those flows are wired to Firestore too) ----------------
 
-     static final List<ShopAddress> _mockAddresses = [];
+     
 
   static final List<TailoringOrder> _mockOrders = [
     TailoringOrder(
@@ -192,46 +192,103 @@ class ApiService {
     }
   }
 
-  Future<List<ShopAddress>> getAddresses() async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    return List.unmodifiable(_mockAddresses);
+    Future<List<ShopAddress>> getAddresses() async {
+    try {
+      final userId = AppState.instance.userId;
+      if (userId == null || userId.isEmpty) return [];
+
+      final snap = await _db
+          .collection('users')
+          .doc(userId)
+          .collection('addresses')
+          .orderBy('created_at', descending: true)
+          .get();
+
+      return snap.docs.map((doc) {
+        final item = doc.data();
+        return ShopAddress(
+          id: doc.id,
+          label: item['label']?.toString() ?? 'Other',
+          addressLine: item['address_line']?.toString() ?? '',
+          city: item['city']?.toString() ?? '',
+          pincode: item['pincode']?.toString() ?? '',
+          phone: item['phone']?.toString(),
+          latitude: (item['latitude'] as num?)?.toDouble(),
+          longitude: (item['longitude'] as num?)?.toDouble(),
+        );
+      }).toList();
+    } catch (e) {
+      // ignore: avoid_print
+      print('❌ getAddresses error: $e');
+      return [];
+    }
   }
 
   Future<ShopAddress> addAddress(ShopAddress address) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    _mockAddresses.add(address);
+    final userId = AppState.instance.userId;
+    if (userId == null || userId.isEmpty) {
+      throw Exception('No logged-in user — cannot save address.');
+    }
+
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('addresses')
+        .doc(address.id)
+        .set({
+      'label': address.label,
+      'address_line': address.addressLine,
+      'city': address.city,
+      'pincode': address.pincode,
+      'phone': address.phone,
+      'latitude': address.latitude,
+      'longitude': address.longitude,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+
     return address;
   }
 
   /// Updates an existing saved address (matched by id) — used by the
   /// "Edit" option in the delivery-address 3-dot menu and by the map
   /// picker's "Update pin and proceed" when editing.
-  ///
-  /// NOTE: this still follows the in-memory mock pattern, since addresses
-  /// aren't wired to Firestore yet. When you're ready, swap the body below
-  /// for a `_db.collection('addresses').doc(address.id).set(...)` call the
-  /// same way fetchProducts below now uses Firestore.
   Future<ShopAddress> updateAddress(ShopAddress address) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    final index = _mockAddresses.indexWhere((a) => a.id == address.id);
-    if (index == -1) {
-      // Address wasn't found (shouldn't normally happen) — add it fresh
-      // instead of silently failing.
-      _mockAddresses.add(address);
-    } else {
-      _mockAddresses[index] = address;
+    final userId = AppState.instance.userId;
+    if (userId == null || userId.isEmpty) {
+      throw Exception('No logged-in user — cannot update address.');
     }
+
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('addresses')
+        .doc(address.id)
+        .set({
+      'label': address.label,
+      'address_line': address.addressLine,
+      'city': address.city,
+      'pincode': address.pincode,
+      'phone': address.phone,
+      'latitude': address.latitude,
+      'longitude': address.longitude,
+      'updated_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
     return address;
   }
 
   /// Deletes a saved address by id — used by the "Delete" option in the
   /// delivery-address 3-dot menu.
-  ///
-  /// NOTE: same in-memory mock pattern as addAddress — swap for
-  /// `_db.collection('addresses').doc(id).delete()` once that's wired up.
   Future<void> deleteAddress(String id) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    _mockAddresses.removeWhere((a) => a.id == id);
+    final userId = AppState.instance.userId;
+    if (userId == null || userId.isEmpty) return;
+
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('addresses')
+        .doc(id)
+        .delete();
   }
 
   Future<List<TailoringOrder>> getOrders() async {

@@ -528,9 +528,8 @@ class CartPage extends StatelessWidget {
                   icon: Icons.favorite_border,
                   label: 'Move to Wishlist',
                   color: AppColors.text,
-                  onTap: () {
-                                        // Keep the wishlist action local to this cart flow.
-                    _wishlistIds.add('${product.id}');
+                                   onTap: () {
+                    state.addToWishlist(product);
                     state.removeFromCart(product.id);
 
                     ScaffoldMessenger.of(context)
@@ -604,9 +603,7 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  // Keeps the selected products for the current cart session.
-  // The button is ready for a dedicated Wishlist page if you add one later.
-  static final Set<String> _wishlistIds = <String>{};
+
 
   // ===================================================================
   // IMAGE PLACEHOLDER
@@ -718,13 +715,34 @@ class CartPage extends StatelessWidget {
 // still displayed as a safe fallback.
 // =======================================================================
 
-class CartProductDetailsPage extends StatelessWidget {
+ class CartProductDetailsPage extends StatefulWidget {
   final Product product;
 
   const CartProductDetailsPage({
     super.key,
     required this.product,
   });
+
+  @override
+  State<CartProductDetailsPage> createState() => _CartProductDetailsPageState();
+}
+
+class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
+  int _qty = 1;
+
+  Product get product => widget.product;
+
+  double get _rating {
+    final seed = '${product.id}'.codeUnits.fold<int>(0, (a, b) => a + b);
+    return 4.3 + (seed % 3) * 0.2;
+  }
+
+  bool get _isWishlisted => AppState.instance.wishlistIds.contains(product.id);
+  bool get _isInCart => AppState.instance.cartItems.any((p) => p.id == product.id);
+
+  void _goToCart() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage()));
+  }
 
   Future<Map<String, dynamic>> _loadProductDetails() async {
     try {
@@ -788,9 +806,11 @@ class CartProductDetailsPage extends StatelessWidget {
     };
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return AnimatedBuilder(
+      animation: AppState.instance,
+      builder: (context, _) => Scaffold(
       backgroundColor: AppColors.light,
       appBar: AppBar(
         title: const Text(
@@ -803,6 +823,19 @@ class CartProductDetailsPage extends StatelessWidget {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isWishlisted ? Icons.favorite : Icons.favorite_border,
+              color: Colors.white,
+            ),
+            onPressed: () => AppState.instance.toggleWishlist(product),
+          ),
+          IconButton(
+            icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
+            onPressed: _goToCart,
+          ),
+        ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _loadProductDetails(),
@@ -829,8 +862,7 @@ class CartProductDetailsPage extends StatelessWidget {
               };
 
           final name = '${data['name'] ?? product.name}';
-          final category =
-              '${data['category'] ?? 'Product'}';
+         
           final price = num.tryParse(
                 '${data['price'] ?? product.price}',
               ) ??
@@ -908,7 +940,7 @@ class CartProductDetailsPage extends StatelessWidget {
                 // PRODUCT INFORMATION
                 // -------------------------------------------------------
 
-                Container(
+                       Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(top: 10),
                   padding: const EdgeInsets.fromLTRB(
@@ -931,25 +963,56 @@ class CartProductDetailsPage extends StatelessWidget {
                         ),
                       ),
 
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 8),
 
-                      Text(
-                        category,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textLight,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF388E3C),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                const Icon(Icons.star, color: Colors.white, size: 11),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Free Delivery',
+                            style: TextStyle(color: AppColors.textLight, fontSize: 12),
+                          ),
+                        ],
                       ),
 
-                      const SizedBox(height: 10),
+                      const Divider(height: 26),
 
                       Text(
                         '₹${price.toStringAsFixed(0)}',
                         style: const TextStyle(
-                          fontSize: 21,
+                          fontSize: 26,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
+                          color: AppColors.text,
                         ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      const Text(
+                        'Inclusive of all taxes',
+                        style: TextStyle(fontSize: 12, color: AppColors.textLight),
                       ),
 
                       const SizedBox(height: 10),
@@ -986,6 +1049,49 @@ class CartProductDetailsPage extends StatelessWidget {
                           ),
                         ),
                       ),
+
+                      const SizedBox(height: 18),
+
+                      Row(
+                        children: [
+                          const Text('Qty:', style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 12),
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFE0E0E0)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  onPressed: () {
+                                    if (_qty > 1) setState(() => _qty--);
+                                  },
+                                  icon: const Icon(Icons.remove, size: 16),
+                                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                                  padding: EdgeInsets.zero,
+                                ),
+                                SizedBox(
+                                  width: 28,
+                                  child: Text(
+                                    '$_qty',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () {
+                                    if (_qty < 10) setState(() => _qty++);
+                                  },
+                                  icon: const Icon(Icons.add, size: 16),
+                                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -1011,48 +1117,7 @@ class CartProductDetailsPage extends StatelessWidget {
                 // HIGHLIGHTS
                 // -------------------------------------------------------
 
-                if (highlights.isNotEmpty)
-                  _detailSection(
-                    title: 'Product Highlights',
-                    child: Column(
-                      children: highlights
-                          .map(
-                            (item) => Padding(
-                              padding:
-                                  const EdgeInsets.only(
-                                bottom: 9,
-                              ),
-                              child: Row(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.check_circle,
-                                    size: 18,
-                                    color:
-                                        AppColors.primary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      '$item',
-                                      style:
-                                          const TextStyle(
-                                        fontSize: 13.5,
-                                        color:
-                                            AppColors.text,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-
-                // -------------------------------------------------------
+                         // -------------------------------------------------------
                 // PRICE TAGS / VARIATIONS
                 // -------------------------------------------------------
 
@@ -1110,7 +1175,7 @@ class CartProductDetailsPage extends StatelessWidget {
                 // BUY NOW
                 // -------------------------------------------------------
 
-                Padding(
+                   Padding(
                   padding:
                       const EdgeInsets.fromLTRB(
                     16,
@@ -1118,56 +1183,105 @@ class CartProductDetailsPage extends StatelessWidget {
                     16,
                     0,
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CheckoutPage(
-                              items: [product],
-                              fromCart: true,
-                              quantities: {
-                                product.id:
-                                    product.qty > 0
-                                        ? product.qty
-                                        : 1,
-                              },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () {
+                              if (_isInCart) {
+                                _goToCart();
+                              } else {
+                                AppState.instance.addToCart(product.copyWith(qty: _qty));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${product.name} added to cart! 🛒'),
+                                    action: SnackBarAction(label: 'VIEW CART', onPressed: _goToCart),
+                                  ),
+                                );
+                              }
+                              setState(() {});
+                            },
+                            icon: Icon(_isInCart ? Icons.shopping_cart_checkout : Icons.shopping_cart, size: 18),
+                            label: Text(_isInCart ? 'View Cart' : 'Add to Cart'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CheckoutPage(
+                                    items: [product],
+                                    fromCart: true,
+                                    quantities: {product.id: _qty},
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.flash_on,
+                              size: 20,
+                            ),
+                            label: const Text(
+                              'Buy Now',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.gold,
+                              foregroundColor:
+                                  AppColors.dark,
+                              elevation: 2,
+                              shape:
+                                  RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(8),
+                              ),
                             ),
                           ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.flash_on,
-                        size: 20,
-                      ),
-                      label: const Text(
-                        'Buy Now',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.gold,
-                        foregroundColor:
-                            AppColors.dark,
-                        elevation: 2,
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
                 ),
+                if (highlights.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Product Highlights',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          highlights.map((h) => '• $h').join('\n'),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           );
         },
+      ),
       ),
     );
   }

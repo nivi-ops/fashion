@@ -82,12 +82,17 @@ class AppState extends ChangeNotifier {
   List<Product> get wishlistItems => _wishlist.values.toList();
   int get wishlistCount => _wishlist.length;
 
-  void toggleWishlist(Product product) {
+    void toggleWishlist(Product product) {
     if (_wishlist.containsKey(product.id)) {
       _wishlist.remove(product.id);
     } else {
       _wishlist[product.id] = product;
     }
+    notifyListeners();
+  }
+
+  void addToWishlist(Product product) {
+    _wishlist[product.id] = product;
     notifyListeners();
   }
 
