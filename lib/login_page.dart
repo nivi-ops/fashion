@@ -123,10 +123,12 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
 
-          // Very light overlay only for text readability, background stays clear
+                   // Very light overlay only for text readability, background stays clear
           Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.10),
+            child: IgnorePointer(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.10),
+              ),
             ),
           ),
 

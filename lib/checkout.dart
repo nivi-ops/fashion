@@ -56,7 +56,42 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   PaymentMethod _payment = PaymentMethod.upi;
 
-  bool _placingOrder = false;
+    bool _placingOrder = false;
+  String? _previewOrderId;
+
+  Future<String> _getOrGenerateOrderId() async {
+    if (_previewOrderId != null) return _previewOrderId!;
+    final db = FirebaseFirestore.instance;
+    final phone = _phoneCtrl.text.trim();
+    final year = DateTime.now().year;
+    final yearStart = DateTime(year, 1, 1);
+    final snap = await db
+        .collection('orders')
+        .where(
+          'created_at',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart),
+        )
+        .get();
+    final sequence = (snap.docs.length + 1).toString().padLeft(3, '0');
+    final last3 =
+        phone.length >= 3 ? phone.substring(phone.length - 3) : phone;
+    _previewOrderId = 'SS$year$sequence$last3';
+    return _previewOrderId!;
+  }
+
+  Future<void> _awardCoinsIfEligible(String userId) async {
+    final db = FirebaseFirestore.instance;
+    final ref = db.collection('user_coins').doc(userId);
+    final snap = await ref.get();
+    final currentOrderCount = (snap.data()?['orderCount'] ?? 0) as int;
+    final newOrderCount = currentOrderCount + 1;
+
+    final updates = <String, dynamic>{'orderCount': newOrderCount};
+    if (newOrderCount >= 6) {
+      updates['coins'] = FieldValue.increment(2);
+    }
+    await ref.set(updates, SetOptions(merge: true));
+  }
 
   // -------------------------------------------------------------------
   // RAZORPAY
@@ -107,8 +142,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       _nameCtrl.text = state.userName ?? '';
       _phoneCtrl.text = state.userId ?? '';
     }
-
-    // Auto-fill the delivery address fields from the most recently
+          // Auto-fill the delivery address fields from the most recently
     // confirmed/saved address (via LocationMapPickerPage).
     _prefillSavedAddress();
 
@@ -157,6 +191,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // -------------------------------------------------------------------
   // PREFILL SAVED ADDRESS
   // -------------------------------------------------------------------
+
+    @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_addressCtrl.text.trim().isEmpty) {
+      _prefillSavedAddress();
+    }
+  }
 
   Future<void> _prefillSavedAddress() async {
     try {
@@ -464,33 +506,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final double orderTotal = _total;
     final phone = _phoneCtrl.text.trim();
 
-    final year = DateTime.now().year;
-    final yearStart = DateTime(year, 1, 1);
-
-    final snap = await db
-        .collection('orders')
-        .where(
-          'created_at',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart),
-        )
-        .get();
-
-    final sequence = (snap.docs.length + 1).toString().padLeft(3, '0');
-
-    final last3 =
-        phone.length >= 3 ? phone.substring(phone.length - 3) : phone;
-
-    final orderId = 'SS$year$sequence$last3';
+        final orderId = await _getOrGenerateOrderId();
 
     final productNames = widget.items.map((p) => p.name).join(', ');
 
-    await db.collection('orders').add({
+         await db.collection('orders').add({
       'order_id': orderId,
       'name': _nameCtrl.text.trim(),
       'mobile': phone,
       'address': _addressCtrl.text.trim(),
       'pincode': _pincodeCtrl.text.trim(),
       'product': productNames,
+      'product_image': widget.items.isNotEmpty ? widget.items.first.image : '',
       'amount': orderTotal,
       'status': 'Ordered',
       'source': 'website',
@@ -502,6 +529,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       'created_at': FieldValue.serverTimestamp(),
     });
 
+    await _awardCoinsIfEligible(phone);
     await _completeLocalOrder(orderTotal, _payment, orderId);
   }
 
@@ -529,33 +557,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final double orderTotal = _total;
       final phone = _phoneCtrl.text.trim();
 
-      final year = DateTime.now().year;
-      final yearStart = DateTime(year, 1, 1);
-
-      final snap = await db
-          .collection('orders')
-          .where(
-            'created_at',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(yearStart),
-          )
-          .get();
-
-      final sequence = (snap.docs.length + 1).toString().padLeft(3, '0');
-
-      final last3 =
-          phone.length >= 3 ? phone.substring(phone.length - 3) : phone;
-
-      final orderId = 'SS$year$sequence$last3';
+            final orderId = await _getOrGenerateOrderId();
 
       final productNames = widget.items.map((p) => p.name).join(', ');
 
-      await db.collection('orders').add({
+           await db.collection('orders').add({
         'order_id': orderId,
         'name': _nameCtrl.text.trim(),
         'mobile': phone,
         'address': _addressCtrl.text.trim(),
         'pincode': _pincodeCtrl.text.trim(),
         'product': productNames,
+        'product_image': widget.items.isNotEmpty ? widget.items.first.image : '',
         'amount': orderTotal,
         'status': 'Ordered',
         'source': 'website',
@@ -564,6 +577,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'created_at': FieldValue.serverTimestamp(),
       });
 
+      await _awardCoinsIfEligible(phone);
       await _completeLocalOrder(orderTotal, PaymentMethod.cod, orderId);
     } catch (e) {
       if (!mounted) {
@@ -968,7 +982,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
+                Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1013,7 +1027,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
         ),
 
+        const SizedBox(height: 12),
+
+        FutureBuilder<String>(
+          future: _getOrGenerateOrderId(),
+          builder: (context, snap) {
+            if (!snap.hasData) return const SizedBox.shrink();
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.receipt_long, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Text('Order ID: #${snap.data}',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                ],
+              ),
+            );
+          },
+        ),
+
         const SizedBox(height: 18),
+         
 
         const Text(
           'Items',

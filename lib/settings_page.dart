@@ -40,12 +40,14 @@ class MyOrder {
   final String id;
   final String docId;
   final String product;
+  final String productImage;
   final double amount;
   String status; // Ordered, Processing, Delivered, Cancelled
   MyOrder({
     required this.id,
     required this.docId,
     required this.product,
+    this.productImage = '',
     required this.amount,
     this.status = 'Ordered',
   });
@@ -113,11 +115,20 @@ class _SettingsPageState extends State<SettingsPage> {
   // bool _consentMarketing = true;
   // bool _consentLocation = false;
 
-  // Orders — starts empty. Real orders should be loaded from your
+    // Orders — starts empty. Real orders should be loaded from your
   // backend in _loadOrders() (see TODO there); no sample/dummy data.
   bool _loadingOrders = false;
   String _orderFilter = 'all';
   final List<MyOrder> _orders = [];
+
+  // Super Coins — real balance from Firestore `user_coins/{phone}`.
+  // Coins start being awarded only from the 6th order onward (2 coins
+  // per order), and can only be redeemed once the balance reaches 12.
+  bool _loadingCoins = false;
+  int _coinBalance = 0;
+  int _coinOrderCount = 0;
+  static const int _coinRedeemThreshold = 12;
+  static const int _coinsStartFromOrder = 6;
 
   // Reviews
   bool _loadingReviews = false;
@@ -240,10 +251,32 @@ class _SettingsPageState extends State<SettingsPage> {
     _mobileCtrl.text = _user.phone;
   }
 
-  void _openPanel(_Panel p) {
+       void _openPanel(_Panel p) {
     setState(() => _panel = p);
     if (p == _Panel.orders || p == _Panel.coins) _loadOrders();
+    if (p == _Panel.coins) _loadCoins();
     if (p == _Panel.reviews) _loadReviews();
+  }
+
+  Future<void> _loadCoins() async {
+    if (!_user.isLoggedIn) return;
+    setState(() => _loadingCoins = true);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('user_coins')
+          .doc(_user.phone)
+          .get();
+      final data = doc.data();
+      if (!mounted) return;
+      setState(() {
+        _coinBalance = (data?['coins'] as num?)?.toInt() ?? 0;
+        _coinOrderCount = (data?['orderCount'] as num?)?.toInt() ?? 0;
+      });
+    } catch (e) {
+      if (mounted) _showToast('Could not load Super Coins: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _loadingCoins = false);
+    }
   }
 
       Future<void> _loadOrders() async {
@@ -263,10 +296,11 @@ class _SettingsPageState extends State<SettingsPage> {
         final displayId = savedOrderId.isNotEmpty
             ? savedOrderId
             : (doc.id.length > 6 ? doc.id.substring(0, 6).toUpperCase() : doc.id);
-        return MyOrder(
+                 return MyOrder(
           id: displayId,
           docId: doc.id,
           product: '${m['product'] ?? ''}',
+          productImage: '${m['product_image'] ?? ''}',
           amount: (num.tryParse('${m['amount'] ?? 0}') ?? 0).toDouble(),
           status: '${m['status'] ?? 'Ordered'}',
         );
@@ -1380,11 +1414,29 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
+                               Container(
                   width: 56,
                   height: 56,
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(color: AppColors.gray, borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.checkroom, color: AppColors.primary),
+                  child: o.productImage.trim().isEmpty
+                      ? const Icon(Icons.checkroom, color: AppColors.primary)
+                      : Image.network(
+                          o.productImage,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.checkroom, color: AppColors.primary),
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          },
+                        ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1535,10 +1587,10 @@ class _SettingsPageState extends State<SettingsPage> {
   // SUPER COINS PANEL — like Flipkart SuperCoins: a wallet balance up
   // top, then a per-order "+coins earned" history list below.
   // ---------------------------------------------------------------
-  Widget _buildCoinsPanel() {
+    Widget _buildCoinsPanel() {
     final eligibleOrders = _orders.where((o) => o.status != 'Cancelled').toList();
-    final totalSpent = eligibleOrders.fold<double>(0, (s, o) => s + o.amount);
-    final coins = (totalSpent / 500).floor() * 10;
+    final canRedeem = _coinBalance >= _coinRedeemThreshold;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1554,11 +1606,36 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               const Icon(Icons.monetization_on, size: 36, color: Colors.white),
               const SizedBox(height: 8),
-              Text('$coins',
-                  style: const TextStyle(
-                      fontFamily: 'PlayfairDisplay', fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white)),
+              _loadingCoins
+                  ? const SizedBox(
+                      height: 40,
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        ),
+                      ),
+                    )
+                  : Text('$_coinBalance',
+                      style: const TextStyle(
+                          fontFamily: 'PlayfairDisplay', fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white)),
               const SizedBox(height: 4),
-              const Text('Sumathi Coins Available', style: TextStyle(color: Colors.white, fontSize: 13)),
+                           const Text('Sumathi Coins Available', style: TextStyle(color: Colors.white, fontSize: 13)),
+              if (!_loadingCoins) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'From $_coinOrderCount completed order${_coinOrderCount == 1 ? '' : 's'}',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11),
+                ),
+              ],
+              if (!_loadingCoins && !canRedeem) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Redeem unlocks at $_coinRedeemThreshold coins (${_coinRedeemThreshold - _coinBalance} more to go)',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 11.5),
+                ),
+              ],
             ],
           ),
         ),
@@ -1566,11 +1643,16 @@ class _SettingsPageState extends State<SettingsPage> {
         _card(
           child: Column(
             children: [
-              _coinsInfoRow(Icons.shopping_bag_outlined, 'Earn on every order',
-                  'Get 10 coins for every ₹500 you spend on stitching, sarees, aari work & more.'),
+              _coinsInfoRow(Icons.shopping_bag_outlined, 'Earn from your 6th order',
+                  'Starting from your 6th order, earn 2 Sumathi Coins on every order you place.'),
               const Divider(height: 24),
-              _coinsInfoRow(Icons.card_giftcard, 'Redeem for discounts',
-                  'Use your coins to get discounts on your next custom order. Coming soon!'),
+              _coinsInfoRow(
+                Icons.card_giftcard,
+                canRedeem ? 'Redeem for discounts' : 'Redeem for discounts (locked)',
+                canRedeem
+                    ? 'You have enough coins! Redemption on your next custom order is coming soon.'
+                    : 'Reach $_coinRedeemThreshold coins to unlock redeeming coins for a discount.',
+              ),
             ],
           ),
         ),
@@ -1578,7 +1660,7 @@ class _SettingsPageState extends State<SettingsPage> {
         const Text('COINS HISTORY',
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textLight, letterSpacing: 0.5)),
         const SizedBox(height: 10),
-        if (_loadingOrders)
+        if (_loadingOrders || _loadingCoins)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 30),
             child: Center(child: CircularProgressIndicator()),
@@ -1593,13 +1675,15 @@ class _SettingsPageState extends State<SettingsPage> {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
           })
         else
-          ...eligibleOrders.map(_coinHistoryRow),
+          ...eligibleOrders.asMap().entries.map((e) => _coinHistoryRow(e.value, e.key + 1)),
       ],
     );
   }
 
-  Widget _coinHistoryRow(MyOrder o) {
-    final earned = (o.amount / 500).floor() * 10;
+  Widget _coinHistoryRow(MyOrder o, int orderPosition) {
+    // Coins are only earned from the 6th order onward — 2 coins per
+    // order — matching the award logic run at checkout.
+    final earned = orderPosition >= _coinsStartFromOrder ? 2 : 0;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

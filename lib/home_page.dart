@@ -586,15 +586,20 @@ class _HomePageState extends State<HomePage> {
           // LOCATION
           // -------------------------------------------------------
 
-          InkWell(
+                   InkWell(
             onTap: () async {
               final picked =
                   await LocationPickerSheet.show(context);
 
               if (picked != null) {
-                final display = picked.label.isNotEmpty
-                    ? picked.label
-                    : picked.addressLine;
+                // Prefer the actual resolved address line over the
+                // generic Home/Work/Other label, so the header shows
+                // where the order will actually be delivered.
+                final display = picked.addressLine.trim().isNotEmpty
+                    ? picked.addressLine
+                    : (picked.label.isNotEmpty
+                        ? picked.label
+                        : 'Selected location');
 
                 // Persist the selection (SharedPreferences) so it
                 // survives app restarts, and updates the header text
@@ -618,14 +623,18 @@ class _HomePageState extends State<HomePage> {
 
                 const SizedBox(width: 4),
 
-                Text(
-                  'Deliver to ${state.deliveryLocation}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color:
-                        AppColors.primary,
-                    fontWeight:
-                        FontWeight.w600,
+                                Flexible(
+                  child: Text(
+                    'Deliver to ${state.deliveryLocation}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color:
+                          AppColors.primary,
+                      fontWeight:
+                          FontWeight.w600,
+                    ),
                   ),
                 ),
 
@@ -1863,7 +1872,7 @@ class _HomePageState extends State<HomePage> {
   // ADD TO CART
   // ===============================================================
 
-  void _addToCart(
+    void _addToCart(
     Product product,
     AppState state,
   ) {
@@ -1874,19 +1883,99 @@ class _HomePageState extends State<HomePage> {
       '${product.name} added to your cart.',
     );
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '${product.name} added to cart',
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.white,
+        elevation: 6,
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: AppColors.primary.withValues(alpha: 0.15),
+          ),
         ),
-        duration:
-            const Duration(
-          seconds: 1,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        content: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: product.isNetworkImage
+                  ? Image.network(
+                      product.image,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 40,
+                        height: 40,
+                        color: AppColors.gray,
+                        child: const Icon(Icons.checkroom, size: 18, color: AppColors.textLight),
+                      ),
+                    )
+                  : Image.asset(
+                      product.image,
+                      width: 40,
+                      height: 40,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 40,
+                        height: 40,
+                        color: AppColors.gray,
+                        child: const Icon(Icons.checkroom, size: 18, color: AppColors.textLight),
+                      ),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle, size: 15, color: Colors.green),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Added to cart',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CartPage()),
+                );
+              },
+              child: const Text(
+                'VIEW CART',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
         ),
-        backgroundColor:
-            AppColors.primary,
       ),
     );
   }

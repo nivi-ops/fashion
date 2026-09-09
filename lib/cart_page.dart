@@ -629,7 +629,7 @@ class CartPage extends StatelessWidget {
   // ACTION BUTTON
   // ===================================================================
 
-  Widget _actionBtn({
+    Widget _actionBtn({
     required IconData icon,
     required String label,
     required Color color,
@@ -640,25 +640,31 @@ class CartPage extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(
           vertical: 13,
+          horizontal: 4,
         ),
         child: Row(
           mainAxisAlignment:
               MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 18,
+              size: 16,
               color: color,
             ),
 
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
 
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11.5,
+                ),
               ),
             ),
           ],

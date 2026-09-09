@@ -2961,18 +2961,19 @@ class _AdminPageState extends State<AdminPage> {
       '👤 $name — ${custOrders.length} products ordered',
       Column(
         children: [
-          Row(
+                    Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 10,
+            runSpacing: 6,
             children: [
               OutlinedButton(
                 onPressed: () => setState(() {
                   selectedCustomerPhone = null;
                   selectedCustomerName = null;
                 }),
-                child: const Text('← Back to Customers'),
+                child: const Text('←'),
               ),
-              const Spacer(),
               Text('📞 $phone', style: TextStyle(fontSize: 13, color: muted)),
-              const SizedBox(width: 10),
               TextButton(
                 onPressed: () => openWhatsApp(phone, name),
                 child: const Text('💬 WhatsApp'),
