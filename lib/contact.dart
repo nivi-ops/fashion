@@ -17,14 +17,14 @@ class ContactPage extends StatelessWidget {
 
   static const String phoneNumber = '8610703658';
   static const String whatsappNumber = '918610703658';
-  static const String email = 'sumathisstyle@gmail.com';
+  static const String email = 'divyadeveloper2025gmail.com.com';
   static const String address = 'Injambakkam, Chennai';
   static const String instagramUrl =
       'https://www.instagram.com/_bridal__designer_/';
   static const String youtubeUrl =
       'https://www.youtube.com/@sumathicateringserviceoffi4046/featured';
   static const String mapsUrl =
-      'https://maps.app.goo.gl/RYJZnmMLKigTTSd47';
+      'https://maps.app.goo.gl/JGPnDeH1QL3DKKBc8';
 
   /// ---------------------------------------------------------------
   /// LAUNCH HELPERS

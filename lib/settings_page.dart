@@ -159,7 +159,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Contact details used by Help Center's Call Us / Mail Us buttons.
   static const String _supportPhone = '+918610703658';
-  static const String _supportEmail = 'sumathisstyles@gmail.com';
+  static const String _supportEmail = 'divyadeveloper2025gmail.com.com';
 
   final List<Map<String, String>> _faqData = const [
     {
