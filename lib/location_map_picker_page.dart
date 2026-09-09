@@ -830,6 +830,49 @@ class _LocationMapPickerPageState
     );
   }
 
+    // =========================================================================
+  // CONFIRM LOCATION (quick save — no name/phone form)
+  // =========================================================================
+
+  Future<void> _confirmLocationDirectly() async {
+    if (_fullAddress.trim().isEmpty) {
+      _showSnack(
+        'Please wait for the address to resolve, or search above.',
+      );
+
+      return;
+    }
+
+    final ShopAddress address = ShopAddress(
+      id: widget.editingAddress?.id ??
+          'a${DateTime.now().millisecondsSinceEpoch}',
+
+      label: widget.editingAddress?.label ?? 'Other',
+
+      addressLine: _fullAddress.trim(),
+
+      city: _city.trim(),
+
+      pincode: _pincode.trim(),
+
+      phone: widget.editingAddress?.phone,
+
+      latitude: _pinPosition.latitude,
+
+      longitude: _pinPosition.longitude,
+    );
+
+    if (widget.editingAddress != null) {
+      await ApiService.instance.updateAddress(address);
+    } else {
+      await ApiService.instance.addAddress(address);
+    }
+
+    if (!mounted) return;
+
+    Navigator.pop(context, address);
+  }
+
   // =========================================================================
   // SAVE ADDRESS
   // =========================================================================
@@ -1471,10 +1514,10 @@ class _LocationMapPickerPageState
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                                const SizedBox(height: 14),
 
                 // -----------------------------------------------------------
-                // ADD ADDRESS DETAILS
+                // CONFIRM LOCATION (saves immediately, no extra form)
                 // -----------------------------------------------------------
 
                 SizedBox(
@@ -1482,7 +1525,7 @@ class _LocationMapPickerPageState
 
                   child: FilledButton(
                     onPressed:
-                        _openAddressDetailsSheet,
+                        _confirmLocationDirectly,
 
                     style:
                         FilledButton.styleFrom(
@@ -1494,7 +1537,35 @@ class _LocationMapPickerPageState
                     ),
 
                     child: const Text(
-                      'Add address Details',
+                      'Confirm Location',
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // -----------------------------------------------------------
+                // ADD ADDRESS DETAILS (optional — name/phone/home-work)
+                // -----------------------------------------------------------
+
+                SizedBox(
+                  width: double.infinity,
+
+                  child: OutlinedButton(
+                    onPressed:
+                        _openAddressDetailsSheet,
+
+                    style:
+                        OutlinedButton.styleFrom(
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
+                        vertical: 14,
+                      ),
+                    ),
+
+                    child: const Text(
+                      'Add more details (optional)',
                     ),
                   ),
                 ),

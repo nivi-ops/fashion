@@ -256,8 +256,15 @@ class _SettingsPageState extends State<SettingsPage> {
           .get();
       final loaded = snap.docs.map((doc) {
         final m = doc.data();
+        // Use the human-readable order_id saved at checkout (e.g.
+        // "SS2026001965") instead of the Firestore auto document id,
+        // so this matches exactly what the admin dashboard shows.
+        final savedOrderId = '${m['order_id'] ?? ''}'.trim();
+        final displayId = savedOrderId.isNotEmpty
+            ? savedOrderId
+            : (doc.id.length > 6 ? doc.id.substring(0, 6).toUpperCase() : doc.id);
         return MyOrder(
-          id: doc.id.length > 6 ? doc.id.substring(0, 6).toUpperCase() : doc.id,
+          id: displayId,
           docId: doc.id,
           product: '${m['product'] ?? ''}',
           amount: (num.tryParse('${m['amount'] ?? 0}') ?? 0).toDouble(),
@@ -2753,12 +2760,14 @@ class _SettingsPageState extends State<SettingsPage> {
     String btnLabel,
     VoidCallback? onTap,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 50),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 50),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
           Icon(icon, size: 56, color: const Color(0xFFDDDDDD)),
           const SizedBox(height: 14),
           Text(
@@ -2778,12 +2787,13 @@ class _SettingsPageState extends State<SettingsPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
-          ElevatedButton(
+                   ElevatedButton(
             onPressed: onTap,
             style: _saveBtnStyle(),
             child: Text(btnLabel),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

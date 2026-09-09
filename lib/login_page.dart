@@ -39,9 +39,6 @@ class _LoginPageState extends State<LoginPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLoggedIn', true);
 
-    // Save both name + identifier into AppState so Settings page +
-    // Home page can show the real logged-in name (not just the
-    // email/phone that was typed in).
     final name = nameController.text.trim();
     final identifier = emailController.text.trim();
     await prefs.setString('userName', name);
@@ -88,38 +85,38 @@ class _LoginPageState extends State<LoginPage> {
       body: Stack(
         children: [
 
-                   Positioned.fill(
+          Positioned.fill(
             child: Image.asset(
               "assets/images/lgn_bg.png",
               fit: BoxFit.cover,
             ),
           ),
 
-          // Small admin-access icon — tap to open Admin Panel
+          // Very light, almost-invisible admin-access icon — tap to open
+          // Admin Panel. Kept faint on purpose so customers don't notice it.
           Positioned(
             top: 40,
             right: 16,
             child: SafeArea(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(30),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AdminPage(),
+              child: Opacity(
+                opacity: 0.25,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(30),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AdminPage(),
+                      ),
+                    );
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(
+                      Icons.admin_panel_settings_outlined,
+                      color: Colors.white,
+                      size: 18,
                     ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.admin_panel_settings_outlined,
-                    color: Colors.white70,
-                    size: 20,
                   ),
                 ),
               ),

@@ -114,6 +114,7 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController productSearch = TextEditingController();
   final TextEditingController orderSearch = TextEditingController();
   final TextEditingController customSearch = TextEditingController();
+  final TextEditingController customerListSearch = TextEditingController();
   final TextEditingController boutiqueSearch = TextEditingController();
   final TextEditingController cateringSearch = TextEditingController();
   final TextEditingController dataSearch = TextEditingController();
@@ -131,7 +132,7 @@ class _AdminPageState extends State<AdminPage> {
   String pCategory = '';
   String pStock = 'Available';
   String pVisible = 'yes';
-    List<XFile> uploadedPhotos = [];
+  List<XFile> uploadedPhotos = [];
   final TextEditingController pImageUrl = TextEditingController();
   List<TextEditingController> highlightControllers = [TextEditingController()];
   List<TextEditingController> priceTagControllers = [
@@ -163,6 +164,7 @@ class _AdminPageState extends State<AdminPage> {
       productSearch,
       orderSearch,
       customSearch,
+      customerListSearch,
       boutiqueSearch,
       cateringSearch,
       dataSearch,
@@ -244,7 +246,7 @@ class _AdminPageState extends State<AdminPage> {
       final snap = await _db.collection('orders').get();
       final mapped = snap.docs.map<Map<String, dynamic>>((doc) {
         final m = doc.data();
-                 final createdAt = m['created_at'];
+        final createdAt = m['created_at'];
         DateTime? created;
         if (createdAt is Timestamp) created = createdAt.toDate();
         return {
@@ -255,9 +257,7 @@ class _AdminPageState extends State<AdminPage> {
           'product': m['product'] ?? '',
           'amount': num.tryParse('${m['amount'] ?? 0}') ?? 0,
           'status': m['status'] ?? 'Ordered',
-          'date': created != null
-              ? formatDate(created.toIso8601String())
-              : '',
+          'date': created != null ? formatDate(created.toIso8601String()) : '',
           'source': m['source'] ?? 'website',
           'measurement': m['measurement'] ?? '',
           // The customer app now stores the recorded voice note as a
@@ -288,8 +288,8 @@ class _AdminPageState extends State<AdminPage> {
         final photos = m['photos'] is List
             ? List<dynamic>.from(m['photos'])
             : (m['image_url'] != null && '${m['image_url']}'.isNotEmpty
-                ? [m['image_url']]
-                : <dynamic>[]);
+                  ? [m['image_url']]
+                  : <dynamic>[]);
         return {
           'id': doc.id,
           'name': m['name'] ?? '',
@@ -304,8 +304,9 @@ class _AdminPageState extends State<AdminPage> {
               : 'no',
           'photos': photos,
           'photo': photos.isNotEmpty ? photos.first : '',
-          'highlights':
-              m['highlights'] is List ? List<dynamic>.from(m['highlights']) : [],
+          'highlights': m['highlights'] is List
+              ? List<dynamic>.from(m['highlights'])
+              : [],
           'priceTags': m['price_tags'] is List
               ? List<dynamic>.from(m['price_tags'])
               : [],
@@ -346,8 +347,7 @@ class _AdminPageState extends State<AdminPage> {
         }
         return m;
       }).toList();
-      list.sort((a, b) =>
-          '${a['created_at']}'.compareTo('${b['created_at']}'));
+      list.sort((a, b) => '${a['created_at']}'.compareTo('${b['created_at']}'));
       notifications = list;
     } catch (_) {
       notifications = [];
@@ -379,9 +379,14 @@ class _AdminPageState extends State<AdminPage> {
   Future<void> loadCustomerRequests() async {
     dataRequests = await _customerRequestsByType('data_export', 'requested_at');
     grievances = await _customerRequestsByType('grievance', 'created_at');
-    deactivated = await _customerRequestsByType('deactivated', 'deactivated_at');
-    deletedAccounts =
-        await _customerRequestsByType('deleted_account', 'deleted_at');
+    deactivated = await _customerRequestsByType(
+      'deactivated',
+      'deactivated_at',
+    );
+    deletedAccounts = await _customerRequestsByType(
+      'deleted_account',
+      'deleted_at',
+    );
     if (mounted) setState(() {});
   }
 
@@ -457,8 +462,10 @@ class _AdminPageState extends State<AdminPage> {
     final formType =
         '${c['form_type'] ?? c['type'] ?? c['page'] ?? c['source'] ?? ''}'
             .toLowerCase();
-    if (formType.contains('boutique') || service.contains('boutique')) return false;
-    if (formType.contains('catering') || service.contains('catering')) return true;
+    if (formType.contains('boutique') || service.contains('boutique'))
+      return false;
+    if (formType.contains('catering') || service.contains('catering'))
+      return true;
     const keys = [
       'catering',
       'food',
@@ -468,7 +475,7 @@ class _AdminPageState extends State<AdminPage> {
       'breakfast',
       'tiffin',
       'party food',
-      'wedding food'
+      'wedding food',
     ];
     final combined = '$service $formType';
     return keys.any(combined.contains);
@@ -481,10 +488,12 @@ class _AdminPageState extends State<AdminPage> {
       contacts.where(isCatering).toList();
 
   List<Map<String, dynamic>> get pendingOrders => orders
-      .where((o) =>
-          o['status'] == 'Ordered' ||
-          o['status'] == 'Processing' ||
-          o['status'] == 'Pending')
+      .where(
+        (o) =>
+            o['status'] == 'Ordered' ||
+            o['status'] == 'Processing' ||
+            o['status'] == 'Pending',
+      )
       .toList();
 
   List<Map<String, dynamic>> get deliveredOrders =>
@@ -518,7 +527,11 @@ class _AdminPageState extends State<AdminPage> {
       switch (period) {
         case 'week':
           final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-          final weekStart = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+          final weekStart = DateTime(
+            startOfWeek.year,
+            startOfWeek.month,
+            startOfWeek.day,
+          );
           return !d.isBefore(weekStart) && !d.isAfter(now);
         case 'year':
           return d.year == now.year;
@@ -544,7 +557,8 @@ class _AdminPageState extends State<AdminPage> {
   // ---------------- PDF export ----------------
 
   Future<void> downloadRevenuePdf() async {
-    final periodOrders = ordersForPeriod(revenuePeriod)..sort((a, b) => '${a['date']}'.compareTo('${b['date']}'));
+    final periodOrders = ordersForPeriod(revenuePeriod)
+      ..sort((a, b) => '${a['date']}'.compareTo('${b['date']}'));
     if (periodOrders.isEmpty) {
       showToast('⚠️ No delivered orders in this period to export');
       return;
@@ -563,18 +577,28 @@ class _AdminPageState extends State<AdminPage> {
               style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 4),
-            pw.Text('Period: ${periodLabel(revenuePeriod)}   |   Generated: ${formatDate(DateTime.now().toIso8601String())}'),
+            pw.Text(
+              'Period: ${periodLabel(revenuePeriod)}   |   Generated: ${formatDate(DateTime.now().toIso8601String())}',
+            ),
             pw.SizedBox(height: 16),
             pw.Table.fromTextArray(
-              headers: ['Order ID', 'Customer', 'Product', 'Amount (₹)', 'Date'],
+              headers: [
+                'Order ID',
+                'Customer',
+                'Product',
+                'Amount (₹)',
+                'Date',
+              ],
               data: periodOrders
-                  .map((o) => [
-                        '${o['orderId']}',
-                        '${o['name']}',
-                        '${o['product']}',
-                        '${o['amount']}',
-                        '${o['date']}',
-                      ])
+                  .map(
+                    (o) => [
+                      '${o['orderId']}',
+                      '${o['name']}',
+                      '${o['product']}',
+                      '${o['amount']}',
+                      '${o['date']}',
+                    ],
+                  )
                   .toList(),
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               cellStyle: const pw.TextStyle(fontSize: 10),
@@ -585,10 +609,17 @@ class _AdminPageState extends State<AdminPage> {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text('Total Orders: ${periodOrders.length}',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.Text('Total Revenue: ₹${total.toStringAsFixed(0)}',
-                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                pw.Text(
+                  'Total Orders: ${periodOrders.length}',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text(
+                  'Total Revenue: ₹${total.toStringAsFixed(0)}',
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
               ],
             ),
           ],
@@ -598,7 +629,8 @@ class _AdminPageState extends State<AdminPage> {
       final bytes = await doc.save();
       await Printing.sharePdf(
         bytes: bytes,
-        filename: 'revenue_${revenuePeriod}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+        filename:
+            'revenue_${revenuePeriod}_${DateTime.now().millisecondsSinceEpoch}.pdf',
       );
       showToast('✅ PDF ready');
     } catch (e) {
@@ -650,11 +682,15 @@ class _AdminPageState extends State<AdminPage> {
   /// the image directly. Any other URL (Imgur, Firebase Storage, etc.)
   /// is returned unchanged.
   String _normalizeImageUrl(String url) {
-    final m1 = RegExp(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)').firstMatch(url);
+    final m1 = RegExp(
+      r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)',
+    ).firstMatch(url);
     if (m1 != null) {
       return 'https://drive.google.com/uc?export=view&id=${m1.group(1)}';
     }
-    final m2 = RegExp(r'drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)').firstMatch(url);
+    final m2 = RegExp(
+      r'drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)',
+    ).firstMatch(url);
     if (m2 != null) {
       return 'https://drive.google.com/uc?export=view&id=${m2.group(1)}';
     }
@@ -713,10 +749,15 @@ class _AdminPageState extends State<AdminPage> {
               height: 14,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : Icon(isThisPlaying ? Icons.pause_circle : Icons.play_circle,
-              size: 18, color: teal),
-      label: Text(isThisPlaying ? 'Pause' : 'Play',
-          style: const TextStyle(fontSize: 12)),
+          : Icon(
+              isThisPlaying ? Icons.pause_circle : Icons.play_circle,
+              size: 18,
+              color: teal,
+            ),
+      label: Text(
+        isThisPlaying ? 'Pause' : 'Play',
+        style: const TextStyle(fontSize: 12),
+      ),
     );
   }
 
@@ -744,7 +785,7 @@ class _AdminPageState extends State<AdminPage> {
       }
     }
 
-        setState(() => loading = true);
+    setState(() => loading = true);
     try {
       // Collect photo URLs from TWO sources:
       // 1) Any photos picked via the file picker (uploaded to Firebase
@@ -752,7 +793,7 @@ class _AdminPageState extends State<AdminPage> {
       // 2) A pasted image link (free — no Storage/billing needed).
       final List<String> photoUrls = [];
 
-            for (final photo in uploadedPhotos) {
+      for (final photo in uploadedPhotos) {
         try {
           final bytes = await photo.readAsBytes();
           final ref = FirebaseStorage.instance.ref(
@@ -797,13 +838,17 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Future<void> pickPhotos() async {
-    final files = await picker.pickMultiImage(imageQuality: 60, maxWidth: 600, maxHeight: 600);
+    final files = await picker.pickMultiImage(
+      imageQuality: 60,
+      maxWidth: 600,
+      maxHeight: 600,
+    );
     if (files.isNotEmpty) {
       setState(() => uploadedPhotos.addAll(files));
     }
   }
 
-    void resetUploadForm() {
+  void resetUploadForm() {
     pName.clear();
     pPrice.clear();
     pDesc.clear();
@@ -818,6 +863,400 @@ class _AdminPageState extends State<AdminPage> {
       highlightControllers = [TextEditingController()];
       priceTagControllers = [TextEditingController(), TextEditingController()];
     });
+  }
+
+  // ---------------- EDIT PRODUCT ----------------
+
+  Future<void> editProduct(Map<String, dynamic> product) async {
+    final nameController = TextEditingController(
+      text: '${product['name'] ?? ''}',
+    );
+    final priceController = TextEditingController(
+      text: '${product['price'] ?? ''}',
+    );
+    final descController = TextEditingController(
+      text: '${product['description'] ?? product['desc'] ?? ''}',
+    );
+
+    String editCategory = '${product['category'] ?? product['cat'] ?? ''}';
+    String editStock = '${product['stock'] ?? 'Available'}';
+    String editVisible = '${product['visible'] ?? 'yes'}';
+
+    final existingHighlights = product['highlights'] is List
+        ? List<dynamic>.from(product['highlights'])
+        : <dynamic>[];
+    final highlightEdits = existingHighlights
+        .map((e) => TextEditingController(text: '$e'))
+        .toList();
+    if (highlightEdits.isEmpty) {
+      highlightEdits.add(TextEditingController());
+    }
+
+    final existingPriceTags = product['priceTags'] is List
+        ? List<dynamic>.from(product['priceTags'])
+        : <dynamic>[];
+    final priceTagEdits = <TextEditingController>[];
+
+    for (final tag in existingPriceTags) {
+      if (tag is Map) {
+        priceTagEdits.add(TextEditingController(text: '${tag['label'] ?? ''}'));
+        priceTagEdits.add(TextEditingController(text: '${tag['price'] ?? ''}'));
+      }
+    }
+    if (priceTagEdits.isEmpty) {
+      priceTagEdits.add(TextEditingController());
+      priceTagEdits.add(TextEditingController());
+    }
+
+    bool saving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, dialogSetState) {
+              final categories = [
+                'All',
+                'Kids',
+                'Uniform',
+                'Modern',
+                'Salwar',
+                'Blouse',
+                'Aari',
+                'Saree',
+                'Frock',
+                'Lehenga',
+                'Kurthi',
+              ];
+
+              return AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, color: teal),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Edit Product',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: saving
+                          ? null
+                          : () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                content: SizedBox(
+                  width: 620,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        field(
+                          'Product Name *',
+                          nameController,
+                          hint: 'Product name',
+                        ),
+                        const SizedBox(height: 14),
+                        dropdownField(
+                          'Category *',
+                          editCategory,
+                          categories,
+                          (v) => dialogSetState(() => editCategory = v ?? ''),
+                        ),
+                        const SizedBox(height: 14),
+                        field(
+                          'Amount / Price (₹) *',
+                          priceController,
+                          hint: 'e.g. 1500',
+                          keyboard: TextInputType.number,
+                        ),
+                        const SizedBox(height: 14),
+                        field(
+                          'Description',
+                          descController,
+                          hint: 'Product description...',
+                          maxLines: 4,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          '✨ PRODUCT HIGHLIGHTS',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: muted,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...List.generate(highlightEdits.length, (i) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: field(
+                                    '',
+                                    highlightEdits[i],
+                                    hint: 'e.g. Premium quality fabric',
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove highlight',
+                                  color: danger,
+                                  onPressed: highlightEdits.length > 1
+                                      ? () {
+                                          dialogSetState(() {
+                                            highlightEdits[i].dispose();
+                                            highlightEdits.removeAt(i);
+                                          });
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            dialogSetState(
+                              () => highlightEdits.add(TextEditingController()),
+                            );
+                          },
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Highlight'),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          '🏷️ PRICE TAGS (size/type variations)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: muted,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...List.generate(priceTagEdits.length ~/ 2, (i) {
+                          final labelController = priceTagEdits[i * 2];
+                          final valueController = priceTagEdits[i * 2 + 1];
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: field(
+                                    '',
+                                    labelController,
+                                    hint: 'Tag (e.g. Simple)',
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: field(
+                                    '',
+                                    valueController,
+                                    hint: 'Price ₹',
+                                    keyboard: TextInputType.number,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove price tag',
+                                  color: danger,
+                                  onPressed: priceTagEdits.length > 2
+                                      ? () {
+                                          dialogSetState(() {
+                                            labelController.dispose();
+                                            valueController.dispose();
+                                            priceTagEdits.removeRange(
+                                              i * 2,
+                                              i * 2 + 2,
+                                            );
+                                          });
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            dialogSetState(() {
+                              priceTagEdits.add(TextEditingController());
+                              priceTagEdits.add(TextEditingController());
+                            });
+                          },
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Price Tag'),
+                        ),
+                        const SizedBox(height: 18),
+                        LayoutBuilder(
+                          builder: (_, c) {
+                            final stockField = dropdownField(
+                              'Stock Status',
+                              editStock,
+                              ['Available', 'Limited', 'Out of Stock'],
+                              (v) => dialogSetState(
+                                () => editStock = v ?? 'Available',
+                              ),
+                            );
+                            final visibleField = dropdownField(
+                              'Visible on Website',
+                              editVisible,
+                              ['yes', 'no'],
+                              (v) => dialogSetState(
+                                () => editVisible = v ?? 'yes',
+                              ),
+                            );
+
+                            if (c.maxWidth < 520) {
+                              return Column(
+                                children: [
+                                  stockField,
+                                  const SizedBox(height: 14),
+                                  visibleField,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: stockField),
+                                const SizedBox(width: 14),
+                                Expanded(child: visibleField),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: saving
+                        ? null
+                        : () => Navigator.pop(dialogContext),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: teal,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final name = nameController.text.trim();
+                            final priceText = priceController.text.trim();
+
+                            if (name.isEmpty ||
+                                editCategory.isEmpty ||
+                                priceText.isEmpty) {
+                              showToast(
+                                '⚠️ Name, Category & Price are required!',
+                              );
+                              return;
+                            }
+
+                            final price = num.tryParse(priceText);
+                            if (price == null) {
+                              showToast('⚠️ Enter a valid price');
+                              return;
+                            }
+
+                            final highlights = highlightEdits
+                                .map((c) => c.text.trim())
+                                .where((x) => x.isNotEmpty)
+                                .toList();
+
+                            final priceTags = <Map<String, dynamic>>[];
+                            for (
+                              int i = 0;
+                              i + 1 < priceTagEdits.length;
+                              i += 2
+                            ) {
+                              final label = priceTagEdits[i].text.trim();
+                              final value = priceTagEdits[i + 1].text.trim();
+
+                              if (label.isNotEmpty && value.isNotEmpty) {
+                                priceTags.add({'label': label, 'price': value});
+                              }
+                            }
+
+                            dialogSetState(() => saving = true);
+
+                            try {
+                              await _db
+                                  .collection('products')
+                                  .doc('${product['id']}')
+                                  .update({
+                                    'name': name,
+                                    'category': editCategory,
+                                    'cat': editCategory,
+                                    'price': price,
+                                    'description': descController.text.trim(),
+                                    'stock': editStock,
+                                    'visible': editVisible,
+                                    'highlights': highlights,
+                                    'price_tags': priceTags,
+                                    'updated_at': FieldValue.serverTimestamp(),
+                                  });
+
+                              final updated = await loadProductsFromServer();
+
+                              if (mounted) {
+                                setState(() => products = updated);
+                              }
+
+                              if (dialogContext.mounted) {
+                                Navigator.pop(dialogContext);
+                              }
+
+                              showToast('✅ Product updated successfully!');
+                            } catch (e) {
+                              dialogSetState(() => saving = false);
+                              showToast('❌ Product update failed: $e');
+                            }
+                          },
+                    icon: saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_outlined, size: 18),
+                    label: Text(saving ? 'Saving...' : 'Save Changes'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      nameController.dispose();
+      priceController.dispose();
+      descController.dispose();
+      for (final c in highlightEdits) {
+        c.dispose();
+      }
+      for (final c in priceTagEdits) {
+        c.dispose();
+      }
+    }
   }
 
   // ---------------- PRODUCT ACTIONS ----------------
@@ -903,10 +1342,9 @@ class _AdminPageState extends State<AdminPage> {
 
   Future<void> markGrievance(dynamic id, String status) async {
     try {
-      await _db
-          .collection('customer_requests')
-          .doc('$id')
-          .update({'status': status});
+      await _db.collection('customer_requests').doc('$id').update({
+        'status': status,
+      });
       await loadCustomerRequests();
       showToast('✅ Complaint status → $status');
     } catch (_) {
@@ -969,22 +1407,30 @@ class _AdminPageState extends State<AdminPage> {
           break;
         case 'data_requests_all':
           await _deleteAllInQuery(
-            _db.collection('customer_requests').where('type', isEqualTo: 'data_export'),
+            _db
+                .collection('customer_requests')
+                .where('type', isEqualTo: 'data_export'),
           );
           break;
         case 'grievances_all':
           await _deleteAllInQuery(
-            _db.collection('customer_requests').where('type', isEqualTo: 'grievance'),
+            _db
+                .collection('customer_requests')
+                .where('type', isEqualTo: 'grievance'),
           );
           break;
         case 'deactivated_all':
           await _deleteAllInQuery(
-            _db.collection('customer_requests').where('type', isEqualTo: 'deactivated'),
+            _db
+                .collection('customer_requests')
+                .where('type', isEqualTo: 'deactivated'),
           );
           break;
         case 'deleted_accounts_all':
           await _deleteAllInQuery(
-            _db.collection('customer_requests').where('type', isEqualTo: 'deleted_account'),
+            _db
+                .collection('customer_requests')
+                .where('type', isEqualTo: 'deleted_account'),
           );
           break;
       }
@@ -1005,7 +1451,10 @@ class _AdminPageState extends State<AdminPage> {
         title: const Text('Confirm'),
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: danger),
             onPressed: () => Navigator.pop(context, true),
@@ -1020,7 +1469,8 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> filteredProducts() {
     final s = productSearch.text.trim().toLowerCase();
     return products.where((p) {
-      final okSearch = s.isEmpty ||
+      final okSearch =
+          s.isEmpty ||
           '${p['name']}'.toLowerCase().contains(s) ||
           '${p['cat']}'.toLowerCase().contains(s);
       final okCat = productCategory.isEmpty || p['cat'] == productCategory;
@@ -1032,7 +1482,8 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> filteredOrders() {
     final s = orderSearch.text.trim().toLowerCase().replaceFirst('#', '');
     return orders.where((o) {
-      final okSearch = s.isEmpty ||
+      final okSearch =
+          s.isEmpty ||
           '${o['name']}'.toLowerCase().contains(s) ||
           '${o['mobile']}'.contains(s) ||
           '${o['product']}'.toLowerCase().contains(s) ||
@@ -1047,7 +1498,8 @@ class _AdminPageState extends State<AdminPage> {
     return orders.where((o) {
       final source = '${o['source']}'.toLowerCase();
       final matchSource = source == 'custom-order';
-      final matchSearch = s.isEmpty ||
+      final matchSearch =
+          s.isEmpty ||
           '${o['name']}'.toLowerCase().contains(s) ||
           '${o['mobile']}'.contains(s);
       return matchSource && matchSearch;
@@ -1055,7 +1507,9 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   List<Map<String, dynamic>> filteredContacts(bool catering) {
-    final s = (catering ? cateringSearch.text : boutiqueSearch.text).trim().toLowerCase();
+    final s = (catering ? cateringSearch.text : boutiqueSearch.text)
+        .trim()
+        .toLowerCase();
     final source = catering ? cateringContacts : boutiqueContacts;
     return source.where((c) {
       return s.isEmpty ||
@@ -1085,7 +1539,13 @@ class _AdminPageState extends State<AdminPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 Text(label, style: TextStyle(fontSize: 12, color: muted)),
               ],
             ),
@@ -1133,7 +1593,12 @@ class _AdminPageState extends State<AdminPage> {
 
   /// Full-width version of the stat card, used for the Pending Orders card
   /// so it doesn't sit alone as an odd, half-empty row in the 2-column grid.
-  Widget mobileWideStatCard(String value, String label, String emoji, Color bg) {
+  Widget mobileWideStatCard(
+    String value,
+    String label,
+    String emoji,
+    Color bg,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -1154,7 +1619,13 @@ class _AdminPageState extends State<AdminPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 Text(label, style: TextStyle(fontSize: 12, color: muted)),
               ],
             ),
@@ -1180,12 +1651,14 @@ class _AdminPageState extends State<AdminPage> {
           Row(
             children: [
               Expanded(
-                child: Text(title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: tealDark,
-                    )),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: tealDark,
+                  ),
+                ),
               ),
               if (action != null) action,
             ],
@@ -1197,8 +1670,13 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Widget actionButton(String text, VoidCallback onPressed,
-      {Color? color, Color? textColor, bool outline = false}) {
+  Widget actionButton(
+    String text,
+    VoidCallback onPressed, {
+    Color? color,
+    Color? textColor,
+    bool outline = false,
+  }) {
     return SizedBox(
       height: 40,
       child: outline
@@ -1207,7 +1685,9 @@ class _AdminPageState extends State<AdminPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: color ?? teal,
                 foregroundColor: textColor ?? Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: onPressed,
               child: Text(text),
@@ -1215,14 +1695,26 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Widget field(String label, TextEditingController controller,
-      {String? hint, TextInputType? keyboard, int maxLines = 1}) {
+  Widget field(
+    String label,
+    TextEditingController controller, {
+    String? hint,
+    TextInputType? keyboard,
+    int maxLines = 1,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         if (label.isNotEmpty) ...[
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: muted)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: muted,
+            ),
+          ),
           const SizedBox(height: 5),
         ],
         TextField(
@@ -1233,7 +1725,10 @@ class _AdminPageState extends State<AdminPage> {
             hintText: hint,
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: border, width: 1.5),
@@ -1252,28 +1747,44 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Widget dropdownField(String label, String value, List<String> values,
-      ValueChanged<String?> onChanged) {
+  Widget dropdownField(
+    String label,
+    String value,
+    List<String> values,
+    ValueChanged<String?> onChanged,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: muted)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: muted,
+          ),
+        ),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           value: values.contains(value) ? value : null,
           isExpanded: true,
           items: values
-              .map((v) => DropdownMenuItem(
-                    value: v,
-                    child: Text(v, overflow: TextOverflow.ellipsis),
-                  ))
+              .map(
+                (v) => DropdownMenuItem(
+                  value: v,
+                  child: Text(v, overflow: TextOverflow.ellipsis),
+                ),
+              )
               .toList(),
           onChanged: onChanged,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: border, width: 1.5),
@@ -1297,7 +1808,7 @@ class _AdminPageState extends State<AdminPage> {
             () => clearData(
               'all_demo_data',
               '⚠️ This will delete ALL Orders + Boutique + Catering contact submissions '
-              '(Products will not be touched). Do you want to continue?',
+                  '(Products will not be touched). Do you want to continue?',
             ),
             color: danger,
           ),
@@ -1312,46 +1823,118 @@ class _AdminPageState extends State<AdminPage> {
             crossAxisSpacing: 14,
             childAspectRatio: 1.0,
             children: [
-              mobileStatCard('${orders.length}', 'Orders', '🛒', const Color(0xFFFFF3E0)),
-              mobileStatCard('₹${num.tryParse(rev)?.toStringAsFixed(0) ?? rev}', 'Revenue', '₹', const Color(0xFFE8F5E9)),
+              mobileStatCard(
+                '${orders.length}',
+                'Orders',
+                '🛒',
+                const Color(0xFFFFF3E0),
+              ),
+              mobileStatCard(
+                '₹${num.tryParse(rev)?.toStringAsFixed(0) ?? rev}',
+                'Revenue',
+                '₹',
+                const Color(0xFFE8F5E9),
+              ),
               mobileStatCard('${products.length}', 'Products', '📦', tealLight),
-              mobileStatCard('${deliveredOrders.length}', 'Delivered', '👥', const Color(0xFFE3F2FD)),
+              mobileStatCard(
+                '${deliveredOrders.length}',
+                'Delivered',
+                '👥',
+                const Color(0xFFE3F2FD),
+              ),
             ],
           ),
           const SizedBox(height: 14),
-          mobileWideStatCard('$pending', 'Pending Orders', '⏳', const Color(0xFFFFEBEE)),
+          mobileWideStatCard(
+            '$pending',
+            'Pending Orders',
+            '⏳',
+            const Color(0xFFFFEBEE),
+          ),
           const SizedBox(height: 14),
         ],
         if (!mobile) ...[
-          LayoutBuilder(builder: (_, c) {
-            final cols = c.maxWidth > 1100 ? 4 : 2;
-            return GridView.count(
-              crossAxisCount: cols,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 14,
-              childAspectRatio: 2.8,
-              children: [
-                statCard('${orders.length}', 'Orders', Icons.shopping_cart, const Color(0xFFFFF3E0)),
-                statCard('₹${revenue.toStringAsFixed(0)}', 'Revenue', Icons.currency_rupee, const Color(0xFFE8F5E9)),
-                statCard('${products.length}', 'Products', Icons.inventory_2, tealLight),
-                statCard('$pending', 'Pending', Icons.hourglass_empty, const Color(0xFFFFEBEE)),
-              ],
-            );
-          }),
+          LayoutBuilder(
+            builder: (_, c) {
+              final cols = c.maxWidth > 1100 ? 4 : 2;
+              return GridView.count(
+                crossAxisCount: cols,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: 2.8,
+                children: [
+                  statCard(
+                    '${orders.length}',
+                    'Orders',
+                    Icons.shopping_cart,
+                    const Color(0xFFFFF3E0),
+                  ),
+                  statCard(
+                    '₹${revenue.toStringAsFixed(0)}',
+                    'Revenue',
+                    Icons.currency_rupee,
+                    const Color(0xFFE8F5E9),
+                  ),
+                  statCard(
+                    '${products.length}',
+                    'Products',
+                    Icons.inventory_2,
+                    tealLight,
+                  ),
+                  statCard(
+                    '$pending',
+                    'Pending',
+                    Icons.hourglass_empty,
+                    const Color(0xFFFFEBEE),
+                  ),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 22),
         ],
         if (mobile) ...[
-          sectionCard('📈 Monthly Orders Chart', SizedBox(height: 200, child: SimpleChart(data: monthlyCounts(orders), bar: true, color: teal))),
-          sectionCard('🍩 Order Status', SizedBox(height: 220, child: StatusChart(orders: orders))),
+          sectionCard(
+            '📈 Monthly Orders Chart',
+            SizedBox(
+              height: 200,
+              child: SimpleChart(
+                data: monthlyCounts(orders),
+                bar: true,
+                color: teal,
+              ),
+            ),
+          ),
+          sectionCard(
+            '🍩 Order Status',
+            SizedBox(height: 220, child: StatusChart(orders: orders)),
+          ),
         ] else
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: sectionCard('📈 Monthly Orders Chart', SizedBox(height: 260, child: SimpleChart(data: monthlyCounts(orders), bar: true, color: teal)))),
+              Expanded(
+                child: sectionCard(
+                  '📈 Monthly Orders Chart',
+                  SizedBox(
+                    height: 260,
+                    child: SimpleChart(
+                      data: monthlyCounts(orders),
+                      bar: true,
+                      color: teal,
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(width: 20),
-              Expanded(child: sectionCard('🍩 Order Status', SizedBox(height: 260, child: StatusChart(orders: orders)))),
+              Expanded(
+                child: sectionCard(
+                  '🍩 Order Status',
+                  SizedBox(height: 260, child: StatusChart(orders: orders)),
+                ),
+              ),
             ],
           ),
         sectionCard(
@@ -1380,8 +1963,14 @@ class _AdminPageState extends State<AdminPage> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('PRODUCT PHOTOS',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: muted)),
+          Text(
+            'PRODUCT PHOTOS',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: muted,
+            ),
+          ),
           const SizedBox(height: 8),
           InkWell(
             onTap: pickPhotos,
@@ -1397,15 +1986,23 @@ class _AdminPageState extends State<AdminPage> {
                 children: [
                   const Text('🖼️', style: TextStyle(fontSize: 32)),
                   const SizedBox(height: 6),
-                  Text('Click to Upload Photos',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: teal)),
-                  Text('JPG, PNG, WEBP – Multiple files allowed',
-                      style: TextStyle(fontSize: 12, color: muted)),
+                  Text(
+                    'Click to Upload Photos',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: teal,
+                    ),
+                  ),
+                  Text(
+                    'JPG, PNG, WEBP – Multiple files allowed',
+                    style: TextStyle(fontSize: 12, color: muted),
+                  ),
                 ],
               ),
             ),
           ),
-                    if (uploadedPhotos.isNotEmpty) ...[
+          if (uploadedPhotos.isNotEmpty) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 10,
@@ -1425,7 +2022,11 @@ class _AdminPageState extends State<AdminPage> {
                         clipBehavior: Clip.antiAlias,
                         child: snap.hasData
                             ? Image.memory(snap.data!, fit: BoxFit.cover)
-                            : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            : const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
                       ),
                     ),
                     Positioned(
@@ -1436,7 +2037,10 @@ class _AdminPageState extends State<AdminPage> {
                         child: const CircleAvatar(
                           radius: 9,
                           backgroundColor: Colors.black54,
-                          child: Text('✕', style: TextStyle(fontSize: 10, color: Colors.white)),
+                          child: Text(
+                            '✕',
+                            style: TextStyle(fontSize: 10, color: Colors.white),
+                          ),
                         ),
                       ),
                     ),
@@ -1451,7 +2055,14 @@ class _AdminPageState extends State<AdminPage> {
               Expanded(child: Divider()),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text('OR', style: TextStyle(fontSize: 11, color: Color(0xFF757575), fontWeight: FontWeight.bold)),
+                child: Text(
+                  'OR',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF757575),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               Expanded(child: Divider()),
             ],
@@ -1477,71 +2088,111 @@ class _AdminPageState extends State<AdminPage> {
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
                   color: tealLight,
-                  child: const Center(child: Text('❌ Invalid link', style: TextStyle(fontSize: 10))),
+                  child: const Center(
+                    child: Text(
+                      '❌ Invalid link',
+                      style: TextStyle(fontSize: 10),
+                    ),
+                  ),
                 ),
               ),
             ),
           ],
           const SizedBox(height: 18),
-          LayoutBuilder(builder: (_, c) {
-            final two = c.maxWidth > 650;
-            final nameField = field('Product Name *', pName, hint: 'e.g. Bridal Blouse Stitching');
-            final categoryField = dropdownField(
-              'Category *',
-              pCategory,
-              ['All', 'Kids', 'Uniform', 'Modern', 'Salwar', 'Blouse', 'Aari', 'Saree', 'Frock', 'Lehenga', 'Kurthi'],
-              (v) => setState(() => pCategory = v ?? ''),
-            );
-            final priceField = field('Price (₹) *', pPrice, hint: 'e.g. 1500', keyboard: TextInputType.number);
-            final descField = field('Description', pDesc, hint: 'Short product description...', maxLines: 3);
+          LayoutBuilder(
+            builder: (_, c) {
+              final two = c.maxWidth > 650;
+              final nameField = field(
+                'Product Name *',
+                pName,
+                hint: 'e.g. Bridal Blouse Stitching',
+              );
+              final categoryField = dropdownField('Category *', pCategory, [
+                'All',
+                'Kids',
+                'Uniform',
+                'Modern',
+                'Salwar',
+                'Blouse',
+                'Aari',
+                'Saree',
+                'Frock',
+                'Lehenga',
+                'Kurthi',
+              ], (v) => setState(() => pCategory = v ?? ''));
+              final priceField = field(
+                'Price (₹) *',
+                pPrice,
+                hint: 'e.g. 1500',
+                keyboard: TextInputType.number,
+              );
+              final descField = field(
+                'Description',
+                pDesc,
+                hint: 'Short product description...',
+                maxLines: 3,
+              );
 
-            if (!two) {
+              if (!two) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    nameField,
+                    const SizedBox(height: 14),
+                    categoryField,
+                    const SizedBox(height: 14),
+                    priceField,
+                    const SizedBox(height: 14),
+                    descField,
+                  ],
+                );
+              }
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  nameField,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: nameField),
+                      const SizedBox(width: 14),
+                      Expanded(child: categoryField),
+                    ],
+                  ),
                   const SizedBox(height: 14),
-                  categoryField,
-                  const SizedBox(height: 14),
-                  priceField,
-                  const SizedBox(height: 14),
-                  descField,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: priceField),
+                      const SizedBox(width: 14),
+                      Expanded(child: descField),
+                    ],
+                  ),
                 ],
               );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: nameField),
-                    const SizedBox(width: 14),
-                    Expanded(child: categoryField),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: priceField),
-                    const SizedBox(width: 14),
-                    Expanded(child: descField),
-                  ],
-                ),
-              ],
-            );
-          }),
+            },
+          ),
           const SizedBox(height: 18),
-          Text('✨ PRODUCT HIGHLIGHTS',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: muted)),
+          Text(
+            '✨ PRODUCT HIGHLIGHTS',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: muted,
+            ),
+          ),
           const SizedBox(height: 8),
           ...List.generate(highlightControllers.length, (i) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  Expanded(child: field('', highlightControllers[i], hint: 'e.g. Premium quality fabric')),
+                  Expanded(
+                    child: field(
+                      '',
+                      highlightControllers[i],
+                      hint: 'e.g. Premium quality fabric',
+                    ),
+                  ),
                   IconButton(
                     color: danger,
                     onPressed: () {
@@ -1559,12 +2210,20 @@ class _AdminPageState extends State<AdminPage> {
             );
           }),
           OutlinedButton(
-            onPressed: () => setState(() => highlightControllers.add(TextEditingController())),
+            onPressed: () => setState(
+              () => highlightControllers.add(TextEditingController()),
+            ),
             child: const Text('+ Add Highlight'),
           ),
           const SizedBox(height: 18),
-          Text('🏷️ PRICE TAGS (size/type variations)',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: muted)),
+          Text(
+            '🏷️ PRICE TAGS (size/type variations)',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: muted,
+            ),
+          ),
           const SizedBox(height: 8),
           ...List.generate(priceTagControllers.length ~/ 2, (i) {
             final a = priceTagControllers[i * 2];
@@ -1575,7 +2234,14 @@ class _AdminPageState extends State<AdminPage> {
                 children: [
                   Expanded(child: field('', a, hint: 'Tag (e.g. Simple)')),
                   const SizedBox(width: 10),
-                  Expanded(child: field('', b, hint: 'Price ₹', keyboard: TextInputType.number)),
+                  Expanded(
+                    child: field(
+                      '',
+                      b,
+                      hint: 'Price ₹',
+                      keyboard: TextInputType.number,
+                    ),
+                  ),
                   IconButton(
                     color: danger,
                     onPressed: () {
@@ -1601,36 +2267,49 @@ class _AdminPageState extends State<AdminPage> {
             child: const Text('+ Add Price Tag'),
           ),
           const SizedBox(height: 18),
-          LayoutBuilder(builder: (_, c) {
-            final two = c.maxWidth > 650;
-            final stockField = dropdownField('Stock Status', pStock, ['Available', 'Limited', 'Out of Stock'],
-                (v) => setState(() => pStock = v ?? 'Available'));
-            final visibleField = dropdownField('Visible on Website', pVisible,
-                ['yes', 'no'], (v) => setState(() => pVisible = v ?? 'yes'));
+          LayoutBuilder(
+            builder: (_, c) {
+              final two = c.maxWidth > 650;
+              final stockField = dropdownField(
+                'Stock Status',
+                pStock,
+                ['Available', 'Limited', 'Out of Stock'],
+                (v) => setState(() => pStock = v ?? 'Available'),
+              );
+              final visibleField = dropdownField(
+                'Visible on Website',
+                pVisible,
+                ['yes', 'no'],
+                (v) => setState(() => pVisible = v ?? 'yes'),
+              );
 
-            if (!two) {
-              return Column(
+              if (!two) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    stockField,
+                    const SizedBox(height: 14),
+                    visibleField,
+                  ],
+                );
+              }
+              return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  stockField,
-                  const SizedBox(height: 14),
-                  visibleField,
+                  Expanded(child: stockField),
+                  const SizedBox(width: 14),
+                  Expanded(child: visibleField),
                 ],
               );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: stockField),
-                const SizedBox(width: 14),
-                Expanded(child: visibleField),
-              ],
-            );
-          }),
+            },
+          ),
           const SizedBox(height: 22),
           Row(
             children: [
-              actionButton(loading ? '⏳ Uploading...' : '✅ Upload Product', loading ? () {} : uploadProduct),
+              actionButton(
+                loading ? '⏳ Uploading...' : '✅ Upload Product',
+                loading ? () {} : uploadProduct,
+              ),
               const SizedBox(width: 12),
               actionButton('🔄 Reset', resetUploadForm, outline: true),
             ],
@@ -1646,42 +2325,68 @@ class _AdminPageState extends State<AdminPage> {
       '👗 All Products',
       Column(
         children: [
-          LayoutBuilder(builder: (_, c) {
-            final narrow = c.maxWidth < 560;
-            final searchField = field('', productSearch, hint: '🔍 Search products...');
-            final categoryField = dropdownField('Category', productCategory,
-                ['', 'All', 'Kids', 'Uniform', 'Modern', 'Salwar', 'Blouse', 'Aari', 'Saree', 'Frock', 'Lehenga', 'Kurthi'],
-                (v) => setState(() => productCategory = v ?? ''));
-            final stockField = dropdownField('Stock', productStock, ['', 'Available', 'Limited', 'Out of Stock'],
-                (v) => setState(() => productStock = v ?? ''));
+          LayoutBuilder(
+            builder: (_, c) {
+              final narrow = c.maxWidth < 560;
+              final searchField = field(
+                '',
+                productSearch,
+                hint: '🔍 Search products...',
+              );
+              final categoryField = dropdownField(
+                'Category',
+                productCategory,
+                [
+                  '',
+                  'All',
+                  'Kids',
+                  'Uniform',
+                  'Modern',
+                  'Salwar',
+                  'Blouse',
+                  'Aari',
+                  'Saree',
+                  'Frock',
+                  'Lehenga',
+                  'Kurthi',
+                ],
+                (v) => setState(() => productCategory = v ?? ''),
+              );
+              final stockField = dropdownField('Stock', productStock, [
+                '',
+                'Available',
+                'Limited',
+                'Out of Stock',
+              ], (v) => setState(() => productStock = v ?? ''));
 
-            if (narrow) {
-              return Column(
+              if (narrow) {
+                return Column(
+                  children: [
+                    searchField,
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: categoryField),
+                        const SizedBox(width: 10),
+                        Expanded(child: stockField),
+                      ],
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  searchField,
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: categoryField),
-                      const SizedBox(width: 10),
-                      Expanded(child: stockField),
-                    ],
-                  ),
+                  Expanded(child: searchField),
+                  const SizedBox(width: 10),
+                  SizedBox(width: 180, child: categoryField),
+                  const SizedBox(width: 10),
+                  SizedBox(width: 160, child: stockField),
                 ],
               );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: searchField),
-                const SizedBox(width: 10),
-                SizedBox(width: 180, child: categoryField),
-                const SizedBox(width: 10),
-                SizedBox(width: 160, child: stockField),
-              ],
-            );
-          }),
+            },
+          ),
           const SizedBox(height: 16),
           if (list.isEmpty)
             const EmptyState(icon: '📦', text: 'No products found')
@@ -1698,20 +2403,28 @@ class _AdminPageState extends State<AdminPage> {
               itemCount: list.length,
               itemBuilder: (_, i) {
                 final p = list[i];
-                final photos = p['photos'] is List ? List.from(p['photos']) : <dynamic>[];
-                final rawImage = photos.isNotEmpty ? '${photos.first}' : '${p['photo'] ?? ''}';
-                final image = rawImage.isNotEmpty ? _normalizeImageUrl(rawImage) : '';
+                final photos = p['photos'] is List
+                    ? List.from(p['photos'])
+                    : <dynamic>[];
+                final rawImage = photos.isNotEmpty
+                    ? '${photos.first}'
+                    : '${p['photo'] ?? ''}';
+                final image = rawImage.isNotEmpty
+                    ? _normalizeImageUrl(rawImage)
+                    : '';
                 final stockColor = p['stock'] == 'Available'
                     ? success
                     : p['stock'] == 'Limited'
-                        ? warning
-                        : danger;
+                    ? warning
+                    : danger;
                 return Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: border),
-                    boxShadow: const [BoxShadow(color: Color(0x10000000), blurRadius: 8)],
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x10000000), blurRadius: 8),
+                    ],
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Column(
@@ -1719,44 +2432,133 @@ class _AdminPageState extends State<AdminPage> {
                     children: [
                       Expanded(
                         child: image.isNotEmpty
-                            ? Image.network(image, width: double.infinity, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(color: tealLight, child: const Center(child: Text('👗', style: TextStyle(fontSize: 36)))))
-                            : Container(color: tealLight, child: const Center(child: Text('👗', style: TextStyle(fontSize: 36)))),
+                            ? Image.network(
+                                image,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: tealLight,
+                                  child: const Center(
+                                    child: Text(
+                                      '👗',
+                                      style: TextStyle(fontSize: 36),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                color: tealLight,
+                                child: const Center(
+                                  child: Text(
+                                    '👗',
+                                    style: TextStyle(fontSize: 36),
+                                  ),
+                                ),
+                              ),
                       ),
                       Padding(
                         padding: const EdgeInsets.all(10),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('${p['cat']}', style: TextStyle(fontSize: 11, color: tealDark, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 3),
-                          Text('${p['name']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 3),
-                          Text('₹${p['price']}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: tealDark)),
-                          const SizedBox(height: 4),
-                          Text('${p['stock']}', style: TextStyle(fontSize: 11, color: stockColor, fontWeight: FontWeight.w600)),
-                          Text('Website: ${p['visible'] == 'yes' ? '✅ Visible' : '❌ Hidden'}',
-                              style: TextStyle(fontSize: 11, color: muted)),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => toggleVisible(
-                                      p['id'] as String, p['visible'] == 'yes' ? 'no' : 'yes'),
-                                  child: Text(p['visible'] == 'yes' ? '🙈 Hide' : '👁 Show',
-                                      style: const TextStyle(fontSize: 11)),
-                                ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${p['cat']}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: tealDark,
+                                fontWeight: FontWeight.w600,
                               ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: TextButton(
-                                  style: TextButton.styleFrom(foregroundColor: danger),
-                                  onPressed: () => deleteProduct(p['id'] as String),
-                                  child: const Text('🗑️ Delete', style: TextStyle(fontSize: 11)),
-                                ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${p['name']}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
                               ),
-                            ],
-                          ),
-                        ]),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '₹${p['price']}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: tealDark,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${p['stock']}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: stockColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              'Website: ${p['visible'] == 'yes' ? '✅ Visible' : '❌ Hidden'}',
+                              style: TextStyle(fontSize: 11, color: muted),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => editProduct(p),
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 15,
+                                    ),
+                                    label: const Text(
+                                      'Edit',
+                                      style: TextStyle(fontSize: 11),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: tealDark,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => toggleVisible(
+                                      p['id'] as String,
+                                      p['visible'] == 'yes' ? 'no' : 'yes',
+                                    ),
+                                    child: Text(
+                                      p['visible'] == 'yes'
+                                          ? '🙈 Hide'
+                                          : '👁 Show',
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: TextButton(
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: danger,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                    onPressed: () =>
+                                        deleteProduct(p['id'] as String),
+                                    child: const Text(
+                                      '🗑️ Delete',
+                                      style: TextStyle(fontSize: 10),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1769,17 +2571,54 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget orderTable(List<Map<String, dynamic>> list, {bool compact = false}) {
-    if (list.isEmpty) return const EmptyState(icon: '📭', text: 'No orders yet');
+    if (list.isEmpty)
+      return const EmptyState(icon: '📭', text: 'No orders yet');
 
     final columns = compact
-        ? ['Order ID', 'Customer', 'Mobile', 'Product', 'Amount', 'Status', 'Date', 'WhatsApp']
-        : ['Order ID', 'Customer', 'Mobile', 'Product', 'Amount', 'Payment', 'Measurement', 'Message', 'Voice Note', 'Status', 'Date', 'Update', 'WhatsApp'];
+        ? [
+            'Order ID',
+            'Customer',
+            'Mobile',
+            'Product',
+            'Amount',
+            'Status',
+            'Date',
+            'WhatsApp',
+          ]
+        : [
+            'Order ID',
+            'Customer',
+            'Mobile',
+            'Product',
+            'Amount',
+            'Payment',
+            'Measurement',
+            'Message',
+            'Voice Note',
+            'Status',
+            'Date',
+            'Update',
+            'WhatsApp',
+          ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
         headingRowColor: WidgetStatePropertyAll(tealLight),
-        columns: columns.map((c) => DataColumn(label: Text(c, style: TextStyle(fontSize: 11, color: tealDark, fontWeight: FontWeight.w700)))).toList(),
+        columns: columns
+            .map(
+              (c) => DataColumn(
+                label: Text(
+                  c,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tealDark,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            )
+            .toList(),
         rows: list.map((o) {
           final cells = compact
               ? [
@@ -1790,7 +2629,13 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(Text('₹${o['amount']}')),
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
-                  DataCell(TextButton(onPressed: () => openWhatsApp('${o['mobile']}', '${o['name']}'), child: const Text('💬'))),
+                  DataCell(
+                    TextButton(
+                      onPressed: () =>
+                          openWhatsApp('${o['mobile']}', '${o['name']}'),
+                      child: const Text('💬'),
+                    ),
+                  ),
                 ]
               : [
                   DataCell(Text('${o['orderId']}')),
@@ -1798,26 +2643,51 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(Text('${o['mobile']}')),
                   DataCell(Text('${o['product']}')),
                   DataCell(Text('₹${o['amount']}')),
-                  DataCell(Text('${o['paymentMethod']}\n${o['paymentStatus']}')),
+                  DataCell(
+                    Text('${o['paymentMethod']}\n${o['paymentStatus']}'),
+                  ),
                   DataCell(Text('${o['measurement'] ?? '—'}')),
                   DataCell(Text('${o['notes'] ?? '—'}')),
                   // Voice note is stored as Base64 audio, not a URL — play
                   // it in-place from memory instead of trying to launch it.
-                  DataCell(voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}')),
+                  DataCell(
+                    voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
+                  ),
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
                   DataCell(
                     DropdownButton<String>(
                       value: '${o['status']}',
-                      items: ['Ordered', 'Processing', 'Delivered', 'Cancelled', 'Pending']
-                          .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12))))
-                          .toList(),
+                      items:
+                          [
+                                'Ordered',
+                                'Processing',
+                                'Delivered',
+                                'Cancelled',
+                                'Pending',
+                              ]
+                              .map(
+                                (s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(
+                                    s,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (v) {
                         if (v != null) updateStatus('${o['id']}', v);
                       },
                     ),
                   ),
-                  DataCell(TextButton(onPressed: () => openWhatsApp('${o['mobile']}', '${o['name']}'), child: const Text('💬'))),
+                  DataCell(
+                    TextButton(
+                      onPressed: () =>
+                          openWhatsApp('${o['mobile']}', '${o['name']}'),
+                      child: const Text('💬'),
+                    ),
+                  ),
                 ];
           return DataRow(cells: cells);
         }).toList(),
@@ -1845,26 +2715,49 @@ class _AdminPageState extends State<AdminPage> {
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: tealLight, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              color: tealLight,
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('➕ Add New Order', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: tealDark)),
+                Text(
+                  '➕ Add New Order',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: tealDark,
+                  ),
+                ),
                 const SizedBox(height: 10),
-                const Text('Orders are normally created from the customer website.'),
+                const Text(
+                  'Orders are normally created from the customer website.',
+                ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: field('', orderSearch, hint: '🔍 Search by Order ID / name / mobile / product...')),
+              Expanded(
+                child: field(
+                  '',
+                  orderSearch,
+                  hint: '🔍 Search by Order ID / name / mobile / product...',
+                ),
+              ),
               const SizedBox(width: 10),
               SizedBox(
                 width: 170,
-                child: dropdownField('Status', orderStatus,
-                    ['', 'Ordered', 'Processing', 'Delivered', 'Cancelled', 'Pending'],
-                    (v) => setState(() => orderStatus = v ?? '')),
+                child: dropdownField('Status', orderStatus, [
+                  '',
+                  'Ordered',
+                  'Processing',
+                  'Delivered',
+                  'Cancelled',
+                  'Pending',
+                ], (v) => setState(() => orderStatus = v ?? '')),
               ),
             ],
           ),
@@ -1885,8 +2778,10 @@ class _AdminPageState extends State<AdminPage> {
             alignment: Alignment.centerRight,
             child: actionButton(
               '🗑️ Clear Custom Orders',
-              () => clearData('orders_custom',
-                  '⚠️ This will delete ALL Customized Orders. Do you want to continue?'),
+              () => clearData(
+                'orders_custom',
+                '⚠️ This will delete ALL Customized Orders. Do you want to continue?',
+              ),
               color: danger,
             ),
           ),
@@ -1910,18 +2805,37 @@ class _AdminPageState extends State<AdminPage> {
                   DataColumn(label: Text('Date')),
                   DataColumn(label: Text('WhatsApp')),
                 ],
-                rows: list.map((o) => DataRow(cells: [
-                  DataCell(Text('${o['name']}')),
-                  DataCell(Text('📞 ${o['mobile']}')),
-                  DataCell(Text('${o['product']}')),
-                  DataCell(Text('${o['measurement'] ?? '—'}')),
-                  DataCell(Text('${o['notes'] ?? '—'}')),
-                  // Was showing the raw Base64 text before — now a proper
-                  // Play/Pause button, same as the main Orders table.
-                  DataCell(voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}')),
-                  DataCell(Text('${o['date']}')),
-                  DataCell(TextButton(onPressed: () => openWhatsApp('${o['mobile']}', '${o['name']}'), child: const Text('💬'))),
-                ])).toList(),
+                rows: list
+                    .map(
+                      (o) => DataRow(
+                        cells: [
+                          DataCell(Text('${o['name']}')),
+                          DataCell(Text('📞 ${o['mobile']}')),
+                          DataCell(Text('${o['product']}')),
+                          DataCell(Text('${o['measurement'] ?? '—'}')),
+                          DataCell(Text('${o['notes'] ?? '—'}')),
+                          // Was showing the raw Base64 text before — now a proper
+                          // Play/Pause button, same as the main Orders table.
+                          DataCell(
+                            voiceNoteButton(
+                              '${o['id']}',
+                              '${o['voiceNote'] ?? ''}',
+                            ),
+                          ),
+                          DataCell(Text('${o['date']}')),
+                          DataCell(
+                            TextButton(
+                              onPressed: () => openWhatsApp(
+                                '${o['mobile']}',
+                                '${o['name']}',
+                              ),
+                              child: const Text('💬'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    .toList(),
               ),
             ),
         ],
@@ -1934,37 +2848,54 @@ class _AdminPageState extends State<AdminPage> {
     return digits.length > 10 ? digits.substring(digits.length - 10) : digits;
   }
 
-  List<Map<String, String>> get uniqueCustomers {
+     List<Map<String, String>> get uniqueCustomers {
     final seen = <String, Map<String, String>>{};
-    for (final c in boutiqueContacts) {
-      final phone = normalizePhone('${c['phone'] ?? ''}');
+    for (final o in orders) {
+      final phone = normalizePhone('${o['mobile'] ?? ''}');
       if (phone.isEmpty) continue;
       seen[phone] = {
-        'name': '${c['name'] ?? 'Guest'}',
-        'phone': '${c['phone'] ?? ''}',
+        'name': '${o['name'] ?? 'Guest'}',
+        'phone': '${o['mobile'] ?? ''}',
       };
     }
     return seen.values.toList();
   }
 
+  List<Map<String, String>> get filteredUniqueCustomers {
+    final q = customerListSearch.text.trim().toLowerCase();
+    final qDigits = q.replaceAll(RegExp(r'\D'), '');
+    if (q.isEmpty) return uniqueCustomers;
+    return uniqueCustomers.where((c) {
+      final name = (c['name'] ?? '').toLowerCase();
+      final phone = normalizePhone(c['phone'] ?? '');
+      final matchesName = name.contains(q);
+      final matchesPhone = qDigits.isNotEmpty && phone.contains(qDigits);
+      return matchesName || matchesPhone;
+    }).toList();
+  }
+
   List<Map<String, dynamic>> ordersForPhone(String phone) {
     final norm = normalizePhone(phone);
     if (norm.isEmpty) return [];
-    return orders.where((o) => normalizePhone('${o['mobile'] ?? ''}') == norm).toList();
+    return orders
+        .where((o) => normalizePhone('${o['mobile'] ?? ''}') == norm)
+        .toList();
   }
 
   /// "Boutique Contact" is now shown to the admin as a Customers list.
   /// Tapping a customer opens their own order history (customerDetailPage).
-  Widget customersPage() {
+   Widget customersPage() {
     if (selectedCustomerPhone != null) return customerDetailPage();
 
-    final list = uniqueCustomers;
+    final list = filteredUniqueCustomers;
     return sectionCard(
       '👤 Customers',
       Column(
         children: [
+          field('', customerListSearch, hint: '🔍 Search by name or mobile number...'),
+          const SizedBox(height: 14),
           if (list.isEmpty)
-            const EmptyState(icon: '👤', text: 'No customers yet')
+            const EmptyState(icon: '👤', text: 'No customers found')
           else
             ...list.map((c) {
               final count = ordersForPhone(c['phone']!).length;
@@ -2004,7 +2935,7 @@ class _AdminPageState extends State<AdminPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(color: tealLight, borderRadius: BorderRadius.circular(20)),
-                        child: Text('$count orders',
+                        child: Text('$count products',
                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: tealDark)),
                       ),
                       const SizedBox(width: 6),
@@ -2021,12 +2952,13 @@ class _AdminPageState extends State<AdminPage> {
 
   /// Shows only the orders belonging to the tapped customer — e.g. tapping
   /// "Divya" shows just her orders (matched by mobile number), not everyone's.
-  Widget customerDetailPage() {
+    Widget customerDetailPage() {
     final phone = selectedCustomerPhone!;
     final name = selectedCustomerName ?? 'Customer';
     final custOrders = ordersForPhone(phone).reversed.toList();
+
     return sectionCard(
-      '👤 $name — ${custOrders.length} orders',
+      '👤 $name — ${custOrders.length} products ordered',
       Column(
         children: [
           Row(
@@ -2039,6 +2971,8 @@ class _AdminPageState extends State<AdminPage> {
                 child: const Text('← Back to Customers'),
               ),
               const Spacer(),
+              Text('📞 $phone', style: TextStyle(fontSize: 13, color: muted)),
+              const SizedBox(width: 10),
               TextButton(
                 onPressed: () => openWhatsApp(phone, name),
                 child: const Text('💬 WhatsApp'),
@@ -2046,7 +2980,37 @@ class _AdminPageState extends State<AdminPage> {
             ],
           ),
           const SizedBox(height: 14),
-          orderTable(custOrders, compact: true),
+          if (custOrders.isEmpty)
+            const EmptyState(icon: '📦', text: 'No products ordered yet')
+          else
+            ...custOrders.map((o) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: pageBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${o['product']}',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          Text('₹${o['amount']}  •  ${o['date']}',
+                              style: TextStyle(fontSize: 12, color: muted)),
+                        ],
+                      ),
+                    ),
+                    StatusBadge(status: '${o['status']}'),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -2056,13 +3020,17 @@ class _AdminPageState extends State<AdminPage> {
     final list = filteredContacts(catering).reversed.toList();
     final controller = catering ? cateringSearch : boutiqueSearch;
     return sectionCard(
-      catering ? '🍽️ Catering Contact Form Submissions' : '📨 Boutique Contact Form Submissions',
+      catering
+          ? '🍽️ Catering Contact Form Submissions'
+          : '📨 Boutique Contact Form Submissions',
       Column(
         children: [
           Align(
             alignment: Alignment.centerRight,
             child: actionButton(
-              catering ? '🗑️ Clear Catering Contacts' : '🗑️ Clear Boutique Contacts',
+              catering
+                  ? '🗑️ Clear Catering Contacts'
+                  : '🗑️ Clear Boutique Contacts',
               () => clearData(
                 catering ? 'contacts_catering' : 'contacts_boutique',
                 catering
@@ -2076,7 +3044,12 @@ class _AdminPageState extends State<AdminPage> {
           field('', controller, hint: '🔍 Search by name / phone / email...'),
           const SizedBox(height: 16),
           if (list.isEmpty)
-            EmptyState(icon: catering ? '🍽️' : '📨', text: catering ? 'No catering contact form submissions yet' : 'No contact form submissions yet')
+            EmptyState(
+              icon: catering ? '🍽️' : '📨',
+              text: catering
+                  ? 'No catering contact form submissions yet'
+                  : 'No contact form submissions yet',
+            )
           else
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -2090,14 +3063,20 @@ class _AdminPageState extends State<AdminPage> {
                   DataColumn(label: Text('Message')),
                   DataColumn(label: Text('Date')),
                 ],
-                rows: list.map((c) => DataRow(cells: [
-                  DataCell(Text('${c['name'] ?? ''}')),
-                  DataCell(Text('${c['phone'] ?? '—'}')),
-                  DataCell(Text('${c['email'] ?? '—'}')),
-                  DataCell(Text('${c['service'] ?? '—'}')),
-                  DataCell(Text('${c['message'] ?? ''}')),
-                  DataCell(Text(formatDate(c['created_at']))),
-                ])).toList(),
+                rows: list
+                    .map(
+                      (c) => DataRow(
+                        cells: [
+                          DataCell(Text('${c['name'] ?? ''}')),
+                          DataCell(Text('${c['phone'] ?? '—'}')),
+                          DataCell(Text('${c['email'] ?? '—'}')),
+                          DataCell(Text('${c['service'] ?? '—'}')),
+                          DataCell(Text('${c['message'] ?? ''}')),
+                          DataCell(Text(formatDate(c['created_at']))),
+                        ],
+                      ),
+                    )
+                    .toList(),
               ),
             ),
         ],
@@ -2112,16 +3091,31 @@ class _AdminPageState extends State<AdminPage> {
           '🔔 Send Notification to All Customers',
           Column(
             children: [
-              field('Title *', notificationTitle, hint: 'e.g. New Arrivals in Store!'),
+              field(
+                'Title *',
+                notificationTitle,
+                hint: 'e.g. New Arrivals in Store!',
+              ),
               const SizedBox(height: 14),
-              field('Message *', notificationMessage,
-                  hint: 'e.g. Check out our latest saree collection now available...', maxLines: 3),
+              field(
+                'Message *',
+                notificationMessage,
+                hint:
+                    'e.g. Check out our latest saree collection now available...',
+                maxLines: 3,
+              ),
               const SizedBox(height: 14),
-              dropdownField('Type', notificationType,
-                  ['general', 'order', 'promotion', 'class'],
-                  (v) => setState(() => notificationType = v ?? 'general')),
+              dropdownField(
+                'Type',
+                notificationType,
+                ['general', 'order', 'promotion', 'class'],
+                (v) => setState(() => notificationType = v ?? 'general'),
+              ),
               const SizedBox(height: 18),
-              Align(alignment: Alignment.centerLeft, child: actionButton('📢 Send Notification', sendNotification)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: actionButton('📢 Send Notification', sendNotification),
+              ),
             ],
           ),
         ),
@@ -2133,8 +3127,10 @@ class _AdminPageState extends State<AdminPage> {
                 alignment: Alignment.centerRight,
                 child: actionButton(
                   '🗑️ Clear All Notifications',
-                  () => clearData('notifications_all',
-                      '⚠️ This will delete ALL sent notifications. Customers will no longer see them. Do you want to continue?'),
+                  () => clearData(
+                    'notifications_all',
+                    '⚠️ This will delete ALL sent notifications. Customers will no longer see them. Do you want to continue?',
+                  ),
                   color: danger,
                 ),
               ),
@@ -2153,16 +3149,27 @@ class _AdminPageState extends State<AdminPage> {
                       DataColumn(label: Text('Sent On')),
                       DataColumn(label: Text('Action')),
                     ],
-                    rows: notifications.reversed.map((n) => DataRow(cells: [
-                      DataCell(Text('${n['title'] ?? ''}')),
-                      DataCell(Text('${n['message'] ?? ''}')),
-                      DataCell(Text('${n['type'] ?? ''}')),
-                      DataCell(Text(formatDateTime(n['created_at']))),
-                      DataCell(TextButton(
-                        onPressed: () => deleteNotification(n['id']),
-                        child: Text('🗑️ Delete', style: TextStyle(color: danger)),
-                      )),
-                    ])).toList(),
+                    rows: notifications.reversed
+                        .map(
+                          (n) => DataRow(
+                            cells: [
+                              DataCell(Text('${n['title'] ?? ''}')),
+                              DataCell(Text('${n['message'] ?? ''}')),
+                              DataCell(Text('${n['type'] ?? ''}')),
+                              DataCell(Text(formatDateTime(n['created_at']))),
+                              DataCell(
+                                TextButton(
+                                  onPressed: () => deleteNotification(n['id']),
+                                  child: Text(
+                                    '🗑️ Delete',
+                                    style: TextStyle(color: danger),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
             ],
@@ -2179,21 +3186,31 @@ class _AdminPageState extends State<AdminPage> {
           '❌ Recent Cancellations',
           Column(
             children: [
-              field('', cancellationSearch, hint: '🔍 Search by Order ID / name / mobile / product...'),
+              field(
+                '',
+                cancellationSearch,
+                hint: '🔍 Search by Order ID / name / mobile / product...',
+              ),
               const SizedBox(height: 14),
-              Builder(builder: (_) {
-                final s = cancellationSearch.text.trim().toLowerCase();
-                final cancelled = orders.where((o) {
-                  if (o['status'] != 'Cancelled') return false;
-                  return s.isEmpty ||
-                      '${o['name']}'.toLowerCase().contains(s) ||
-                      '${o['mobile']}'.contains(s) ||
-                      '${o['product']}'.toLowerCase().contains(s) ||
-                      '${o['orderId']}'.toLowerCase().contains(s);
-                }).toList();
-                if (cancelled.isEmpty) return const EmptyState(icon: '❌', text: 'No cancellations yet');
-                return orderTable(cancelled.reversed.toList(), compact: true);
-              }),
+              Builder(
+                builder: (_) {
+                  final s = cancellationSearch.text.trim().toLowerCase();
+                  final cancelled = orders.where((o) {
+                    if (o['status'] != 'Cancelled') return false;
+                    return s.isEmpty ||
+                        '${o['name']}'.toLowerCase().contains(s) ||
+                        '${o['mobile']}'.contains(s) ||
+                        '${o['product']}'.toLowerCase().contains(s) ||
+                        '${o['orderId']}'.toLowerCase().contains(s);
+                  }).toList();
+                  if (cancelled.isEmpty)
+                    return const EmptyState(
+                      icon: '❌',
+                      text: 'No cancellations yet',
+                    );
+                  return orderTable(cancelled.reversed.toList(), compact: true);
+                },
+              ),
             ],
           ),
         ),
@@ -2214,21 +3231,32 @@ class _AdminPageState extends State<AdminPage> {
             alignment: Alignment.centerRight,
             child: actionButton(
               '🗑️ Clear All Complaints',
-              () => clearData('grievances_all',
-                  '⚠️ This will delete ALL customer complaints. Do you want to continue?'),
+              () => clearData(
+                'grievances_all',
+                '⚠️ This will delete ALL customer complaints. Do you want to continue?',
+              ),
               color: danger,
             ),
           ),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: field('', grievanceSearch, hint: '🔍 Search by name / phone / subject...')),
+              Expanded(
+                child: field(
+                  '',
+                  grievanceSearch,
+                  hint: '🔍 Search by name / phone / subject...',
+                ),
+              ),
               const SizedBox(width: 10),
               SizedBox(
                 width: 170,
-                child: dropdownField('Status', grievanceStatus,
-                    ['', 'Open', 'Resolved'],
-                    (v) => setState(() => grievanceStatus = v ?? '')),
+                child: dropdownField(
+                  'Status',
+                  grievanceStatus,
+                  ['', 'Open', 'Resolved'],
+                  (v) => setState(() => grievanceStatus = v ?? ''),
+                ),
               ),
             ],
           ),
@@ -2239,19 +3267,21 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
- 
   Widget _grievanceTable() {
     final s = grievanceSearch.text.trim().toLowerCase();
     final list = grievances.where((g) {
-      final matchSearch = s.isEmpty ||
+      final matchSearch =
+          s.isEmpty ||
           '${g['name'] ?? ''}'.toLowerCase().contains(s) ||
           '${g['phone'] ?? ''}'.contains(s) ||
           '${g['subject'] ?? ''}'.toLowerCase().contains(s);
-      final matchStatus = grievanceStatus.isEmpty || g['status'] == grievanceStatus;
+      final matchStatus =
+          grievanceStatus.isEmpty || g['status'] == grievanceStatus;
       return matchSearch && matchStatus;
     }).toList();
 
-    if (list.isEmpty) return const EmptyState(icon: '⚖️', text: 'No complaints yet');
+    if (list.isEmpty)
+      return const EmptyState(icon: '⚖️', text: 'No complaints yet');
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -2270,22 +3300,33 @@ class _AdminPageState extends State<AdminPage> {
         ],
         rows: list.reversed.map((g) {
           final resolved = '${g['status']}' == 'Resolved';
-          return DataRow(cells: [
-            DataCell(Text('${g['name'] ?? 'Guest'}')),
-            DataCell(Text('${g['phone'] ?? '—'}')),
-            DataCell(Text('${g['subject'] ?? ''}')),
-            DataCell(Text('${g['order_id'] ?? '—'}')),
-            DataCell(Text('${g['description'] ?? ''}')),
-            DataCell(StatusBadge(status: '${g['status'] ?? 'Open'}')),
-            DataCell(Text(formatDateTime(g['created_at']))),
-            DataCell(
-              TextButton(
-                onPressed: () => markGrievance(g['id'], resolved ? 'Open' : 'Resolved'),
-                child: Text(resolved ? '↩️ Reopen' : '✅ Mark Resolved'),
+          return DataRow(
+            cells: [
+              DataCell(Text('${g['name'] ?? 'Guest'}')),
+              DataCell(Text('${g['phone'] ?? '—'}')),
+              DataCell(Text('${g['subject'] ?? ''}')),
+              DataCell(Text('${g['order_id'] ?? '—'}')),
+              DataCell(Text('${g['description'] ?? ''}')),
+              DataCell(StatusBadge(status: '${g['status'] ?? 'Open'}')),
+              DataCell(Text(formatDateTime(g['created_at']))),
+              DataCell(
+                TextButton(
+                  onPressed: () =>
+                      markGrievance(g['id'], resolved ? 'Open' : 'Resolved'),
+                  child: Text(resolved ? '↩️ Reopen' : '✅ Mark Resolved'),
+                ),
               ),
-            ),
-            DataCell(TextButton(onPressed: () => openWhatsApp('${g['phone']}', '${g['name'] ?? 'Customer'}'), child: const Text('💬'))),
-          ]);
+              DataCell(
+                TextButton(
+                  onPressed: () => openWhatsApp(
+                    '${g['phone']}',
+                    '${g['name'] ?? 'Customer'}',
+                  ),
+                  child: const Text('💬'),
+                ),
+              ),
+            ],
+          );
         }).toList(),
       ),
     );
@@ -2294,7 +3335,10 @@ class _AdminPageState extends State<AdminPage> {
   Widget revenuePage() {
     final periodOrders = ordersForPeriod(revenuePeriod);
     final total = revenue;
-    final periodTotal = periodOrders.fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+    final periodTotal = periodOrders.fold<num>(
+      0,
+      (s, o) => s + (o['amount'] ?? 0),
+    );
     final avg = deliveredOrders.isEmpty ? 0 : total / deliveredOrders.length;
 
     return Column(
@@ -2303,8 +3347,10 @@ class _AdminPageState extends State<AdminPage> {
           alignment: Alignment.centerRight,
           child: actionButton(
             '🗑️ Clear Orders (resets Revenue)',
-            () => clearData('orders_all',
-                '⚠️ This will delete ALL Orders, and Revenue will reset to ₹0. Do you want to continue?'),
+            () => clearData(
+              'orders_all',
+              '⚠️ This will delete ALL Orders, and Revenue will reset to ₹0. Do you want to continue?',
+            ),
             color: danger,
           ),
         ),
@@ -2315,7 +3361,11 @@ class _AdminPageState extends State<AdminPage> {
           spacing: 10,
           runSpacing: 10,
           children: [
-            for (final entry in {'week': '📅 Week', 'month': '🗓️ Month', 'year': '📆 Year'}.entries)
+            for (final entry in {
+              'week': '📅 Week',
+              'month': '🗓️ Month',
+              'year': '📆 Year',
+            }.entries)
               ChoiceChip(
                 label: Text(entry.value),
                 selected: revenuePeriod == entry.key,
@@ -2341,29 +3391,66 @@ class _AdminPageState extends State<AdminPage> {
         ),
 
         const SizedBox(height: 20),
-        LayoutBuilder(builder: (_, c) {
-          final cols = c.maxWidth > 700 ? 3 : 1;
-          return GridView.count(
-            crossAxisCount: cols,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
-            childAspectRatio: 2.8,
-            children: [
-              RevenueCard(label: 'TOTAL REVENUE', value: '₹${total.toStringAsFixed(0)}', sub: 'All delivered orders', color1: tealDark, color2: teal),
-              RevenueCard(label: periodLabel(revenuePeriod), value: '₹${periodTotal.toStringAsFixed(0)}', sub: '${periodOrders.length} delivered orders', color1: const Color(0xFF9C6024), color2: copper),
-              RevenueCard(label: 'AVG ORDER VALUE', value: '₹${avg.toStringAsFixed(0)}', sub: 'Per delivered order', color1: const Color(0xFF2E7D32), color2: success),
-            ],
-          );
-        }),
+        LayoutBuilder(
+          builder: (_, c) {
+            final cols = c.maxWidth > 700 ? 3 : 1;
+            return GridView.count(
+              crossAxisCount: cols,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+              childAspectRatio: 2.8,
+              children: [
+                RevenueCard(
+                  label: 'TOTAL REVENUE',
+                  value: '₹${total.toStringAsFixed(0)}',
+                  sub: 'All delivered orders',
+                  color1: tealDark,
+                  color2: teal,
+                ),
+                RevenueCard(
+                  label: periodLabel(revenuePeriod),
+                  value: '₹${periodTotal.toStringAsFixed(0)}',
+                  sub: '${periodOrders.length} delivered orders',
+                  color1: const Color(0xFF9C6024),
+                  color2: copper,
+                ),
+                RevenueCard(
+                  label: 'AVG ORDER VALUE',
+                  value: '₹${avg.toStringAsFixed(0)}',
+                  sub: 'Per delivered order',
+                  color1: const Color(0xFF2E7D32),
+                  color2: success,
+                ),
+              ],
+            );
+          },
+        ),
         const SizedBox(height: 20),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: sectionCard('📊 ${periodLabel(revenuePeriod)} Revenue Chart', SizedBox(height: 260, child: SimpleChart(data: monthlyRevenue(deliveredOrders), bar: false, color: teal)))),
+            Expanded(
+              child: sectionCard(
+                '📊 ${periodLabel(revenuePeriod)} Revenue Chart',
+                SizedBox(
+                  height: 260,
+                  child: SimpleChart(
+                    data: monthlyRevenue(deliveredOrders),
+                    bar: false,
+                    color: teal,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 20),
-            Expanded(child: sectionCard('🏆 Top Products by Revenue', topProducts(periodOrders))),
+            Expanded(
+              child: sectionCard(
+                '🏆 Top Products by Revenue',
+                topProducts(periodOrders),
+              ),
+            ),
           ],
         ),
         sectionCard(
@@ -2381,42 +3468,47 @@ class _AdminPageState extends State<AdminPage> {
     final periodOrders = ordersForPeriod(revenuePeriod);
     final counts = productPurchaseCounts(periodOrders);
     final totalOrders = counts.values.fold<int>(0, (a, b) => a + b);
-    final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     return sectionCard(
       '📊 Most Bought Products — ${periodLabel(revenuePeriod)}',
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               OutlinedButton(
                 onPressed: () => showPage('revenue'),
-                child: const Text('← Back to Revenue'),
+                child: const Text('←'),
               ),
-              const Spacer(),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final entry in {'week': 'Week', 'month': 'Month', 'year': 'Year'}.entries)
-                    ChoiceChip(
-                      label: Text(entry.value),
-                      selected: revenuePeriod == entry.key,
-                      selectedColor: teal,
-                      labelStyle: TextStyle(
-                        color: revenuePeriod == entry.key ? Colors.white : tealDark,
-                        fontSize: 12,
-                      ),
-                      backgroundColor: tealLight,
-                      onSelected: (_) => setState(() => revenuePeriod = entry.key),
-                    ),
-                ],
-              ),
+              for (final entry in {
+                'week': 'Week',
+                'month': 'Month',
+                'year': 'Year',
+              }.entries)
+                ChoiceChip(
+                  label: Text(entry.value),
+                  selected: revenuePeriod == entry.key,
+                  selectedColor: teal,
+                  labelStyle: TextStyle(
+                    color: revenuePeriod == entry.key ? Colors.white : tealDark,
+                    fontSize: 12,
+                  ),
+                  backgroundColor: tealLight,
+                  onSelected: (_) => setState(() => revenuePeriod = entry.key),
+                ),
             ],
           ),
           const SizedBox(height: 18),
           if (totalOrders == 0)
-            const EmptyState(icon: '📊', text: 'No delivered orders in this period yet')
+            const EmptyState(
+              icon: '📊',
+              text: 'No delivered orders in this period yet',
+            )
           else
             ...List.generate(sorted.length, (i) {
               final e = sorted[i];
@@ -2429,11 +3521,22 @@ class _AdminPageState extends State<AdminPage> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text('${i + 1}. ${e.key}',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          child: Text(
+                            '${i + 1}. ${e.key}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                        Text('${pct.toStringAsFixed(1)}%  (${e.value} orders)',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: tealDark)),
+                        Text(
+                          '${pct.toStringAsFixed(1)}%  (${e.value} orders)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: tealDark,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -2473,9 +3576,11 @@ class _AdminPageState extends State<AdminPage> {
       final name = '${o['product'] ?? ''}';
       map[name] = (map[name] ?? 0) + (o['amount'] ?? 0);
     }
-    final list = map.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final list = map.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     final top = list.take(5).toList();
-    if (top.isEmpty) return const EmptyState(icon: '📊', text: 'No delivered orders yet');
+    if (top.isEmpty)
+      return const EmptyState(icon: '📊', text: 'No delivered orders yet');
     final maxValue = top.first.value == 0 ? 1 : top.first.value;
     return Column(
       children: List.generate(top.length, (i) {
@@ -2484,10 +3589,26 @@ class _AdminPageState extends State<AdminPage> {
           padding: const EdgeInsets.only(bottom: 14),
           child: Column(
             children: [
-              Row(children: [
-                Expanded(child: Text('${i + 1}. ${e.key}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-                Text('₹${e.value.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              ]),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${i + 1}. ${e.key}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '₹${e.value.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 4),
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
@@ -2505,13 +3626,17 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-    Future<void> openWhatsApp(String mobile, String name) async {
+  Future<void> openWhatsApp(String mobile, String name) async {
     final numText = mobile.replaceAll(RegExp(r'\D'), '');
     final msg = Uri.encodeComponent(
-        "Hi $name! 👗 Thank you for choosing Sumathi's Styles, Injambakkam. How can we help you today?");
+      "Hi $name! 👗 Thank you for choosing Sumathi's Styles, Injambakkam. How can we help you today?",
+    );
     final uri = Uri.parse('https://wa.me/91$numText?text=$msg');
     try {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched) showToast('❌ Could not open WhatsApp');
     } catch (e) {
       showToast('❌ WhatsApp error: $e');
@@ -2617,7 +3742,11 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                   const Text(
                     'Admin Login',
-                    style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -2625,7 +3754,10 @@ class _AdminPageState extends State<AdminPage> {
             Expanded(
               child: Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 24,
+                  ),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 340),
                     child: Column(
@@ -2650,10 +3782,22 @@ class _AdminPageState extends State<AdminPage> {
                                   decoration: BoxDecoration(
                                     color: loginBlue,
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 3),
-                                    boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 6)],
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 3,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x26000000),
+                                        blurRadius: 6,
+                                      ),
+                                    ],
                                   ),
-                                  child: const Icon(Icons.person, color: Colors.white, size: 16),
+                                  child: const Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
                                 ),
                               ),
                             ],
@@ -2662,7 +3806,11 @@ class _AdminPageState extends State<AdminPage> {
                         const SizedBox(height: 20),
                         const Text(
                           'Admin Panel',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A1A1A),
+                          ),
                         ),
                         const SizedBox(height: 28),
                         loginField(
@@ -2686,19 +3834,28 @@ class _AdminPageState extends State<AdminPage> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: loginBlue,
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
                               elevation: 0,
                             ),
                             onPressed: doLogin,
                             child: const Text(
                               'LOGIN',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: .6),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: .6,
+                              ),
                             ),
                           ),
                         ),
                         if (loginError.isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          Text(loginError, style: TextStyle(color: danger, fontSize: 13)),
+                          Text(
+                            loginError,
+                            style: TextStyle(color: danger, fontSize: 13),
+                          ),
                         ],
                       ],
                     ),
@@ -2774,16 +3931,32 @@ class _AdminPageState extends State<AdminPage> {
               padding: const EdgeInsets.all(18),
               margin: const EdgeInsets.only(bottom: 14),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [sidebar, const Color(0xFF00796B)]),
+                gradient: LinearGradient(
+                  colors: [sidebar, const Color(0xFF00796B)],
+                ),
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: const [BoxShadow(color: Color(0x20000000), blurRadius: 18)],
+                boxShadow: const [
+                  BoxShadow(color: Color(0x20000000), blurRadius: 18),
+                ],
               ),
               child: Column(
                 children: [
-                  const Text("👗 Sumathi's Styles",
-                      style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+                  const Text(
+                    "👗 Sumathi's Styles",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 5),
-                  Text('Admin Panel', style: TextStyle(color: Colors.white.withOpacity(.8), fontSize: 12)),
+                  Text(
+                    'Admin Panel',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(.8),
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2812,15 +3985,24 @@ class _AdminPageState extends State<AdminPage> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: const Color(0xFFD7E5E3)),
-                      boxShadow: const [BoxShadow(color: Color(0x10000000), blurRadius: 10)],
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x10000000), blurRadius: 10),
+                      ],
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(item.$2, style: const TextStyle(fontSize: 24)),
                         const SizedBox(height: 6),
-                        Text(item.$3, textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: tealDark)),
+                        Text(
+                          item.$3,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: tealDark,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2834,11 +4016,15 @@ class _AdminPageState extends State<AdminPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFC62828),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 onPressed: doLogout,
-                child: const Text('🚪 Logout',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                child: const Text(
+                  '🚪 Logout',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
               ),
             ),
           ],
@@ -2850,19 +4036,33 @@ class _AdminPageState extends State<AdminPage> {
   Widget sidebarWidget() {
     final groups = [
       ('Overview', [('dashboard', '📊', 'Dashboard')]),
-      ('Catalogue', [('upload', '📦', 'Product Upload'), ('products', '👗', 'All Products')]),
-      ('Sales', [
-        ('ordersmgmt', '🧾', 'Orders'),
-        ('customorder', '✂️', 'Customized Order'),
-        ('contactform', '👤', 'Customers'),
-        ('contactform2', '🍽️', 'Catering Contact Form'),
-      ]),
-      ('Engagement', [
-        ('notifications', '🔔', 'Send Notification'),
-        ('datarequests', '❌', 'Cancellation Msg'),
-        
-      ]),
-      ('Finance', [('revenue', '💰', 'Revenue'), ('analysis', '📊', 'Analysis')]),
+      (
+        'Catalogue',
+        [
+          ('upload', '📦', 'Product Upload'),
+          ('products', '👗', 'All Products'),
+        ],
+      ),
+      (
+        'Sales',
+        [
+          ('ordersmgmt', '🧾', 'Orders'),
+          ('customorder', '✂️', 'Customized Order'),
+          ('contactform', '👤', 'Customers'),
+          ('contactform2', '🍽️', 'Catering Contact Form'),
+        ],
+      ),
+      (
+        'Engagement',
+        [
+          ('notifications', '🔔', 'Send Notification'),
+          ('datarequests', '❌', 'Cancellation Msg'),
+        ],
+      ),
+      (
+        'Finance',
+        [('revenue', '💰', 'Revenue'), ('analysis', '📊', 'Analysis')],
+      ),
     ];
 
     return Container(
@@ -2881,10 +4081,21 @@ class _AdminPageState extends State<AdminPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Sumathi's Styles",
-                          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
-                      Text('Admin Dashboard',
-                          style: TextStyle(color: Colors.white.withOpacity(.55), fontSize: 11)),
+                      const Text(
+                        "Sumathi's Styles",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'Admin Dashboard',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(.55),
+                          fontSize: 11,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -2897,19 +4108,33 @@ class _AdminPageState extends State<AdminPage> {
                 for (final group in groups) ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
-                    child: Text(group.$1.toUpperCase(),
-                        style: TextStyle(color: Colors.white.withOpacity(.35), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+                    child: Text(
+                      group.$1.toUpperCase(),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(.35),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
                   for (final item in group.$2)
                     InkWell(
                       onTap: () => showPage(item.$1),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: currentPage == item.$1 ? const Color(0xFF00695C) : Colors.transparent,
+                          color: currentPage == item.$1
+                              ? const Color(0xFF00695C)
+                              : Colors.transparent,
                           border: Border(
                             left: BorderSide(
-                              color: currentPage == item.$1 ? copper : Colors.transparent,
+                              color: currentPage == item.$1
+                                  ? copper
+                                  : Colors.transparent,
                               width: 3,
                             ),
                           ),
@@ -2919,12 +4144,16 @@ class _AdminPageState extends State<AdminPage> {
                             Text(item.$2, style: const TextStyle(fontSize: 18)),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(item.$3,
-                                  style: TextStyle(
-                                    color: currentPage == item.$1 ? Colors.white : Colors.white.withOpacity(.75),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  )),
+                              child: Text(
+                                item.$3,
+                                style: TextStyle(
+                                  color: currentPage == item.$1
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(.75),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -2938,12 +4167,24 @@ class _AdminPageState extends State<AdminPage> {
             onTap: doLogout,
             child: Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(.1)))),
-              child: Row(children: [
-                const Text('🚪', style: TextStyle(fontSize: 18)),
-                const SizedBox(width: 12),
-                Text('Logout', style: TextStyle(color: Colors.white.withOpacity(.65), fontSize: 14)),
-              ]),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.white.withOpacity(.1)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Text('🚪', style: TextStyle(fontSize: 18)),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Logout',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(.65),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -2963,7 +4204,10 @@ class _AdminPageState extends State<AdminPage> {
           if (mobile)
             OutlinedButton(
               onPressed: () => setState(() => mobilePageMode = false),
-              child: const Text('← Back to Menu', style: TextStyle(fontSize: 12)),
+              child: const Text(
+                '← Back to Menu',
+                style: TextStyle(fontSize: 12),
+              ),
             )
           else
             OutlinedButton(
@@ -2972,8 +4216,14 @@ class _AdminPageState extends State<AdminPage> {
             ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(titleFor(currentPage),
-                style: TextStyle(fontSize: mobile ? 16 : 18, fontWeight: FontWeight.w700, color: tealDark)),
+            child: Text(
+              titleFor(currentPage),
+              style: TextStyle(
+                fontSize: mobile ? 16 : 18,
+                fontWeight: FontWeight.w700,
+                color: tealDark,
+              ),
+            ),
           ),
           if (!mobile) ...[
             Text(
@@ -2984,9 +4234,15 @@ class _AdminPageState extends State<AdminPage> {
             OutlinedButton(onPressed: () {}, child: const Text('🔔')),
             const SizedBox(width: 10),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                foregroundColor: Colors.white,
+              ),
               onPressed: () => showPage('ordersmgmt'),
-              child: const Text('🧾 Go to Orders', style: TextStyle(fontSize: 12)),
+              child: const Text(
+                '🧾 Go to Orders',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
           ],
         ],
@@ -2995,15 +4251,35 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   String monthName(int month) {
-    const names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
-      'September', 'October', 'November', 'December'];
+    const names = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
     return names[month - 1];
   }
 }
 
 extension on int {
   String weekdayName() {
-    const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const names = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
     return names[this - 1];
   }
 }
@@ -3030,7 +4306,8 @@ class ShieldPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant ShieldPainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(covariant ShieldPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class EmptyState extends StatelessWidget {
@@ -3047,7 +4324,10 @@ class EmptyState extends StatelessWidget {
           children: [
             Text(icon, style: const TextStyle(fontSize: 44)),
             const SizedBox(height: 10),
-            Text(text, style: const TextStyle(fontSize: 14, color: Color(0xFF757575))),
+            Text(
+              text,
+              style: const TextStyle(fontSize: 14, color: Color(0xFF757575)),
+            ),
           ],
         ),
       ),
@@ -3065,20 +4345,35 @@ class StatusBadge extends StatelessWidget {
     Color fg;
     switch (status) {
       case 'Ordered':
-        bg = const Color(0xFFE3F2FD); fg = const Color(0xFF1565C0); break;
+        bg = const Color(0xFFE3F2FD);
+        fg = const Color(0xFF1565C0);
+        break;
       case 'Processing':
-        bg = const Color(0xFFEDE7F6); fg = const Color(0xFF4527A0); break;
+        bg = const Color(0xFFEDE7F6);
+        fg = const Color(0xFF4527A0);
+        break;
       case 'Delivered':
-        bg = const Color(0xFFE8F5E9); fg = const Color(0xFF2E7D32); break;
+        bg = const Color(0xFFE8F5E9);
+        fg = const Color(0xFF2E7D32);
+        break;
       case 'Cancelled':
-        bg = const Color(0xFFFFEBEE); fg = const Color(0xFFE53935); break;
+        bg = const Color(0xFFFFEBEE);
+        fg = const Color(0xFFE53935);
+        break;
       default:
-        bg = const Color(0xFFFFF3E0); fg = const Color(0xFFE65100);
+        bg = const Color(0xFFFFF3E0);
+        fg = const Color(0xFFE65100);
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg),
+      ),
     );
   }
 }
@@ -3106,13 +4401,33 @@ class RevenueCard extends StatelessWidget {
         gradient: LinearGradient(colors: [color1, color2]),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 3),
-        Text(sub, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            sub,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -3146,7 +4461,10 @@ class _ChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (data.isEmpty) return;
-    final paint = Paint()..color = color..strokeWidth = 2..style = PaintingStyle.stroke;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
     final maxValue = math.max(1, data.fold<num>(0, (a, b) => math.max(a, b)));
     final bottom = size.height - 28;
     final top = 12.0;
@@ -3170,13 +4488,20 @@ class _ChartPainter extends CustomPainter {
     } else {
       final path = Path();
       for (int i = 0; i < data.length; i++) {
-        final x = data.length == 1 ? size.width / 2 : i * size.width / (data.length - 1);
+        final x = data.length == 1
+            ? size.width / 2
+            : i * size.width / (data.length - 1);
         final y = bottom - (data[i] / maxValue) * chartHeight;
-        if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+        if (i == 0)
+          path.moveTo(x, y);
+        else
+          path.lineTo(x, y);
       }
       canvas.drawPath(path, paint);
       for (int i = 0; i < data.length; i++) {
-        final x = data.length == 1 ? size.width / 2 : i * size.width / (data.length - 1);
+        final x = data.length == 1
+            ? size.width / 2
+            : i * size.width / (data.length - 1);
         final y = bottom - (data[i] / maxValue) * chartHeight;
         canvas.drawCircle(Offset(x, y), 4, Paint()..color = color);
       }
@@ -3185,7 +4510,9 @@ class _ChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ChartPainter oldDelegate) =>
-      oldDelegate.data != data || oldDelegate.bar != bar || oldDelegate.color != color;
+      oldDelegate.data != data ||
+      oldDelegate.bar != bar ||
+      oldDelegate.color != color;
 }
 
 class StatusChart extends StatelessWidget {
@@ -3220,8 +4547,17 @@ class StatusChart extends StatelessWidget {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('$total', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
-                const Text('Orders', style: TextStyle(fontSize: 12, color: Color(0xFF757575))),
+                Text(
+                  '$total',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Text(
+                  'Orders',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF757575)),
+                ),
               ],
             ),
           ],
@@ -3260,7 +4596,10 @@ class _DonutPainter extends CustomPainter {
     for (int i = 0; i < values.length; i++) {
       final sweep = (values[i] / total) * math.pi * 2;
       canvas.drawArc(
-        Rect.fromCircle(center: size.center(Offset.zero), radius: size.width / 2 - 12),
+        Rect.fromCircle(
+          center: size.center(Offset.zero),
+          radius: size.width / 2 - 12,
+        ),
         start,
         sweep,
         false,
@@ -3274,5 +4613,6 @@ class _DonutPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DonutPainter oldDelegate) => oldDelegate.values != values;
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) =>
+      oldDelegate.values != values;
 }

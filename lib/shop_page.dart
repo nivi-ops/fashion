@@ -410,15 +410,29 @@ class _ShopPageState extends State<ShopPage> {
                                   ),
                                   const SizedBox(height: 20),
 
-                                  const Text(
-                                    'Description',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    service.description,
-                                    style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.5),
-                                  ),
+                                                                    if (service.description.trim().isNotEmpty) ...[
+                                    const Text(
+                                      'Description',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      service.description,
+                                      style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.5),
+                                    ),
+                                    const SizedBox(height: 20),
+                                  ],
+                                  if (service.highlights.isNotEmpty) ...[
+                                    const Text(
+                                      'Product Highlights',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      service.highlights.map((h) => '• $h').join('\n'),
+                                      style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),

@@ -16,6 +16,7 @@ class StitchingService {
   final double price;
   final String imageUrl;
   final String category;
+  final List<String> highlights;
 
   const StitchingService({
     required this.id,
@@ -24,6 +25,7 @@ class StitchingService {
     required this.price,
     required this.imageUrl,
     required this.category,
+    this.highlights = const [],
   });
 }
 
@@ -76,17 +78,7 @@ class ApiService {
   // ---------------- MOCK DATA (still used for services/addresses/orders
   // until those flows are wired to Firestore too) ----------------
 
-  static final List<ShopAddress> _mockAddresses = [
-    const ShopAddress(
-      id: 'a1',
-      label: 'Home',
-      addressLine: '12, Gandhi Street',
-      city: 'Chennai',
-      pincode: '600001',
-      latitude: 13.0827,
-      longitude: 80.2707,
-    ),
-  ];
+     static final List<ShopAddress> _mockAddresses = [];
 
   static final List<TailoringOrder> _mockOrders = [
     TailoringOrder(
@@ -104,6 +96,20 @@ class ApiService {
       amount: 150,
     ),
   ];
+
+  // ---------------- Small shared helper ----------------
+
+  /// Reads a Firestore `highlights` field (a List of dynamic) into a
+  /// clean List<String>, dropping any blank entries. Returns an empty
+  /// list when the field is missing/not a List, so callers never need
+  /// to null-check.
+  static List<String> _parseHighlights(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .map((e) => e.toString().trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
 
   // ---------------- INSTANCE METHODS (used by shop_page.dart) ----------------
 
@@ -138,6 +144,7 @@ class ApiService {
           category: item['category']?.toString() ??
               item['cat']?.toString() ??
               'Other',
+          highlights: _parseHighlights(item['highlights']),
         );
       }).toList();
 
@@ -178,6 +185,7 @@ class ApiService {
         category: item['category']?.toString() ??
             item['cat']?.toString() ??
             'Other',
+        highlights: _parseHighlights(item['highlights']),
       );
     } catch (_) {
       return null;
@@ -290,6 +298,8 @@ class ApiService {
           price: double.tryParse('${item['price'] ?? 0}') ?? 0,
           image: image,
           rating: double.tryParse(item['rating']?.toString() ?? '') ?? 4.5,
+          description: item['description']?.toString() ?? '',
+          highlights: _parseHighlights(item['highlights']),
         );
       }).toList();
     } catch (e) {
