@@ -21,20 +21,77 @@ class AppUser {
 }
 
 class SavedAddress {
+  // Saved label: Home / Work / Other.
   String name;
+  String recipient;
+  String phone;
   String door;
   String street;
+  String area;
   String city;
+  String state;
   String pin;
+  String landmark;
+
   SavedAddress({
     required this.name,
+    this.recipient = '',
+    this.phone = '',
     required this.door,
     required this.street,
+    this.area = '',
     required this.city,
+    this.state = '',
     this.pin = '',
+    this.landmark = '',
   });
-  String get detail => '$door, $street, $city${pin.isNotEmpty ? ', $pin' : ''}';
-  bool get isOffice => name.toUpperCase().contains('OFFICE');
+
+  String get detail {
+    final parts = <String>[
+      if (door.trim().isNotEmpty) door.trim(),
+      if (street.trim().isNotEmpty) street.trim(),
+      if (area.trim().isNotEmpty) area.trim(),
+      if (city.trim().isNotEmpty) city.trim(),
+      if (state.trim().isNotEmpty) state.trim(),
+      if (pin.trim().isNotEmpty) pin.trim(),
+    ];
+    return parts.join(', ');
+  }
+
+  bool get isOffice =>
+      name.toUpperCase() == 'WORK' ||
+      name.toUpperCase() == 'OFFICE';
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'recipient': recipient,
+      'phone': phone,
+      'door': door,
+      'street': street,
+      'area': area,
+      'city': city,
+      'state': state,
+      'pin': pin,
+      'landmark': landmark,
+    };
+  }
+
+  factory SavedAddress.fromMap(Map<String, dynamic> map) {
+    return SavedAddress(
+      // Backward-compatible with older saved address documents.
+      name: (map['name'] ?? 'Home').toString(),
+      recipient: (map['recipient'] ?? '').toString(),
+      phone: (map['phone'] ?? '').toString(),
+      door: (map['door'] ?? '').toString(),
+      street: (map['street'] ?? '').toString(),
+      area: (map['area'] ?? '').toString(),
+      city: (map['city'] ?? '').toString(),
+      state: (map['state'] ?? '').toString(),
+      pin: (map['pin'] ?? '').toString(),
+      landmark: (map['landmark'] ?? '').toString(),
+    );
+  }
 }
 
 class MyOrder {
@@ -144,13 +201,20 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Addresses
     final List<SavedAddress> _addresses = [];
+  final List<String> _addressDocIds = [];
   int _addrEditIndex = -1;
   bool _showAddrForm = false;
   final _addrNameCtrl = TextEditingController();
+  final _addrRecipientCtrl = TextEditingController();
+  final _addrPhoneCtrl = TextEditingController();
   final _addrDoorCtrl = TextEditingController();
   final _addrStreetCtrl = TextEditingController();
+  final _addrAreaCtrl = TextEditingController();
   final _addrCityCtrl = TextEditingController();
+  final _addrStateCtrl = TextEditingController();
   final _addrPinCtrl = TextEditingController();
+  final _addrLandmarkCtrl = TextEditingController();
+  String _addrType = 'Home';
 
   // Grievance
   final _grievanceSubjectCtrl = TextEditingController();
@@ -195,6 +259,7 @@ class _SettingsPageState extends State<SettingsPage> {
     AppState.instance.addListener(_onAppStateChanged);
     _syncFromAppState();
     _loadNotifPrefs();
+    if (_user.isLoggedIn) _loadAddresses();
   }
 
   @override
@@ -205,10 +270,15 @@ class _SettingsPageState extends State<SettingsPage> {
     _emailCtrl.dispose();
     _mobileCtrl.dispose();
     _addrNameCtrl.dispose();
+    _addrRecipientCtrl.dispose();
+    _addrPhoneCtrl.dispose();
     _addrDoorCtrl.dispose();
     _addrStreetCtrl.dispose();
+    _addrAreaCtrl.dispose();
     _addrCityCtrl.dispose();
+    _addrStateCtrl.dispose();
     _addrPinCtrl.dispose();
+    _addrLandmarkCtrl.dispose();
     _grievanceSubjectCtrl.dispose();
     _grievanceOrderIdCtrl.dispose();
     _grievanceDescCtrl.dispose();
@@ -248,6 +318,12 @@ class _SettingsPageState extends State<SettingsPage> {
       _editingPersonalInfo = false;
       _editingEmail = false;
       _editingMobile = false;
+      if (_user.isLoggedIn) {
+        _loadAddresses();
+      } else {
+        _addresses.clear();
+        _addressDocIds.clear();
+      }
     }
   }
   void _syncControllersFromUser() {
@@ -262,6 +338,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _panel = p);
     if (p == _Panel.orders || p == _Panel.coins) _loadOrders();
     if (p == _Panel.coins) _loadCoins();
+    if (p == _Panel.addresses) _loadAddresses();
     if (p == _Panel.reviews) _loadReviews();
   }
 
@@ -1152,6 +1229,11 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() {
         _user = AppUser();
         _syncControllersFromUser();
+        _addresses.clear();
+        _addressDocIds.clear();
+        _editingPersonalInfo = false;
+        _editingEmail = false;
+        _editingMobile = false;
         _panel = _Panel.home;
       });
     }
@@ -1173,6 +1255,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
+  // ---------------------------------------------------------------
   // PROFILE PANEL — Flipkart-style locked fields
   // ---------------------------------------------------------------
   Widget _buildProfilePanel() {
@@ -1180,257 +1263,74 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Profile Information', Icons.edit),
-
-        // -----------------------------------------------------------
-        // PERSONAL INFORMATION
-        // -----------------------------------------------------------
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.badge_outlined,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Personal Information',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() => _editingPersonalInfo = true);
-                    },
-                    child: const Text(
-                      'Edit',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              Row(children: [
+                const Icon(Icons.badge_outlined, size: 16, color: AppColors.primary),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Personal Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+                TextButton(onPressed: () => setState(() => _editingPersonalInfo = true), child: const Text('Edit', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600))),
+              ]),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _textField(
-                      _firstNameCtrl,
-                      'First Name',
-                      readOnly: !_editingPersonalInfo,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _textField(
-                      _lastNameCtrl,
-                      'Last Name',
-                      readOnly: !_editingPersonalInfo,
-                    ),
-                  ),
-                ],
-              ),
+              Row(children: [
+                Expanded(child: _textField(_firstNameCtrl, 'First Name', readOnly: !_editingPersonalInfo)),
+                const SizedBox(width: 12),
+                Expanded(child: _textField(_lastNameCtrl, 'Last Name', readOnly: !_editingPersonalInfo)),
+              ]),
               if (_editingPersonalInfo) ...[
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: _savePersonalInfo,
-                      style: _saveBtnStyle(),
-                      child: const Text('Save'),
-                    ),
-                    const SizedBox(width: 10),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _syncControllersFromUser();
-                          _editingPersonalInfo = false;
-                        });
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                  ],
-                ),
+                Row(children: [
+                  ElevatedButton(onPressed: _savePersonalInfo, style: _saveBtnStyle(), child: const Text('Save')),
+                  const SizedBox(width: 10),
+                  TextButton(onPressed: () { setState(() { _syncControllersFromUser(); _editingPersonalInfo = false; }); }, child: const Text('Cancel')),
+                ]),
               ],
             ],
           ),
         ),
-
-        // -----------------------------------------------------------
-        // EMAIL ADDRESS
-        // -----------------------------------------------------------
         _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.email_outlined,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Email Address',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() => _editingEmail = true);
-                    },
-                    child: const Text(
-                      'Edit',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _textField(
-                _emailCtrl,
-                'Enter email address',
-                keyboardType: TextInputType.emailAddress,
-                readOnly: !_editingEmail,
-              ),
-              if (_editingEmail) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        final email = _emailCtrl.text.trim();
-                        if (!email.contains('@') || !email.contains('.')) {
-                          _showToast(
-                            'Enter a valid email address!',
-                            error: true,
-                          );
-                          return;
-                        }
-                        setState(() {
-                          _user.email = email;
-                          _editingEmail = false;
-                        });
-                        widget.onUserChanged?.call(_user);
-                        _showToast('Email updated!');
-                      },
-                      style: _saveBtnStyle(),
-                      icon: const Icon(Icons.save, size: 16),
-                      label: const Text('Save Email'),
-                    ),
-                    const SizedBox(width: 10),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _emailCtrl.text = _user.email;
-                          _editingEmail = false;
-                        });
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                  ],
-                ),
-              ],
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.email_outlined, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Email Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+              TextButton(onPressed: () => setState(() => _editingEmail = true), child: const Text('Edit', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600))),
+            ]),
+            const SizedBox(height: 14),
+            _textField(_emailCtrl, 'Enter email address', keyboardType: TextInputType.emailAddress, readOnly: !_editingEmail),
+            if (_editingEmail) ...[
+              const SizedBox(height: 12),
+              Row(children: [
+                ElevatedButton(onPressed: _saveEmail, style: _saveBtnStyle(), child: const Text('Save')),
+                const SizedBox(width: 10),
+                TextButton(onPressed: () { setState(() { _emailCtrl.text = _user.email; _editingEmail = false; }); }, child: const Text('Cancel')),
+              ]),
             ],
-          ),
+          ]),
         ),
-
-        // -----------------------------------------------------------
-        // MOBILE NUMBER
-        // -----------------------------------------------------------
         _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.phone_android,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Mobile Number',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() => _editingMobile = true);
-                    },
-                    child: const Text(
-                      'Edit',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _textField(
-                _mobileCtrl,
-                '10-digit number',
-                keyboardType: TextInputType.phone,
-                maxLength: 10,
-                readOnly: !_editingMobile,
-              ),
-              if (_editingMobile) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _saveMobileNumber,
-                      style: _saveBtnStyle(),
-                      icon: const Icon(Icons.save, size: 16),
-                      label: const Text('Save Mobile'),
-                    ),
-                    const SizedBox(width: 10),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _mobileCtrl.text = _user.phone;
-                          _editingMobile = false;
-                        });
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 8),
-              const Text(
-                "Note: changing mobile number here won't move your past orders — those stay linked to the number you logged in with.",
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.textLight,
-                ),
-              ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.phone_android, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Mobile Number', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+              TextButton(onPressed: () => setState(() => _editingMobile = true), child: const Text('Edit', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600))),
+            ]),
+            const SizedBox(height: 14),
+            _textField(_mobileCtrl, '10-digit number', keyboardType: TextInputType.phone, maxLength: 10, readOnly: !_editingMobile),
+            if (_editingMobile) ...[
+              const SizedBox(height: 12),
+              Row(children: [
+                ElevatedButton(onPressed: _saveMobileNumber, style: _saveBtnStyle(), child: const Text('Save')),
+                const SizedBox(width: 10),
+                TextButton(onPressed: () { setState(() { _mobileCtrl.text = _user.phone; _editingMobile = false; }); }, child: const Text('Cancel')),
+              ]),
             ],
-          ),
+            const SizedBox(height: 8),
+            const Text("Note: changing mobile number here won't move your past orders — those stay linked to the number you logged in with.", style: TextStyle(fontSize: 11.5, color: AppColors.textLight)),
+          ]),
         ),
       ],
     );
@@ -1461,25 +1361,19 @@ class _SettingsPageState extends State<SettingsPage> {
         counterText: '',
         filled: readOnly,
         fillColor: readOnly ? const Color(0xFFF5F5F5) : Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: readOnly
-                ? const Color(0xFFE8E8E8)
-                : const Color(0xFFE0E0E0),
-          ),
+          borderSide: BorderSide(color: readOnly ? const Color(0xFFE7E7E7) : const Color(0xFFE0E0E0)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.primary),
         ),
+        suffixIcon: readOnly
+            ? const Icon(Icons.lock_outline, size: 17, color: Colors.grey)
+            : const Icon(Icons.edit_outlined, size: 17, color: AppColors.primary),
       ),
     );
   }
@@ -1487,43 +1381,43 @@ class _SettingsPageState extends State<SettingsPage> {
   void _savePersonalInfo() {
     final first = _firstNameCtrl.text.trim();
     final last = _lastNameCtrl.text.trim();
-
     if (first.isEmpty) {
-      _showToast(
-        'Please enter your first name!',
-        error: true,
-      );
+      _showToast('Please enter your first name!', error: true);
       return;
     }
-
     setState(() {
-      _user.name = [first, last]
-          .where((s) => s.isNotEmpty)
-          .join(' ');
+      _user.name = [first, last].where((s) => s.isNotEmpty).join(' ');
       _editingPersonalInfo = false;
     });
-
     widget.onUserChanged?.call(_user);
     _showToast('Name updated!');
   }
 
-  void _saveMobileNumber() {
-    final mobile = _mobileCtrl.text.trim();
-
-    if (mobile.length != 10 || int.tryParse(mobile) == null) {
-      _showToast(
-        'Enter a valid 10-digit number!',
-        error: true,
-      );
+  void _saveEmail() {
+    final email = _emailCtrl.text.trim();
+    if (!email.contains('@') || !email.contains('.')) {
+      _showToast('Enter a valid email address!', error: true);
       return;
     }
+    setState(() {
+      _user.email = email;
+      _editingEmail = false;
+    });
+    widget.onUserChanged?.call(_user);
+    _showToast('Email updated!');
+  }
 
+  void _saveMobileNumber() {
+    final mobile = _mobileCtrl.text.trim();
+    if (mobile.length != 10 || int.tryParse(mobile) == null) {
+      _showToast('Enter a valid 10-digit number!', error: true);
+      return;
+    }
     // TODO: trigger real OTP verification via your backend before saving
     setState(() {
       _user.phone = mobile;
       _editingMobile = false;
     });
-
     widget.onUserChanged?.call(_user);
     _showToast('Mobile number updated!');
   }
@@ -1774,9 +1668,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // WISHLIST PANEL (data comes from your product store — hook up onLoad)
   // ---------------------------------------------------------------
-     Widget _buildWishlistPanel() {
+  // WISHLIST PANEL — product grid; tap a product to view it
+  // ---------------------------------------------------------------
+  Widget _buildWishlistPanel() {
     return AnimatedBuilder(
       animation: AppState.instance,
       builder: (context, _) {
@@ -1786,12 +1681,22 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             _panelHeader('My Wishlist', Icons.favorite, back: _Panel.home),
             if (items.isEmpty)
-              _emptyState(Icons.heart_broken_outlined, 'Your wishlist is empty',
-                  'Save your favourite products here!', 'Explore Shop', () {
+              _emptyState(Icons.heart_broken_outlined, 'Your wishlist is empty', 'Save your favourite products here!', 'Explore Shop', () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
               })
             else
-              ...items.map(_wishlistCard),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 0.66,
+                ),
+                itemBuilder: (_, index) => _wishlistCard(items[index]),
+              ),
           ],
         );
       },
@@ -1799,53 +1704,92 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _wishlistCard(Product p) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              p.image,
-              width: 56,
-              height: 56,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 56,
-                height: 56,
-                color: AppColors.gray,
-                child: const Icon(Icons.checkroom, color: AppColors.primary),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showWishlistProduct(p),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3))],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 48, color: AppColors.primary))),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.white,
+                        shape: const CircleBorder(),
+                        elevation: 2,
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.favorite, color: AppColors.danger, size: 20),
+                          onPressed: () => AppState.instance.toggleWishlist(p),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 5),
+                  Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  const SizedBox(height: 9),
+                  SizedBox(width: double.infinity, height: 40, child: ElevatedButton(onPressed: () => _showWishlistProduct(p), style: _saveBtnStyle(), child: const Text('View Product'))),
+                ]),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 4),
-                Text('₹${p.price.toStringAsFixed(0)}',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
-            onPressed: () => AppState.instance.toggleWishlist(p),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  // ---------------------------------------------------------------
+  void _showWishlistProduct(Product p) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: const BoxDecoration(color: AppColors.light, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)))),
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: AspectRatio(aspectRatio: 1.05, child: Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 64, color: AppColors.primary)))),
+                ),
+                const SizedBox(height: 16),
+                Text(p.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                const SizedBox(height: 18),
+                SizedBox(width: double.infinity, height: 48, child: ElevatedButton(onPressed: () => Navigator.pop(sheetContext), style: _saveBtnStyle(), child: const Text('Close'))),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // SUPER COINS PANEL — like Flipkart SuperCoins: a wallet balance up
   // top, then a per-order "+coins earned" history list below.
   // ---------------------------------------------------------------
@@ -2002,187 +1946,181 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // ADDRESSES PANEL
+  // ---------------------------------------------------------------
+  // ADDRESSES PANEL — upgraded form + Firestore persistence
   // ---------------------------------------------------------------
   Widget _buildAddressesPanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _panelHeader('Saved Addresses', Icons.location_on_outlined),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _panelHeader('Saved Addresses', Icons.location_on_outlined),
+      if (_addresses.isEmpty && !_showAddrForm)
+        _emptyState(Icons.location_off_outlined, 'No saved addresses', 'Add your delivery address for faster checkout.', 'Add New Address', () => _openAddressForm(-1))
+      else
         ..._addresses.asMap().entries.map((e) => _addressCard(e.key, e.value)),
-        OutlinedButton.icon(
+      if (_addresses.isNotEmpty)
+        SizedBox(width: double.infinity, child: OutlinedButton.icon(
           onPressed: () => _openAddressForm(-1),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primary,
-            side: BorderSide(color: AppColors.primaryLight, width: 2),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          icon: const Icon(Icons.add),
-          label: const Text('Add New Address'),
-        ),
-        if (_showAddrForm) ...[
-          const SizedBox(height: 16),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_addrEditIndex >= 0 ? 'Edit Address' : 'Add New Address',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                const SizedBox(height: 12),
-                _textField(_addrNameCtrl, 'Address Name (e.g. Home, Office)'),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(child: _textField(_addrDoorCtrl, 'Door No')),
-                    const SizedBox(width: 10),
-                    Expanded(child: _textField(_addrStreetCtrl, 'Street Name')),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(child: _textField(_addrCityCtrl, 'City')),
-                    const SizedBox(width: 10),
-                    Expanded(child: _textField(_addrPinCtrl, 'Pincode', maxLength: 6)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    ElevatedButton(onPressed: _saveAddress, style: _saveBtnStyle(), child: const Text('Save Address')),
-                    const SizedBox(width: 10),
-                    TextButton(onPressed: _closeAddressForm, child: const Text('Cancel')),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
+          style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, side: const BorderSide(color: AppColors.primary), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          icon: const Icon(Icons.add), label: const Text('Add New Address'),
+        )),
+      if (_showAddrForm) ...[const SizedBox(height: 16), _buildAddressForm()],
+    ]);
+  }
+
+  Widget _buildAddressForm() {
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Expanded(child: Text('Add New Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17))),
+        IconButton(onPressed: _closeAddressForm, icon: const Icon(Icons.close)),
+      ]),
+      const Text('Use this address for delivery and future orders.', style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+      const SizedBox(height: 16),
+      const Text('Address Type', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, children: ['Home', 'Work', 'Other'].map((type) => ChoiceChip(
+        label: Text(type), selected: _addrType == type,
+        onSelected: (_) => setState(() => _addrType = type), selectedColor: AppColors.primary,
+        labelStyle: TextStyle(color: _addrType == type ? Colors.white : AppColors.primary),
+        side: const BorderSide(color: AppColors.primary),
+      )).toList()),
+      const SizedBox(height: 14),
+      _textField(_addrRecipientCtrl, 'Full Name'),
+      const SizedBox(height: 10),
+      _textField(_addrPhoneCtrl, 'Mobile Number', keyboardType: TextInputType.phone, maxLength: 10),
+      const SizedBox(height: 10),
+      Row(children: [Expanded(child: _textField(_addrDoorCtrl, 'Door / Flat No.')), const SizedBox(width: 10), Expanded(child: _textField(_addrStreetCtrl, 'Street / Road'))]),
+      const SizedBox(height: 10),
+      _textField(_addrAreaCtrl, 'Area / Locality'),
+      const SizedBox(height: 10),
+      Row(children: [Expanded(child: _textField(_addrCityCtrl, 'City')), const SizedBox(width: 10), Expanded(child: _textField(_addrStateCtrl, 'State'))]),
+      const SizedBox(height: 10),
+      Row(children: [Expanded(child: _textField(_addrPinCtrl, 'Pincode', keyboardType: TextInputType.number, maxLength: 6)), const SizedBox(width: 10), Expanded(child: _textField(_addrLandmarkCtrl, 'Landmark (optional)'))]),
+      const SizedBox(height: 18),
+      Row(children: [
+        Expanded(child: ElevatedButton.icon(onPressed: _saveAddress, style: _saveBtnStyle(), icon: const Icon(Icons.check, size: 17), label: const Text('Save Address'))),
+        const SizedBox(width: 10), OutlinedButton(onPressed: _closeAddressForm, child: const Text('Cancel')),
+      ]),
+    ]));
   }
 
   Widget _addressCard(int index, SavedAddress a) {
+    final label = a.name.isNotEmpty ? a.name : 'Home';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(color: AppColors.gray, borderRadius: BorderRadius.circular(8)),
-            child: Icon(a.isOffice ? Icons.work_outline : Icons.home_outlined, color: AppColors.primary, size: 18),
-          ),
+      margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE8E8E8)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(width: 40, height: 40, decoration: BoxDecoration(color: AppColors.gray, borderRadius: BorderRadius.circular(10)), child: Icon(a.isOffice ? Icons.work_outline : Icons.home_outlined, color: AppColors.primary, size: 20)),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: AppColors.gray, borderRadius: BorderRadius.circular(4)),
-                      child: Text(a.isOffice ? 'OFFICE' : 'HOME',
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(a.detail, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight)),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textLight),
-            onPressed: () => _openAddressForm(index),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-            onPressed: () => _deleteAddress(index),
-          ),
-        ],
-      ),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            if (a.recipient.isNotEmpty) Text(a.recipient, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ])),
+          IconButton(icon: const Icon(Icons.edit_outlined, size: 19), onPressed: () => _openAddressForm(index)),
+          IconButton(icon: const Icon(Icons.delete_outline, size: 19, color: AppColors.danger), onPressed: () => _deleteAddress(index)),
+        ]),
+        const SizedBox(height: 10),
+        Text(a.detail, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.5)),
+        if (a.landmark.isNotEmpty) Text('Landmark: ${a.landmark}', style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
+        if (a.phone.isNotEmpty) Text('Phone: +91 ${a.phone}', style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
+      ]),
     );
   }
 
   void _openAddressForm(int index) {
     setState(() {
-      _addrEditIndex = index;
-      _showAddrForm = true;
+      _addrEditIndex = index; _showAddrForm = true;
       if (index >= 0) {
         final a = _addresses[index];
-        _addrNameCtrl.text = a.name;
-        _addrDoorCtrl.text = a.door;
-        _addrStreetCtrl.text = a.street;
-        _addrCityCtrl.text = a.city;
-        _addrPinCtrl.text = a.pin;
+        _addrType = a.name.toUpperCase() == 'WORK' || a.name.toUpperCase() == 'OFFICE' ? 'Work' : (a.name.toUpperCase() == 'OTHER' ? 'Other' : 'Home');
+        _addrNameCtrl.text = a.name; _addrRecipientCtrl.text = a.recipient; _addrPhoneCtrl.text = a.phone;
+        _addrDoorCtrl.text = a.door; _addrStreetCtrl.text = a.street; _addrAreaCtrl.text = a.area;
+        _addrCityCtrl.text = a.city; _addrStateCtrl.text = a.state; _addrPinCtrl.text = a.pin; _addrLandmarkCtrl.text = a.landmark;
       } else {
-        _addrNameCtrl.clear();
-        _addrDoorCtrl.clear();
-        _addrStreetCtrl.clear();
-        _addrCityCtrl.clear();
-        _addrPinCtrl.clear();
+        _addrType = 'Home'; _addrNameCtrl.text = 'Home'; _addrRecipientCtrl.text = _user.name; _addrPhoneCtrl.text = _user.phone;
+        _addrDoorCtrl.clear(); _addrStreetCtrl.clear(); _addrAreaCtrl.clear(); _addrCityCtrl.clear(); _addrStateCtrl.clear(); _addrPinCtrl.clear(); _addrLandmarkCtrl.clear();
       }
     });
   }
 
-  void _closeAddressForm() {
-    setState(() {
-      _showAddrForm = false;
-      _addrEditIndex = -1;
-    });
+  void _closeAddressForm() { setState(() { _showAddrForm = false; _addrEditIndex = -1; }); }
+
+  Future<void> _loadAddresses() async {
+    if (!_user.isLoggedIn) return;
+    try {
+      final snap = await FirebaseFirestore.instance.collection('saved_addresses').doc(_user.phone).collection('addresses').get();
+      final loaded = snap.docs.map((doc) => SavedAddress.fromMap(doc.data())).toList();
+      if (!mounted) return;
+      setState(() {
+        _addresses..clear()..addAll(loaded);
+        _addressDocIds..clear()..addAll(snap.docs.map((doc) => doc.id));
+      });
+    } catch (e) {
+      if (mounted) _showToast('Could not load saved addresses: $e', error: true);
+    }
   }
 
-  void _saveAddress() {
-    final name = _addrNameCtrl.text.trim();
+  Future<void> _saveAddress() async {
+    final recipient = _addrRecipientCtrl.text.trim();
+    final phone = _addrPhoneCtrl.text.trim();
     final door = _addrDoorCtrl.text.trim();
     final street = _addrStreetCtrl.text.trim();
+    final area = _addrAreaCtrl.text.trim();
     final city = _addrCityCtrl.text.trim();
-    if (name.isEmpty || door.isEmpty || street.isEmpty || city.isEmpty) {
-      _showToast('Please fill Address Name, Door No, Street Name and City!', error: true);
-      return;
+    final state = _addrStateCtrl.text.trim();
+    final pin = _addrPinCtrl.text.trim();
+    if (recipient.isEmpty || phone.length != 10 || int.tryParse(phone) == null || door.isEmpty || street.isEmpty || area.isEmpty || city.isEmpty || state.isEmpty || pin.length != 6) {
+      _showToast('Please fill all required address details!', error: true); return;
     }
-    final entry = SavedAddress(name: name, door: door, street: street, city: city, pin: _addrPinCtrl.text.trim());
-    setState(() {
-      if (_addrEditIndex >= 0) {
-        _addresses[_addrEditIndex] = entry;
+    if (!_user.isLoggedIn) { _showToast('Please login to save your address!', error: true); return; }
+
+    final entry = SavedAddress(name: _addrType, recipient: recipient, phone: phone, door: door, street: street, area: area, city: city, state: state, pin: pin, landmark: _addrLandmarkCtrl.text.trim());
+    try {
+      final ref = FirebaseFirestore.instance.collection('saved_addresses').doc(_user.phone).collection('addresses');
+      if (_addrEditIndex >= 0 && _addrEditIndex < _addressDocIds.length && _addressDocIds[_addrEditIndex].isNotEmpty) {
+        await ref.doc(_addressDocIds[_addrEditIndex]).set(
+          {...entry.toMap(), 'updatedAt': FieldValue.serverTimestamp()},
+          SetOptions(merge: true),
+        );
       } else {
-        _addresses.add(entry);
+        final newDoc = await ref.add({...entry.toMap(), 'createdAt': FieldValue.serverTimestamp(), 'updatedAt': FieldValue.serverTimestamp()});
+        if (_addrEditIndex < 0) {
+          _addressDocIds.add(newDoc.id);
+        }
       }
-      _showAddrForm = false;
-      _addrEditIndex = -1;
-    });
-    _showToast('Address saved!');
+      if (!mounted) return;
+      setState(() {
+        if (_addrEditIndex >= 0) {
+          _addresses[_addrEditIndex] = entry;
+        } else {
+          _addresses.add(entry);
+        }
+        _showAddrForm = false;
+        _addrEditIndex = -1;
+      });
+      _showToast('Address saved successfully!');
+    } catch (e) { if (mounted) _showToast('Could not save address: $e', error: true); }
   }
 
-  void _deleteAddress(int index) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete this address?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    setState(() => _addresses.removeAt(index));
-    _showToast('Address deleted');
+  Future<void> _deleteAddress(int index) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Delete this address?'), content: const Text('This saved address will be removed from your account.'),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: AppColors.danger)))],
+    ));
+    if (confirmed != true || !_user.isLoggedIn) return;
+    try {
+      final ref = FirebaseFirestore.instance.collection('saved_addresses').doc(_user.phone).collection('addresses');
+      if (index < _addressDocIds.length && _addressDocIds[index].isNotEmpty) {
+        await ref.doc(_addressDocIds[index]).delete();
+      }
+      if (!mounted) return;
+      setState(() {
+        _addresses.removeAt(index);
+        if (index < _addressDocIds.length) _addressDocIds.removeAt(index);
+      });
+      _showToast('Address deleted');
+    } catch (e) { if (mounted) _showToast('Could not delete address: $e', error: true); }
   }
 
-  // ---------------------------------------------------------------
   // NOTIFICATION SETTINGS PANEL
   // ---------------------------------------------------------------
   Widget _buildNotifPanel() {

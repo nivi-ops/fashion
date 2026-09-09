@@ -499,8 +499,15 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> get deliveredOrders =>
       orders.where((o) => o['status'] == 'Delivered').toList();
 
-  num get revenue =>
+   num get revenue =>
       deliveredOrders.fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+
+  /// Orders created TODAY only — resets automatically next day since it
+  /// compares against DateTime.now() every time it's read.
+  int get todaysOrdersCount {
+    final today = formatDate(DateTime.now().toIso8601String());
+    return orders.where((o) => '${o['date']}' == today).length;
+  }
 
   // ---------------- Revenue period filter helpers ----------------
 
@@ -874,6 +881,53 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
+  void showProductDetail(Map<String, dynamic> product) {
+    final photos = product['photos'] is List
+        ? List.from(product['photos'])
+        : <dynamic>[];
+    final image = photos.isNotEmpty
+        ? _normalizeImageUrl('${photos.first}')
+        : '${product['photo'] ?? ''}';
+    final highlights = product['highlights'] is List
+        ? List<dynamic>.from(product['highlights'])
+        : <dynamic>[];
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('${product['name']}'),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (image.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(image, height: 180, width: double.infinity, fit: BoxFit.cover),
+                  ),
+                const SizedBox(height: 12),
+                Text('₹${product['price']}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: tealDark)),
+                const SizedBox(height: 6),
+                Text('${product['category'] ?? product['cat']}', style: TextStyle(color: muted)),
+                const SizedBox(height: 10),
+                Text('${product['description'] ?? product['desc'] ?? ''}'),
+                if (highlights.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  ...highlights.map((h) => Text('✨ $h')),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
   // ---------------- EDIT PRODUCT ----------------
 
   Future<void> editProduct(Map<String, dynamic> product) async {
@@ -1775,9 +1829,12 @@ class _AdminPageState extends State<AdminPage> {
           ),
         ),
         const SizedBox(height: 5),
-        DropdownButtonFormField<String>(
+                DropdownButtonFormField<String>(
           value: values.contains(value) ? value : null,
           isExpanded: true,
+          icon: Icon(Icons.arrow_drop_down, color: muted),
+          dropdownColor: Colors.white,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
           items: values
               .map(
                 (v) => DropdownMenuItem(
@@ -1832,9 +1889,9 @@ class _AdminPageState extends State<AdminPage> {
             crossAxisSpacing: 14,
             childAspectRatio: 1.0,
             children: [
-              mobileStatCard(
-                '${orders.length}',
-                'Orders',
+                           mobileStatCard(
+                '$todaysOrdersCount',
+                "Today's Orders",
                 '🛒',
                 const Color(0xFFFFF3E0),
               ),
@@ -1874,9 +1931,9 @@ class _AdminPageState extends State<AdminPage> {
                 mainAxisSpacing: 14,
                 childAspectRatio: 2.8,
                 children: [
-                  statCard(
-                    '${orders.length}',
-                    'Orders',
+                                   statCard(
+                    '$todaysOrdersCount',
+                    "Today's Orders",
                     Icons.shopping_cart,
                     const Color(0xFFFFF3E0),
                   ),
@@ -2426,7 +2483,9 @@ class _AdminPageState extends State<AdminPage> {
                     : p['stock'] == 'Limited'
                     ? warning
                     : danger;
-                return Container(
+                                return InkWell(
+                  onTap: () => showProductDetail(p),
+                  child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
@@ -2527,16 +2586,28 @@ class _AdminPageState extends State<AdminPage> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 5),
+                                                               const SizedBox(width: 5),
                                 Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () => toggleVisible(
-                                      p['id'] as String,
-                                      p['visible'] == 'yes' ? 'no' : 'yes',
-                                    ),
-                                    child: Text(
-                                      p['visible'] == 'yes' ? '🙈' : '👁',
-                                      style: const TextStyle(fontSize: 15),
+                                  child: Center(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(20),
+                                      onTap: () => toggleVisible(
+                                        p['id'] as String,
+                                        p['visible'] == 'yes' ? 'no' : 'yes',
+                                      ),
+                                      child: Container(
+                                        width: 32,
+                                        height: 32,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: border),
+                                        ),
+                                        child: Text(
+                                          p['visible'] == 'yes' ? '🙈' : '👁',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -2563,8 +2634,9 @@ class _AdminPageState extends State<AdminPage> {
                           ],
                         ),
                       ),
-                    ],
+                                    ],
                   ),
+                ),
                 );
               },
             ),

@@ -5,6 +5,7 @@
 // backend. No baseUrl / http calls needed anymore for these flows.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 import 'app_state.dart';
 
@@ -103,12 +104,30 @@ class ApiService {
   /// clean List<String>, dropping any blank entries. Returns an empty
   /// list when the field is missing/not a List, so callers never need
   /// to null-check.
-  static List<String> _parseHighlights(dynamic raw) {
+      static List<String> _parseHighlights(dynamic raw) {
     if (raw is! List) return const [];
     return raw
         .map((e) => e.toString().trim())
         .where((s) => s.isNotEmpty)
         .toList();
+  }
+
+  /// Returns the logged-in user's id if available, otherwise falls back
+  /// to a persistent per-device guest id (saved once in SharedPreferences)
+  /// so address saving still works before login is implemented.
+  static Future<String> _resolveUserId() async {
+    final loggedInId = AppState.instance.userId;
+    if (loggedInId != null && loggedInId.isNotEmpty) {
+      return loggedInId;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    String? guestId = prefs.getString('ss_guest_id');
+    if (guestId == null || guestId.isEmpty) {
+      guestId = 'guest_${DateTime.now().millisecondsSinceEpoch}';
+      await prefs.setString('ss_guest_id', guestId);
+    }
+    return guestId;
   }
 
   // ---------------- INSTANCE METHODS (used by shop_page.dart) ----------------
@@ -192,10 +211,9 @@ class ApiService {
     }
   }
 
-    Future<List<ShopAddress>> getAddresses() async {
+        Future<List<ShopAddress>> getAddresses() async {
     try {
-      final userId = AppState.instance.userId;
-      if (userId == null || userId.isEmpty) return [];
+      final userId = await _resolveUserId();
 
       final snap = await _db
           .collection('users')
@@ -224,11 +242,8 @@ class ApiService {
     }
   }
 
-  Future<ShopAddress> addAddress(ShopAddress address) async {
-    final userId = AppState.instance.userId;
-    if (userId == null || userId.isEmpty) {
-      throw Exception('No logged-in user — cannot save address.');
-    }
+     Future<ShopAddress> addAddress(ShopAddress address) async {
+    final userId = await _resolveUserId();
 
     await _db
         .collection('users')
@@ -252,11 +267,8 @@ class ApiService {
   /// Updates an existing saved address (matched by id) — used by the
   /// "Edit" option in the delivery-address 3-dot menu and by the map
   /// picker's "Update pin and proceed" when editing.
-  Future<ShopAddress> updateAddress(ShopAddress address) async {
-    final userId = AppState.instance.userId;
-    if (userId == null || userId.isEmpty) {
-      throw Exception('No logged-in user — cannot update address.');
-    }
+   Future<ShopAddress> updateAddress(ShopAddress address) async {
+    final userId = await _resolveUserId();
 
     await _db
         .collection('users')
@@ -279,9 +291,8 @@ class ApiService {
 
   /// Deletes a saved address by id — used by the "Delete" option in the
   /// delivery-address 3-dot menu.
-  Future<void> deleteAddress(String id) async {
-    final userId = AppState.instance.userId;
-    if (userId == null || userId.isEmpty) return;
+    Future<void> deleteAddress(String id) async {
+    final userId = await _resolveUserId();
 
     await _db
         .collection('users')
@@ -458,10 +469,9 @@ class ApiService {
   /// can be targeted to this user/device from the admin dashboard.
   /// Stored under users/{userId} with merge, so it doesn't wipe out
   /// other fields already saved for that user.
-  static Future<void> saveFcmToken(String token) async {
+    static Future<void> saveFcmToken(String token) async {
     try {
-      final userId = AppState.instance.userId;
-      if (userId == null || userId.isEmpty) return;
+      final userId = await _resolveUserId();
 
       await _db.collection('users').doc(userId).set({
         'fcm_token': token,

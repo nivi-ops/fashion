@@ -331,14 +331,23 @@ class _LocationMapPickerPageState
       _entryChoicePending = false;
     });
 
-        if (useCurrentLocation == true) {
+           if (useCurrentLocation == true) {
       await _centerOnDeviceLocation(
         showErrors: true,
       );
     } else {
+      // Swallow the stray onCameraIdle that fires right after the map
+      // settles at the fallback Chennai center — otherwise it silently
+      // reverse-geocodes to that fixed point (shows as "Poongavanapuram")
+      // and displays it as if it's a real address before the user has
+      // touched the map at all.
+      _suppressNextAutoResolve = true;
       setState(() {
         _shortLabel = 'Move the map to select your location';
         _pinLabel = '';
+        _fullAddress = '';
+        _city = '';
+        _pincode = '';
       });
     }
   }
@@ -872,10 +881,18 @@ class _LocationMapPickerPageState
       longitude: _pinPosition.longitude,
     );
 
-    if (widget.editingAddress != null) {
-      await ApiService.instance.updateAddress(address);
-    } else {
-      await ApiService.instance.addAddress(address);
+       try {
+      if (widget.editingAddress != null) {
+        await ApiService.instance.updateAddress(address);
+      } else {
+        await ApiService.instance.addAddress(address);
+      }
+    } catch (e) {
+      debugPrint('❌ Confirm Location save failed: $e');
+      if (mounted) {
+        _showSnack('Could not save address: $e');
+      }
+      return;
     }
 
     if (!mounted) return;
@@ -1720,15 +1737,15 @@ class _AddressDetailsSheetState
         _altPhoneController.text.trim(),
         _addressType,
       );
-    } catch (_) {
+         } catch (e) {
+      debugPrint('❌ Add-details save failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Could not save address. Please try again.',
-              ),
+            SnackBar(
+              content: Text('Could not save address: $e'),
+              duration: const Duration(seconds: 6),
             ),
           );
       }

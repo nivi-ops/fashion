@@ -4,6 +4,7 @@ import 'app_colors.dart';
 import 'app_state.dart';
 import 'models.dart';
 import 'checkout.dart';
+import 'cart_page.dart';
 
 /// ---------------------------------------------------------------------
 /// PRODUCT DETAILS PAGE (Flipkart style)
@@ -52,9 +53,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
                 onPressed: () => state.toggleWishlist(product),
               ),
-              IconButton(
+                           IconButton(
                 icon: const Icon(Icons.shopping_cart_outlined),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CartPage()),
+                  );
+                },
               ),
             ],
           ),
