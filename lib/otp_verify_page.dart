@@ -39,11 +39,12 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   // SUMATHI STYLES COLORS
   // ------------------------------------------------------------
 
-  static const Color background = Color(0xFF07080C);
-  static const Color cardColor = Color(0xFF151722);
+  static const Color background = Color(0xFF061312);
+  static const Color cardColor = Color(0xFF0F1D1C);
+  static const Color teal = Color(0xFF18C7B7);
   static const Color gold = Color(0xFFFFC44D);
   static const Color cream = Color(0xFFF7F3EA);
-  static const Color greyText = Color(0xFFA9AAB8);
+  static const Color greyText = Color(0xFFA9B8B6);
 
   @override
   void initState() {
@@ -347,7 +348,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
               ),
               child: const Icon(
                 Icons.content_cut_rounded,
-                color: gold,
+                color: teal,
                 size: 36,
               ),
             ),
@@ -437,7 +438,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                         boxShadow: active
                             ? [
                                 BoxShadow(
-                                  color: gold.withValues(
+                                  color: teal.withValues(
                                     alpha: glow,
                                   ),
                                   blurRadius: 18,
@@ -504,8 +505,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                 alpha: 0.55,
               ),
               elevation: 4,
-              shadowColor: gold.withValues(
-                alpha: 0.18 + (_glowController.value * 0.15),
+              shadowColor: teal.withValues(
+                alpha: 0.14 + (_glowController.value * 0.18),
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(30),
@@ -671,10 +672,10 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                   height: 370,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: gold.withValues(
+                    color: teal.withValues(
                       alpha:
                           0.025 +
-                          (_glowController.value * 0.025),
+                          (_glowController.value * 0.035),
                     ),
                   ),
                 );
@@ -694,8 +695,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
               height: 400,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF151722)
-                    .withValues(alpha: 0.85),
+                color: const Color(0xFF0B2926)
+                    .withValues(alpha: 0.88),
               ),
             ),
           ),
@@ -819,8 +820,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                                         Expanded(
                                           child: Container(
                                             height: 1,
-                                            color: gold.withValues(
-                                              alpha: 0.15,
+                                            color: teal.withValues(
+                                              alpha: 0.22,
                                             ),
                                           ),
                                         ),
@@ -834,7 +835,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                                             Icons
                                                 .checkroom_rounded,
                                             color: gold.withValues(
-                                              alpha: 0.45,
+                                              alpha: 0.70,
                                             ),
                                             size: 20,
                                           ),
@@ -842,8 +843,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                                         Expanded(
                                           child: Container(
                                             height: 1,
-                                            color: gold.withValues(
-                                              alpha: 0.15,
+                                            color: teal.withValues(
+                                              alpha: 0.22,
                                             ),
                                           ),
                                         ),
@@ -1014,8 +1015,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                                         Icon(
                                           Icons
                                               .content_cut_rounded,
-                                          color: gold.withValues(
-                                            alpha: 0.45,
+                                          color: teal.withValues(
+                                            alpha: 0.65,
                                           ),
                                           size: 14,
                                         ),
@@ -1032,8 +1033,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                                         Icon(
                                           Icons
                                               .content_cut_rounded,
-                                          color: gold.withValues(
-                                            alpha: 0.45,
+                                          color: teal.withValues(
+                                            alpha: 0.65,
                                           ),
                                           size: 14,
                                         ),
@@ -1110,7 +1111,7 @@ class _FashionBackgroundPainter extends CustomPainter {
     // SOFT FASHION CIRCLE
     // ------------------------------------------------------------
 
-    paint.color = const Color(0xFF12141C);
+    paint.color = const Color(0xFF0B2220);
 
     canvas.drawCircle(
       Offset(size.width * 0.82, size.height * 0.34),
@@ -1123,7 +1124,7 @@ class _FashionBackgroundPainter extends CustomPainter {
     // ------------------------------------------------------------
 
     final dressPaint = Paint()
-      ..color = const Color(0xFF1B1D28).withValues(alpha: 0.62)
+      ..color = const Color(0xFF102B29).withValues(alpha: 0.62)
       ..style = PaintingStyle.fill;
 
     final dressPath = Path();
@@ -1171,8 +1172,8 @@ class _FashionBackgroundPainter extends CustomPainter {
     // ------------------------------------------------------------
 
     final outlinePaint = Paint()
-      ..color = const Color(0xFFFFC44D)
-          .withValues(alpha: 0.10)
+      ..color = const Color(0xFF18C7B7)
+          .withValues(alpha: 0.12)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
@@ -1207,11 +1208,12 @@ class _FashionBackgroundPainter extends CustomPainter {
     // FLOATING GOLD PARTICLES
     // ------------------------------------------------------------
 
-    final particlePaint = Paint()
-      ..color = const Color(0xFFFFC44D)
-          .withValues(alpha: 0.20);
+    final particlePaint = Paint();
 
-    for (int i = 0; i < 18; i++) {
+    for (int i = 0; i < 22; i++) {
+      particlePaint.color = (i % 3 == 0)
+          ? const Color(0xFF18C7B7).withValues(alpha: 0.24)
+          : const Color(0xFFFFC44D).withValues(alpha: 0.18);
       final baseX =
           (i * 71.0) % size.width;
 
@@ -1245,8 +1247,8 @@ class _FashionBackgroundPainter extends CustomPainter {
     // ------------------------------------------------------------
 
     final scissorPaint = Paint()
-      ..color = const Color(0xFFFFC44D)
-          .withValues(alpha: 0.07)
+      ..color = const Color(0xFF18C7B7)
+          .withValues(alpha: 0.10)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 

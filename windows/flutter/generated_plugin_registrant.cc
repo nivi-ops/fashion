@@ -14,6 +14,7 @@
 #include <geolocator_windows/geolocator_windows.h>
 #include <location/location_plugin.h>
 #include <printing/printing_plugin.h>
+#include <public_file_saver/public_file_saver_plugin_c_api.h>
 #include <record_windows/record_windows_plugin_c_api.h>
 #include <url_launcher_windows/url_launcher_windows.h>
 
@@ -34,6 +35,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("LocationPlugin"));
   PrintingPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("PrintingPlugin"));
+  PublicFileSaverPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("PublicFileSaverPluginCApi"));
   RecordWindowsPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("RecordWindowsPluginCApi"));
   UrlLauncherWindowsRegisterWithRegistrar(

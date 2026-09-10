@@ -6,6 +6,7 @@ import 'admin_page.dart';
 import 'app_state.dart';
 import 'login_page.dart';
 import 'shop_page.dart';
+import 'product_details_page.dart';
 import 'notification_service.dart';
 import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1296,79 +1297,345 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Profile Information', Icons.edit),
+
+        // PERSONAL INFORMATION
         _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                const Icon(Icons.badge_outlined, size: 16, color: AppColors.primary),
+                const Icon(Icons.badge_outlined, size: 18, color: AppColors.primary),
                 const SizedBox(width: 8),
-                const Expanded(child: Text('Personal Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                TextButton(onPressed: () => setState(() => _editingPersonalInfo = true), child: const Text('Edit', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600))),
+                const Expanded(
+                  child: Text(
+                    'Personal Information',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _editingPersonalInfo = true),
+                  child: const Text(
+                    'Edit',
+                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ]),
               const SizedBox(height: 14),
               Row(children: [
-                Expanded(child: _textField(_firstNameCtrl, 'First Name', readOnly: !_editingPersonalInfo)),
+                Expanded(
+                  child: _textField(
+                    _firstNameCtrl,
+                    'First Name',
+                    readOnly: !_editingPersonalInfo,
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _textField(_lastNameCtrl, 'Last Name', readOnly: !_editingPersonalInfo)),
+                Expanded(
+                  child: _textField(
+                    _lastNameCtrl,
+                    'Last Name',
+                    readOnly: !_editingPersonalInfo,
+                  ),
+                ),
               ]),
               if (_editingPersonalInfo) ...[
                 const SizedBox(height: 14),
                 Row(children: [
-                  ElevatedButton(onPressed: _savePersonalInfo, style: _saveBtnStyle(), child: const Text('Save')),
+                  ElevatedButton(
+                    onPressed: _savePersonalInfo,
+                    style: _saveBtnStyle(),
+                    child: const Text('Save'),
+                  ),
                   const SizedBox(width: 10),
-                  TextButton(onPressed: () { setState(() { _syncControllersFromUser(); _editingPersonalInfo = false; }); }, child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _syncControllersFromUser();
+                        _editingPersonalInfo = false;
+                      });
+                    },
+                    child: const Text('Cancel'),
+                  ),
                 ]),
               ],
             ],
           ),
         ),
+
+        // EMAIL
         _card(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Icon(Icons.email_outlined, size: 16, color: AppColors.primary),
-              const SizedBox(width: 8),
-              const Expanded(child: Text('Email Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-              TextButton(onPressed: () => setState(() => _editingEmail = true), child: const Text('Edit', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600))),
-            ]),
-            const SizedBox(height: 14),
-            _textField(_emailCtrl, 'Enter email address', keyboardType: TextInputType.emailAddress, readOnly: !_editingEmail),
-            if (_editingEmail) ...[
-              const SizedBox(height: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(children: [
-                ElevatedButton(onPressed: _saveEmail, style: _saveBtnStyle(), child: const Text('Save')),
-                const SizedBox(width: 10),
-                TextButton(onPressed: () { setState(() { _emailCtrl.text = _user.email; _editingEmail = false; }); }, child: const Text('Cancel')),
+                const Icon(Icons.email_outlined, size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Email Address',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _editingEmail = true),
+                  child: const Text(
+                    'Edit',
+                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ]),
+              const SizedBox(height: 14),
+              _textField(
+                _emailCtrl,
+                'Enter email address',
+                keyboardType: TextInputType.emailAddress,
+                readOnly: !_editingEmail,
+              ),
+              if (_editingEmail) ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  ElevatedButton(
+                    onPressed: _saveEmail,
+                    style: _saveBtnStyle(),
+                    child: const Text('Save'),
+                  ),
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _emailCtrl.text = _user.email;
+                        _editingEmail = false;
+                      });
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                ]),
+              ],
             ],
-          ]),
+          ),
         ),
+
+        // MOBILE
         _card(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Icon(Icons.phone_android, size: 16, color: AppColors.primary),
-              const SizedBox(width: 8),
-              const Expanded(child: Text('Mobile Number', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-              TextButton(onPressed: () => setState(() => _editingMobile = true), child: const Text('Edit', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600))),
-            ]),
-            const SizedBox(height: 14),
-            _textField(_mobileCtrl, '10-digit number', keyboardType: TextInputType.phone, maxLength: 10, readOnly: !_editingMobile),
-            if (_editingMobile) ...[
-              const SizedBox(height: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(children: [
-                ElevatedButton(onPressed: _saveMobileNumber, style: _saveBtnStyle(), child: const Text('Save')),
-                const SizedBox(width: 10),
-                TextButton(onPressed: () { setState(() { _mobileCtrl.text = _user.phone; _editingMobile = false; }); }, child: const Text('Cancel')),
+                const Icon(Icons.phone_android, size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Mobile Number',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _editingMobile = true),
+                  child: const Text(
+                    'Edit',
+                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ]),
+              const SizedBox(height: 14),
+              _textField(
+                _mobileCtrl,
+                '10-digit number',
+                keyboardType: TextInputType.phone,
+                maxLength: 10,
+                readOnly: !_editingMobile,
+              ),
+              if (_editingMobile) ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  ElevatedButton(
+                    onPressed: _saveMobileNumber,
+                    style: _saveBtnStyle(),
+                    child: const Text('Save'),
+                  ),
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _mobileCtrl.text = _user.phone;
+                        _editingMobile = false;
+                      });
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                ]),
+              ],
+              const SizedBox(height: 8),
+              const Text(
+                "Note: changing mobile number here won't move your past orders — those stay linked to the number you logged in with.",
+                style: TextStyle(fontSize: 11.5, color: AppColors.textLight),
+              ),
             ],
-            const SizedBox(height: 8),
-            const Text("Note: changing mobile number here won't move your past orders — those stay linked to the number you logged in with.", style: TextStyle(fontSize: 11.5, color: AppColors.textLight)),
-          ]),
+          ),
         ),
-        _menuCard(null, [
-          _menuRow(Icons.location_on_outlined, 'Add / Manage Addresses', () => _openPanel(_Panel.addresses)),
-        ]),
+
+        // ADDRESS IS NOW INLINE — tapping Edit Profile no longer opens
+        // another address page. Saved addresses are visible and editable here.
+        _buildInlineAddressSection(),
       ],
+    );
+  }
+
+  Widget _buildInlineAddressSection() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.location_on_outlined, color: AppColors.primary),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Delivery Address',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Save an address for faster checkout',
+                    style: TextStyle(fontSize: 11.5, color: AppColors.textLight),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Add address',
+              onPressed: () => _openAddressForm(-1),
+              icon: const Icon(Icons.add_circle_outline, color: AppColors.primary),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          if (_addresses.isEmpty && !_showAddrForm)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7FAF9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.home_work_outlined, size: 34, color: AppColors.primary),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No delivery address saved',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                  ),
+                  const SizedBox(height: 5),
+                  const Text(
+                    'Add your address here. It will appear automatically on the product page.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11.5, color: AppColors.textLight, height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () => _openAddressForm(-1),
+                    style: _saveBtnStyle(),
+                    icon: const Icon(Icons.add, size: 17),
+                    label: const Text('Add Address'),
+                  ),
+                ],
+              ),
+            )
+          else
+            ..._addresses.asMap().entries.map((e) => _inlineAddressCard(e.key, e.value)),
+          if (_showAddrForm) ...[
+            const SizedBox(height: 12),
+            _buildAddressForm(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _inlineAddressCard(int index, SavedAddress a) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(
+              a.isOffice ? Icons.work_outline : Icons.home_outlined,
+              size: 19,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    a.name.isNotEmpty ? a.name : 'Home',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                  ),
+                  if (a.recipient.isNotEmpty)
+                    Text(
+                      a.recipient,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Edit address',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _openAddressForm(index),
+              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+            ),
+            IconButton(
+              tooltip: 'Delete address',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _deleteAddress(index),
+              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            a.detail,
+            style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.5),
+          ),
+          if (a.landmark.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                'Landmark: ${a.landmark}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textLight),
+              ),
+            ),
+          if (a.phone.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                'Phone: +91 ${a.phone}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textLight),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1884,119 +2151,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showWishlistProduct(Product p) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 10, bottom: 4),
-                  child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4))),
-                ),
-              ),
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                child: AspectRatio(
-                  aspectRatio: 1.1,
-                  child: Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 64, color: AppColors.primary))),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text("SUMATHI'S STYLE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 0.6)),
-                  const SizedBox(height: 4),
-                  Text(p.name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: AppColors.success, borderRadius: BorderRadius.circular(6)),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('4.7', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        SizedBox(width: 2),
-                        Icon(Icons.star, color: Colors.white, size: 12),
-                      ]),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('New Listing', style: TextStyle(color: AppColors.textLight, fontSize: 12.5)),
-                  ]),
-                  const Divider(height: 28),
-                  Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Free delivery above ₹500', style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(sheetContext);
-                          _showToast('Added to cart!');
-                        },
-                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, side: const BorderSide(color: AppColors.primary), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                        icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-                        label: const Text('Add to Cart', style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(sheetContext);
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: AppColors.dark, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                        icon: const Icon(Icons.bolt, size: 18),
-                        label: const Text('Buy Now', style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 22),
-                  const Text('Delivery details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 10),
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _addresses.isNotEmpty ? _addresses.first.detail : 'Add a delivery address in your profile',
-                        style: const TextStyle(fontSize: 13, color: AppColors.text),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 10),
-                  const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(Icons.local_shipping_outlined, size: 18, color: AppColors.primary),
-                    SizedBox(width: 10),
-                    Expanded(child: Text('Custom stitched — delivered within 10-15 days', style: TextStyle(fontSize: 13, color: AppColors.text))),
-                  ]),
-                  const SizedBox(height: 22),
-                  const Text('Description', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 8),
-                  Text(p.name, style: const TextStyle(fontSize: 13, color: AppColors.textLight)),
-                  const SizedBox(height: 18),
-                  const Text('Product Highlights', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 8),
-                  const Text('• Made to order, custom stitched\n• Quality checked before dispatch', style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6)),
-                ]),
-              ),
-            ]),
-          ),
-        ),
+    // Wishlist product now opens the same full Product Details page used by
+    // the Shop/Home product cards — not a bottom-sheet preview.
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductDetailsPage(product: p),
       ),
     );
   }

@@ -59,6 +59,7 @@ dependencies:
   # PDF Generation / Printing
   pdf: ^3.11.1
   printing: ^5.13.1
+  public_file_saver: ^1.2.0
 
 dev_dependencies:
   flutter_test:

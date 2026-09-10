@@ -11,6 +11,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   geolocator_windows
   location
   printing
+  public_file_saver
   record_windows
   url_launcher_windows
 )

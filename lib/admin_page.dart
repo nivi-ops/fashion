@@ -12,7 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import 'package:public_file_saver/public_file_saver.dart';
 
 /// Flutter conversion of the supplied "Sumathi's Styles – Admin Dashboard".
 /// The login screen matches admin.html: black top bar ("Admin Login"),
@@ -886,13 +886,25 @@ class _AdminPageState extends State<AdminPage> {
         ),
       );
 
-      final bytes = await doc.save();
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename:
-            'revenue_${revenuePeriod}_${DateTime.now().millisecondsSinceEpoch}.pdf',
-      );
-      showToast('✅ PDF ready');
+    final bytes = await doc.save();
+
+final fileName =
+    'revenue_${revenuePeriod}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+final fileSaver = PublicFileSaver();
+
+final result = await fileSaver.saveBytes(
+  bytes: bytes,
+  fileName: fileName,
+  mimeType: 'application/pdf',
+  subDir: 'Sumathis Styles',
+);
+
+if (result != null && result.isSuccess) {
+  showToast('✅ PDF downloaded successfully');
+} else {
+  showToast('❌ PDF download failed');
+}
     } catch (e) {
       showToast('❌ Could not generate PDF: $e');
     } finally {
@@ -4171,10 +4183,6 @@ class _AdminPageState extends State<AdminPage> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-                            OutlinedButton(
-                onPressed: () => showPage('dashboard'),
-                child: const Text('←'),
-              ),
               for (final entry in {
                 'week': 'Week',
                 'month': 'Month',
