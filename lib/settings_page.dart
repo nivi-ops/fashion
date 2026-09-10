@@ -94,13 +94,17 @@ class SavedAddress {
   }
 }
 
-class MyOrder {
+ class MyOrder {
   final String id;
   final String docId;
   final String product;
   final String productImage;
   final double amount;
   String status; // Ordered, Processing, Delivered, Cancelled
+  final String orderedAt;
+  final String processingAt;
+  final String deliveredAt;
+  final String cancelledAt;
   MyOrder({
     required this.id,
     required this.docId,
@@ -108,6 +112,10 @@ class MyOrder {
     this.productImage = '',
     required this.amount,
     this.status = 'Ordered',
+    this.orderedAt = '',
+    this.processingAt = '',
+    this.deliveredAt = '',
+    this.cancelledAt = '',
   });
 }
 
@@ -371,7 +379,7 @@ class _SettingsPageState extends State<SettingsPage> {
           .collection('orders')
           .where('mobile', isEqualTo: _user.phone)
           .get();
-      final loaded = snap.docs.map((doc) {
+             final loaded = snap.docs.map((doc) {
         final m = doc.data();
         // Use the human-readable order_id saved at checkout (e.g.
         // "SS2026001965") instead of the Firestore auto document id,
@@ -380,6 +388,13 @@ class _SettingsPageState extends State<SettingsPage> {
         final displayId = savedOrderId.isNotEmpty
             ? savedOrderId
             : (doc.id.length > 6 ? doc.id.substring(0, 6).toUpperCase() : doc.id);
+
+        String statusDate(String key) {
+          final ts = m[key];
+          if (ts is Timestamp) return _formatOrderDate(ts.toDate());
+          return '';
+        }
+
                  return MyOrder(
           id: displayId,
           docId: doc.id,
@@ -387,6 +402,10 @@ class _SettingsPageState extends State<SettingsPage> {
           productImage: '${m['product_image'] ?? ''}',
           amount: (num.tryParse('${m['amount'] ?? 0}') ?? 0).toDouble(),
           status: '${m['status'] ?? 'Ordered'}',
+          orderedAt: statusDate('ordered_at'),
+          processingAt: statusDate('processing_at'),
+          deliveredAt: statusDate('delivered_at'),
+          cancelledAt: statusDate('cancelled_at'),
         );
       }).toList();
       if (!mounted) return;
@@ -783,6 +802,16 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       },
     );
+  }
+
+      // 'dd MMM, hh:mm a' style date used on the order timeline
+  // (e.g. "10 Sep, 02:30 PM").
+  String _formatOrderDate(DateTime d) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final hour12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final ampm = d.hour >= 12 ? 'PM' : 'AM';
+    final minute = d.minute.toString().padLeft(2, '0');
+    return '${d.day} ${months[d.month - 1]}, $hour12:$minute $ampm';
   }
 
      // Only prefix +91 when it's an actual 10-digit phone number.
@@ -1510,6 +1539,23 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+                    if (o.status != 'Cancelled')
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _orderTimeline(o),
+            )
+          else if (o.cancelledAt.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Row(
+                children: [
+                  const Icon(Icons.cancel, size: 16, color: AppColors.danger),
+                  const SizedBox(width: 8),
+                  Text('Cancelled on ${o.cancelledAt}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.danger, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -1572,6 +1618,57 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
         ],
       ),
+    );
+  }
+
+      // Flipkart-style horizontal step tracker: Ordered → Processing →
+  // Delivered, each dot with its date once that stage is reached.
+  Widget _orderTimeline(MyOrder o) {
+    final steps = [
+      ('Ordered', o.orderedAt),
+      ('Processing', o.processingAt),
+      ('Delivered', o.deliveredAt),
+    ];
+    // How far along the order is, so earlier dots also show filled.
+    final reachedIndex = o.status == 'Delivered'
+        ? 2
+        : o.status == 'Processing'
+            ? 1
+            : 0;
+
+    return Row(
+      children: List.generate(steps.length * 2 - 1, (i) {
+        if (i.isOdd) {
+          final stepIndex = i ~/ 2;
+          final done = stepIndex < reachedIndex;
+          return Expanded(
+            child: Container(height: 2, color: done ? AppColors.primary : const Color(0xFFE0E0E0)),
+          );
+        }
+        final stepIndex = i ~/ 2;
+        final label = steps[stepIndex].$1;
+        final date = steps[stepIndex].$2;
+        final reached = stepIndex <= reachedIndex;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              reached ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 16,
+              color: reached ? AppColors.primary : const Color(0xFFBDBDBD),
+            ),
+            const SizedBox(height: 4),
+            Text(label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
+                  color: reached ? AppColors.text : AppColors.textLight,
+                )),
+            if (reached && date.trim().isNotEmpty)
+              Text(date, style: const TextStyle(fontSize: 9, color: AppColors.textLight)),
+          ],
+        );
+      }),
     );
   }
 

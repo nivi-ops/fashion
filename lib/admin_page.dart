@@ -250,6 +250,12 @@ class _AdminPageState extends State<AdminPage> {
         final createdAt = m['created_at'];
         DateTime? created;
         if (createdAt is Timestamp) created = createdAt.toDate();
+                 String statusDate(String key) {
+          final ts = m[key];
+          if (ts is Timestamp) return formatDateTime(ts.toDate().toIso8601String());
+          return '';
+        }
+
         return {
           'id': doc.id,
           'orderId': '#${m['order_id'] ?? doc.id.toUpperCase()}',
@@ -259,6 +265,10 @@ class _AdminPageState extends State<AdminPage> {
           'amount': num.tryParse('${m['amount'] ?? 0}') ?? 0,
           'status': m['status'] ?? 'Ordered',
           'date': created != null ? formatDate(created.toIso8601String()) : '',
+          'orderedAt': statusDate('ordered_at'),
+          'processingAt': statusDate('processing_at'),
+          'deliveredAt': statusDate('delivered_at'),
+          'cancelledAt': statusDate('cancelled_at'),
           'source': m['source'] ?? 'website',
           'measurement': m['measurement'] ?? '',
           // The customer app now stores the recorded voice note as a
@@ -1589,10 +1599,19 @@ class _AdminPageState extends State<AdminPage> {
 
   // ---------------- ORDER ACTIONS ----------------
 
-  Future<void> updateStatus(String id, String status) async {
+    Future<void> updateStatus(String id, String status) async {
     try {
       showToast('⏳ Updating status...');
-      await _db.collection('orders').doc(id).update({'status': status});
+      // Records a separate timestamp field per status (ordered_at,
+      // processing_at, delivered_at, cancelled_at, pending_at) the FIRST
+      // time an order reaches that status — this is what lets the
+      // customer app show a Flipkart-style "Ordered on ... / Processing
+      // on ... / Delivered on ..." timeline on the My Orders page.
+      final statusKey = status.toLowerCase().replaceAll(' ', '_');
+      await _db.collection('orders').doc(id).set({
+        'status': status,
+        '${statusKey}_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       orders = await loadOrdersFromServer();
       setState(() {});
       showToast('✅ Status → $status');
@@ -3073,10 +3092,19 @@ class _AdminPageState extends State<AdminPage> {
           row('Delivery Charge', '${o['deliveryCharge'] ?? ''}'
               '${'${o['deliveryCharge'] ?? ''}'.trim().isEmpty ? '' : ''}'),
           row('Measurement', '${o['measurement'] ?? ''}'),
-          row('Notes', '${o['notes'] ?? ''}'),
+                    row('Notes', '${o['notes'] ?? ''}'),
           row('Date', '${o['date']}'),
-          if ('${o['status']}' == 'Cancelled')
+          if ('${o['orderedAt'] ?? ''}'.trim().isNotEmpty)
+            row('Ordered On', '${o['orderedAt']}'),
+          if ('${o['processingAt'] ?? ''}'.trim().isNotEmpty)
+            row('Processing On', '${o['processingAt']}'),
+          if ('${o['deliveredAt'] ?? ''}'.trim().isNotEmpty)
+            row('Delivered On', '${o['deliveredAt']}'),
+          if ('${o['status']}' == 'Cancelled') ...[
+            if ('${o['cancelledAt'] ?? ''}'.trim().isNotEmpty)
+              row('Cancelled On', '${o['cancelledAt']}'),
             row('Cancel Reason', '${o['cancelReason'] ?? ''}'),
+          ],
           const SizedBox(height: 6),
           StatusBadge(status: '${o['status']}'),
           const SizedBox(height: 16),
@@ -4023,13 +4051,17 @@ class _AdminPageState extends State<AdminPage> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+                         Expanded(
               child: sectionCard(
                 '📊 ${periodLabel(revenuePeriod)} Revenue Chart',
                 SizedBox(
                   height: 260,
                   child: SimpleChart(
-                    data: monthlyRevenue(deliveredOrders),
+                    // Was using ALL delivered orders across every year,
+                    // mixing them into the same 12 month buckets. Now
+                    // scoped to the current year, so it shows the full
+                    // current year correctly.
+                    data: monthlyRevenue(ordersForPeriod('year')),
                     bar: false,
                     color: teal,
                   ),
@@ -4073,13 +4105,13 @@ class _AdminPageState extends State<AdminPage> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
+                    Wrap(
             spacing: 8,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              OutlinedButton(
-                onPressed: () => showPage('revenue'),
+                            OutlinedButton(
+                onPressed: () => showPage('dashboard'),
                 child: const Text('←'),
               ),
               for (final entry in {
@@ -4098,8 +4130,14 @@ class _AdminPageState extends State<AdminPage> {
                   backgroundColor: tealLight,
                   onSelected: (_) => setState(() => revenuePeriod = entry.key),
                 ),
+              actionButton(
+                pdfGenerating ? '⏳ Generating...' : '📄 Download PDF',
+                pdfGenerating ? () {} : downloadRevenuePdf,
+                color: copper,
+              ),
             ],
           ),
+          
           const SizedBox(height: 18),
           InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -4886,9 +4924,9 @@ class _AdminPageState extends State<AdminPage> {
           ('datarequests', '❌', 'Cancellation Msg'),
         ],
       ),
-      (
+            (
         'Finance',
-        [('revenue', '💰', 'Revenue'), ('analysis', '📊', 'Analysis')],
+        [('analysis', '📊', 'Analysis')],
       ),
     ];
 
@@ -5028,12 +5066,21 @@ class _AdminPageState extends State<AdminPage> {
       ),
       child: Row(
         children: [
-          if (mobile)
-            OutlinedButton(
-              onPressed: () => setState(() => mobilePageMode = false),
-              child: const Text(
-                '← Back to Menu',
-                style: TextStyle(fontSize: 12),
+                    if (mobile)
+            InkWell(
+              onTap: () => setState(() => mobilePageMode = false),
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x1A000000), blurRadius: 6),
+                  ],
+                ),
+                child: Icon(Icons.arrow_back, color: loginBlue, size: 20),
               ),
             )
           else
