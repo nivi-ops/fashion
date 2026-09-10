@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 class OtpVerifyPage extends StatefulWidget {
+  final String phoneNumber;
   final String correctOtp;
-  final String title;
   final VoidCallback onVerified;
 
   const OtpVerifyPage({
     super.key,
+    required this.phoneNumber,
     required this.correctOtp,
     required this.onVerified,
-    this.title = "Verify OTP",
   });
 
   @override
@@ -17,305 +17,194 @@ class OtpVerifyPage extends StatefulWidget {
 }
 
 class _OtpVerifyPageState extends State<OtpVerifyPage>
-    with TickerProviderStateMixin {
-  final TextEditingController otpController = TextEditingController();
+    with SingleTickerProviderStateMixin {
+  final TextEditingController _otpController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
 
   String? errorText;
+  bool isVerifying = false;
+  bool isVerified = false;
 
-  final Color teal = const Color(0xff0F766E);
-  final Color gold = const Color(0xffD4AF37);
-
-  // ------------------------------------------------------------
-  // PAGE ANIMATION
-  // ------------------------------------------------------------
-
-  late final AnimationController _pageController;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
-  late final Animation<double> _boxScale;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   // ------------------------------------------------------------
-  // SUCCESS ANIMATION
+  // SUMATHI STYLES COLORS
   // ------------------------------------------------------------
 
-  late final AnimationController _successController;
-  late final Animation<double> _successScale;
-  late final Animation<double> _successFade;
-  late final Animation<double> _checkProgress;
-
-  bool _isVerifying = false;
-  bool _isVerified = false;
+  static const Color background = Color(0xFF08090D);
+  static const Color cardColor = Color(0xFF151722);
+  static const Color gold = Color(0xFFFFC44D);
+  static const Color cream = Color(0xFFF7F3EA);
+  static const Color greyText = Color(0xFFA9AAB8);
 
   @override
   void initState() {
     super.initState();
 
-    // ----------------------------------------------------------
-    // PAGE ENTRY ANIMATION
-    // ----------------------------------------------------------
-
-    _pageController = AnimationController(
+    _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
 
-    _fade = CurvedAnimation(
-      parent: _pageController,
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
       curve: Curves.easeIn,
     );
 
-    _slide = Tween<Offset>(
+    _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.08),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
-        parent: _pageController,
+        parent: _animationController,
         curve: Curves.easeOutCubic,
       ),
     );
 
-    _boxScale = Tween<double>(
-      begin: 0.85,
-      end: 1.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _pageController,
-        curve: Curves.elasticOut,
-      ),
-    );
-
-    _pageController.forward();
-
-    // ----------------------------------------------------------
-    // SUCCESS ANIMATION
-    // ----------------------------------------------------------
-
-    _successController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-
-    _successScale = Tween<double>(
-      begin: 0.2,
-      end: 1.0,
-    ).animate(
-      CurvedAnimation(
-        parent: _successController,
-        curve: Curves.elasticOut,
-      ),
-    );
-
-    _successFade = CurvedAnimation(
-      parent: _successController,
-      curve: const Interval(
-        0.0,
-        0.45,
-        curve: Curves.easeIn,
-      ),
-    );
-
-    _checkProgress = CurvedAnimation(
-      parent: _successController,
-      curve: const Interval(
-        0.25,
-        0.90,
-        curve: Curves.easeOutCubic,
-      ),
-    );
-
-    // ----------------------------------------------------------
-    // DEMO OTP POPUP
-    // ----------------------------------------------------------
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text(
-            "Demo OTP",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            "Your OTP is: ${widget.correctOtp}\n\n"
-            "(This is shown only in demo mode. In production this "
-            "will be sent via SMS/Email instead.)",
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text("OK"),
-            ),
-          ],
-        ),
-      );
-    });
+    _animationController.forward();
   }
 
   // ------------------------------------------------------------
-  // VERIFY
+  // VERIFY OTP
   // ------------------------------------------------------------
 
-  Future<void> _verify() async {
-    if (_isVerifying) return;
+  Future<void> _verifyOtp() async {
+    if (isVerifying) return;
 
-    final String enteredOtp = otpController.text.trim();
+    final otp = _otpController.text.trim();
 
-    // Empty OTP
-    if (enteredOtp.isEmpty) {
+    if (otp.length != 6) {
       setState(() {
-        errorText = "Please enter the OTP.";
+        errorText = "Please enter the 6-digit OTP";
       });
       return;
     }
 
-    // Less than 4 digits
-    if (enteredOtp.length != 4) {
-      setState(() {
-        errorText = "Please enter the 4-digit OTP.";
-      });
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // CORRECT OTP
-    // ----------------------------------------------------------
-
-    if (enteredOtp == widget.correctOtp) {
-      setState(() {
-        _isVerifying = true;
-        errorText = null;
-      });
-
-      // Hide keyboard
-      FocusScope.of(context).unfocus();
-
-      // Loading effect
-      await Future.delayed(
-        const Duration(milliseconds: 500),
-      );
-
-      if (!mounted) return;
-
-      // Show success screen
-      setState(() {
-        _isVerified = true;
-      });
-
-      // Play success animation
-      await _successController.forward(from: 0);
-
-      if (!mounted) return;
-
-      // Keep success visible
-      await Future.delayed(
-        const Duration(milliseconds: 700),
-      );
-
-      if (!mounted) return;
-
-      // Continue to next page
-      widget.onVerified();
-    }
-
-    // ----------------------------------------------------------
-    // WRONG OTP
-    // ----------------------------------------------------------
-
-    else {
+    if (otp != widget.correctOtp) {
       setState(() {
         errorText = "Incorrect OTP. Please try again.";
       });
-
-      // Small animation replay
-      await _pageController.forward(
-        from: 0.7,
-      );
-
-      if (!mounted) return;
-
-      otpController.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: otpController.text.length,
-      );
+      return;
     }
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      isVerifying = true;
+      errorText = null;
+    });
+
+    await Future.delayed(
+      const Duration(milliseconds: 700),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      isVerified = true;
+    });
+
+    await Future.delayed(
+      const Duration(milliseconds: 900),
+    );
+
+    if (!mounted) return;
+
+    widget.onVerified();
   }
 
   // ------------------------------------------------------------
-  // OTP INPUT
+  // OTP BOX
   // ------------------------------------------------------------
 
-  Widget _otpInput() {
-    return ScaleTransition(
-      scale: _boxScale,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: teal.withValues(alpha: 0.15),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: TextField(
-          controller: otpController,
-          keyboardType: TextInputType.number,
-          maxLength: 4,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 24,
-            letterSpacing: 8,
-            fontWeight: FontWeight.w600,
-          ),
-          onChanged: (_) {
-            if (errorText != null) {
-              setState(() {
-                errorText = null;
-              });
-            }
-          },
-          decoration: InputDecoration(
-            counterText: "",
-            errorText: errorText,
-            filled: true,
-            fillColor: Colors.white,
-            hintText: "••••",
-            hintStyle: TextStyle(
-              color: Colors.grey.shade400,
-              fontSize: 25,
-              letterSpacing: 8,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide(
-                color: teal,
-                width: 2,
+  Widget _otpBoxes() {
+    return GestureDetector(
+      onTap: () {
+        _focusNode.requestFocus();
+      },
+      child: Stack(
+        children: [
+          // Hidden TextField
+          SizedBox(
+            height: 1,
+            width: 1,
+            child: TextField(
+              controller: _otpController,
+              focusNode: _focusNode,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              style: const TextStyle(
+                color: Colors.transparent,
               ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(15),
-              borderSide: const BorderSide(
-                color: Colors.red,
-                width: 1.5,
+              cursorColor: Colors.transparent,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                counterText: '',
               ),
+              onChanged: (_) {
+                if (errorText != null) {
+                  setState(() {
+                    errorText = null;
+                  });
+                }
+
+                setState(() {});
+              },
             ),
           ),
-        ),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(
+              6,
+              (index) {
+                final text = _otpController.text;
+
+                final bool filled = index < text.length;
+
+                final bool active =
+                    index == text.length && _focusNode.hasFocus;
+
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 47,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: errorText != null
+                          ? Colors.redAccent
+                          : active
+                              ? gold
+                              : const Color(0xFF3D4050),
+                      width: active ? 2 : 1,
+                    ),
+                    boxShadow: active
+                        ? [
+                            BoxShadow(
+                              color: gold.withValues(alpha: 0.18),
+                              blurRadius: 12,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      filled ? "●" : "",
+                      style: const TextStyle(
+                        color: cream,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -327,114 +216,102 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   Widget _verifyButton() {
     return SizedBox(
       width: double.infinity,
-      height: 52,
+      height: 58,
       child: ElevatedButton(
+        onPressed: isVerifying ? null : _verifyOtp,
         style: ElevatedButton.styleFrom(
-          backgroundColor: teal,
-          disabledBackgroundColor: teal.withValues(alpha: 0.75),
-          elevation: 4,
+          backgroundColor: gold,
+          disabledBackgroundColor: gold.withValues(alpha: 0.55),
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(30),
           ),
         ),
-        onPressed: _isVerifying ? null : _verify,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          child: _isVerifying
-              ? const SizedBox(
-                  key: ValueKey("loading"),
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Colors.white,
+        child: isVerifying
+            ? const SizedBox(
+                height: 23,
+                width: 23,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: background,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Text(
+                    "VERIFY",
+                    style: TextStyle(
+                      color: background,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
                     ),
                   ),
-                )
-              : Text(
-                  "VERIFY",
-                  key: const ValueKey("verify"),
-                  style: TextStyle(
-                    color: gold,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    letterSpacing: 1.5,
+                  SizedBox(width: 12),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: background,
+                    size: 24,
                   ),
-                ),
-        ),
+                ],
+              ),
       ),
     );
   }
 
   // ------------------------------------------------------------
-  // SUCCESS SCREEN
+  // SUCCESS VIEW
   // ------------------------------------------------------------
 
   Widget _successView() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ScaleTransition(
-          scale: _successScale,
-          child: FadeTransition(
-            opacity: _successFade,
-            child: Container(
-              width: 130,
-              height: 130,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: teal,
-                boxShadow: [
-                  BoxShadow(
-                    color: teal.withValues(alpha: 0.28),
-                    blurRadius: 30,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: AnimatedBuilder(
-                animation: _checkProgress,
-                builder: (context, child) {
-                  return CustomPaint(
-                    painter: _AnimatedCheckPainter(
-                      progress: _checkProgress.value,
-                      color: Colors.white,
-                    ),
-                  );
-                },
-              ),
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 110,
+            width: 110,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: gold,
+              boxShadow: [
+                BoxShadow(
+                  color: gold.withValues(alpha: 0.25),
+                  blurRadius: 30,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              size: 65,
+              color: background,
             ),
           ),
-        ),
 
-        const SizedBox(height: 25),
+          const SizedBox(height: 28),
 
-        FadeTransition(
-          opacity: _successFade,
-          child: const Text(
+          const Text(
             "OTP Verified!",
             style: TextStyle(
-              fontSize: 26,
+              color: cream,
+              fontSize: 27,
               fontWeight: FontWeight.bold,
-              color: Color(0xff0F766E),
             ),
           ),
-        ),
 
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
 
-        FadeTransition(
-          opacity: _successFade,
-          child: const Text(
-            "Verification successful",
+          const Text(
+            "Your account has been verified",
             style: TextStyle(
+              color: greyText,
               fontSize: 15,
-              color: Colors.black54,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -444,116 +321,313 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: const Color(0xffF8F4EC),
-
-      appBar: AppBar(
-        backgroundColor: teal,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          widget.title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
-      ),
-
+      backgroundColor: background,
       body: Stack(
         children: [
           // ------------------------------------------------------
-          // BACKGROUND IMAGE
+          // BACKGROUND CIRCLES
           // ------------------------------------------------------
 
-          Positioned.fill(
-            child: Image.asset(
-              "assets/images/lgn_bg.png",
-              fit: BoxFit.cover,
-            ),
-          ),
-
-          // ------------------------------------------------------
-          // WHITE OVERLAY
-          // ------------------------------------------------------
-
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Container(
-                color: Colors.white.withValues(alpha: 0.88),
+          Positioned(
+            top: -150,
+            right: -120,
+            child: Container(
+              width: 360,
+              height: 360,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF11131D),
               ),
             ),
           ),
 
-          // ------------------------------------------------------
-          // CONTENT
-          // ------------------------------------------------------
+          Positioned(
+            bottom: -180,
+            left: -150,
+            child: Container(
+              width: 390,
+              height: 390,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF11131D),
+              ),
+            ),
+          ),
 
           SafeArea(
-            child: FadeTransition(
-              opacity: _fade,
-              child: SlideTransition(
-                position: _slide,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 450),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeIn,
+            child: Column(
+              children: [
+                // ------------------------------------------------
+                // TOP BAR
+                // ------------------------------------------------
 
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: animation,
-                            child: child,
-                          ),
-                        );
-                      },
-
-                      child: _isVerified
-                          ? _successView()
-                          : Column(
-                              key: const ValueKey("otpContent"),
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // SMS ICON
-                                Icon(
-                                  Icons.sms_outlined,
-                                  size: 60,
-                                  color: gold,
-                                ),
-
-                                const SizedBox(height: 20),
-
-                                // TITLE
-                                const Text(
-                                  "Enter the 4-digit OTP sent to you",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-
-                                const SizedBox(height: 25),
-
-                                // OTP
-                                _otpInput(),
-
-                                const SizedBox(height: 20),
-
-                                // VERIFY
-                                _verifyButton(),
-                              ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          height: 44,
+                          width: 44,
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF30323E),
                             ),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: cream,
+                            size: 19,
+                          ),
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      const Text(
+                        "SUMATHI",
+                        style: TextStyle(
+                          color: cream,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2.5,
+                        ),
+                      ),
+
+                      const SizedBox(width: 5),
+
+                      const Text(
+                        "STYLES",
+                        style: TextStyle(
+                          color: gold,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2.5,
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      const SizedBox(width: 44),
+                    ],
+                  ),
+                ),
+
+                // ------------------------------------------------
+                // MAIN CONTENT
+                // ------------------------------------------------
+
+                Expanded(
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SlideTransition(
+                      position: _slideAnimation,
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: size.width < 380 ? 20 : 28,
+                        ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: 500,
+                          ),
+                          child: isVerified
+                              ? SizedBox(
+                                  height: size.height * 0.75,
+                                  child: _successView(),
+                                )
+                              : Column(
+                                  children: [
+                                    SizedBox(
+                                      height: size.height < 700
+                                          ? 30
+                                          : 70,
+                                    ),
+
+                                    // ------------------------------------------------
+                                    // OTP ICON
+                                    // ------------------------------------------------
+
+                                    Container(
+                                      height: 92,
+                                      width: 92,
+                                      decoration: BoxDecoration(
+                                        color: gold.withValues(alpha: 0.10),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: gold.withValues(alpha: 0.35),
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.lock_outline_rounded,
+                                        color: gold,
+                                        size: 42,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 28),
+
+                                    // ------------------------------------------------
+                                    // TITLE
+                                    // ------------------------------------------------
+
+                                    const Text(
+                                      "Verify Your Account",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: cream,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 12),
+
+                                    const Text(
+                                      "We've sent a 6-digit OTP to",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: greyText,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 6),
+
+                                    Text(
+                                      widget.phoneNumber,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: gold,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 38),
+
+                                    // ------------------------------------------------
+                                    // OTP LABEL
+                                    // ------------------------------------------------
+
+                                    const Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        "ENTER 6-DIGIT OTP",
+                                        style: TextStyle(
+                                          color: greyText,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 2,
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 14),
+
+                                    _otpBoxes(),
+
+                                    if (errorText != null) ...[
+                                      const SizedBox(height: 12),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          errorText!,
+                                          style: const TextStyle(
+                                            color: Colors.redAccent,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+
+                                    const SizedBox(height: 30),
+
+                                    // ------------------------------------------------
+                                    // VERIFY
+                                    // ------------------------------------------------
+
+                                    _verifyButton(),
+
+                                    const SizedBox(height: 25),
+
+                                    // ------------------------------------------------
+                                    // RESEND
+                                    // ------------------------------------------------
+
+                                    TextButton(
+                                      onPressed: () {
+                                        _otpController.clear();
+
+                                        setState(() {
+                                          errorText = null;
+                                        });
+
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              "OTP sent again",
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: const Text(
+                                        "Didn't receive the OTP?  Resend",
+                                        style: TextStyle(
+                                          color: gold,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 45),
+
+                                    // ------------------------------------------------
+                                    // FOOTER
+                                    // ------------------------------------------------
+
+                                    const Text(
+                                      "SUMATHI STYLES",
+                                      style: TextStyle(
+                                        color: greyText,
+                                        fontSize: 11,
+                                        letterSpacing: 3,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 8),
+
+                                    const Text(
+                                      "Style that speaks for you ♡",
+                                      style: TextStyle(
+                                        color: greyText,
+                                        fontSize: 13,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 25),
+                                  ],
+                                ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -561,107 +635,11 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
     );
   }
 
-  // ------------------------------------------------------------
-  // DISPOSE
-  // ------------------------------------------------------------
-
   @override
   void dispose() {
-    otpController.dispose();
-    _pageController.dispose();
-    _successController.dispose();
+    _otpController.dispose();
+    _focusNode.dispose();
+    _animationController.dispose();
     super.dispose();
-  }
-}
-
-// =================================================================
-// ANIMATED CHECK MARK
-// =================================================================
-
-class _AnimatedCheckPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  _AnimatedCheckPainter({
-    required this.progress,
-    required this.color,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = color
-      ..strokeWidth = 7
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-
-    final double startX = size.width * 0.27;
-    final double startY = size.height * 0.52;
-
-    final double midX = size.width * 0.44;
-    final double midY = size.height * 0.68;
-
-    final double endX = size.width * 0.76;
-    final double endY = size.height * 0.34;
-
-    // ------------------------------------------------------------
-    // First part of check
-    // ------------------------------------------------------------
-
-    if (progress <= 0) {
-      return;
-    }
-
-    if (progress < 0.5) {
-      final double firstProgress = progress / 0.5;
-
-      final double currentX =
-          startX + (midX - startX) * firstProgress;
-
-      final double currentY =
-          startY + (midY - startY) * firstProgress;
-
-      canvas.drawLine(
-        Offset(startX, startY),
-        Offset(currentX, currentY),
-        paint,
-      );
-    }
-
-    // ------------------------------------------------------------
-    // Second part of check
-    // ------------------------------------------------------------
-
-    else {
-      // Draw first half completely
-      canvas.drawLine(
-        Offset(startX, startY),
-        Offset(midX, midY),
-        paint,
-      );
-
-      final double secondProgress =
-          (progress - 0.5) / 0.5;
-
-      final double currentX =
-          midX + (endX - midX) * secondProgress;
-
-      final double currentY =
-          midY + (endY - midY) * secondProgress;
-
-      canvas.drawLine(
-        Offset(midX, midY),
-        Offset(currentX, currentY),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(
-    covariant _AnimatedCheckPainter oldDelegate,
-  ) {
-    return oldDelegate.progress != progress;
   }
 }

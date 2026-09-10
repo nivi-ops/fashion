@@ -99,6 +99,9 @@ class _AdminPageState extends State<AdminPage> {
   String revenuePeriod = 'month'; // 'week' | 'month' | 'year'
   bool pdfGenerating = false;
 
+  // Which sub-section is showing inside the merged "Contact Form" hub.
+  String contactHubTab = 'catering'; // 'catering' | 'custom' | 'customers'
+
   List<Map<String, dynamic>> products = [];
   List<Map<String, dynamic>> orders = [];
   List<Map<String, dynamic>> contacts = [];
@@ -427,7 +430,7 @@ class _AdminPageState extends State<AdminPage> {
   void showPage(String id) {
     setState(() {
       currentPage = id;
-      if (id == 'contactform') {
+      if (id == 'contactformhub') {
         selectedCustomerPhone = null;
         selectedCustomerName = null;
       }
@@ -435,12 +438,10 @@ class _AdminPageState extends State<AdminPage> {
     if (id == 'dashboard') refreshDashboard();
     if (id == 'products') loadProductsAndSet();
     if (id == 'ordersmgmt') loadOrdersAndSet();
-    if (id == 'customorder') loadOrdersAndSet();
-    if (id == 'contactform') {
+    if (id == 'contactformhub') {
       loadContacts();
       loadOrdersAndSet();
     }
-    if (id == 'contactform2') loadContacts();
     if (id == 'notifications') loadNotifications();
     if (id == 'datarequests') loadCustomerRequests();
     if (id == 'grievances') loadCustomerRequests();
@@ -507,6 +508,203 @@ class _AdminPageState extends State<AdminPage> {
   int get todaysOrdersCount {
     final today = formatDate(DateTime.now().toIso8601String());
     return orders.where((o) => '${o['date']}' == today).length;
+  }
+
+  /// Total ₹ value of orders placed TODAY (any status) — pairs with
+  /// todaysOrdersCount. Resets to 0 automatically the next day since it
+  /// re-checks DateTime.now() every time it's read, same as that getter.
+  num get todaysRevenue {
+    final today = formatDate(DateTime.now().toIso8601String());
+    return orders
+        .where((o) => '${o['date']}' == today)
+        .fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+  }
+
+  // ---------------- SALES COMPARISON (Today / Week / Month / All) ----------------
+
+  /// Revenue from DELIVERED orders placed today only.
+  num get salesToday {
+    final today = formatDate(DateTime.now().toIso8601String());
+    return deliveredOrders
+        .where((o) => '${o['date']}' == today)
+        .fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+  }
+
+  num get salesThisWeek =>
+      ordersForPeriod('week').fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+
+  num get salesThisMonth =>
+      ordersForPeriod('month').fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+
+  // `revenue` (already defined) = All Time total, reused below.
+
+  /// "Sales Comparison" box — Today / This Week / This Month / All Time,
+  /// each with its own colour bar, matching the reference screenshot.
+  Widget _salesComparisonBox() {
+    final rows = [
+      ('Today', salesToday, const Color(0xFFFB8C00)),
+      ('This Week', salesThisWeek, const Color(0xFF1976D2)),
+      ('This Month', salesThisMonth, const Color(0xFF43A047)),
+      ('All Time', revenue, const Color(0xFF8E24AA)),
+    ];
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(color: Color(0x10000000), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.show_chart, size: 18, color: Color(0xFF616161)),
+              const SizedBox(width: 8),
+              const Text(
+                'Sales Comparison',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final row in rows)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                color: pageBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: row.$3,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      row.$1,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '₹${row.$2.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: row.$3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// "Day" summary box shown at the top of the Analysis page — today's
+  /// order count + today's order value. Purely date-driven (no stored
+  /// counter), so it naturally shows 0 / ₹0 as soon as the calendar
+  /// date changes, with no reset logic needed.
+  Widget _dayBox() {
+    final today = DateTime.now();
+    final label =
+        '${today.day} ${monthName(today.month)} ${today.year}';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [tealDark, teal]),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'DAY — $label',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: .5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$todaysOrdersCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const Text(
+                            'Orders Today',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '₹${todaysRevenue.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const Text(
+                            'Amount Today',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ---------------- Revenue period filter helpers ----------------
@@ -667,9 +865,7 @@ class _AdminPageState extends State<AdminPage> {
       'upload': 'Product Upload',
       'products': 'All Products',
       'ordersmgmt': 'Orders',
-      'customorder': 'Customized Order',
-      'contactform': 'Customers',
-      'contactform2': 'Catering Contact Form',
+      'contactformhub': 'Contact Form',
       'notifications': 'Send Notification',
       'datarequests': 'Cancellation Msg',
       'grievances': 'Complaints',
@@ -2957,6 +3153,94 @@ class _AdminPageState extends State<AdminPage> {
         .toList();
   }
 
+  /// Merged "Contact Form" hub — Catering / Customized Order / Customers
+  /// all live under one menu entry now, switched by the chips below.
+  /// Reuses the existing contactPage(), customOrdersPage() and
+  /// customersPage() bodies untouched — only the navigation changes.
+  Widget contactFormHubPage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 18),
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(color: Color(0x10000000), blurRadius: 10),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _hubTabButton(
+                  '🍽️ Catering',
+                  'catering',
+                ),
+              ),
+              Expanded(
+                child: _hubTabButton(
+                  '✂️ Customized Order',
+                  'custom',
+                ),
+              ),
+              Expanded(
+                child: _hubTabButton(
+                  '👤 Customers',
+                  'customers',
+                ),
+              ),
+            ],
+          ),
+        ),
+        Builder(
+          builder: (_) {
+            switch (contactHubTab) {
+              case 'custom':
+                return customOrdersPage();
+              case 'customers':
+                return customersPage();
+              case 'catering':
+              default:
+                return contactPage(true);
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _hubTabButton(String label, String tabId) {
+    final selected = contactHubTab == tabId;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () {
+        setState(() => contactHubTab = tabId);
+        // Make sure the right data is loaded when switching tabs.
+        if (tabId == 'catering') loadContacts();
+        if (tabId == 'custom') loadOrdersAndSet();
+        if (tabId == 'customers') loadOrdersAndSet();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? teal : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : muted,
+          ),
+        ),
+      ),
+    );
+  }
+
   /// "Boutique Contact" is now shown to the admin as a Customers list.
   /// Tapping a customer opens their own order history (customerDetailPage).
    Widget customersPage() {
@@ -3658,6 +3942,8 @@ class _AdminPageState extends State<AdminPage> {
             ],
           ),
           const SizedBox(height: 18),
+          _salesComparisonBox(),
+          _dayBox(),
           if (totalOrders == 0)
             const EmptyState(
               icon: '📊',
@@ -3805,12 +4091,8 @@ class _AdminPageState extends State<AdminPage> {
         return productsPage();
       case 'ordersmgmt':
         return ordersPage();
-      case 'customorder':
-        return customOrdersPage();
-      case 'contactform':
-        return customersPage();
-      case 'contactform2':
-        return contactPage(true);
+      case 'contactformhub':
+        return contactFormHubPage();
       case 'notifications':
         return notificationsPage();
       case 'datarequests':
@@ -4060,125 +4342,332 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  /// Used by every tile/button on the mobile dashboard home screen.
+  /// Calls the existing showPage() so the right data loads (orders,
+  /// contacts, etc — same as the sidebar does on desktop), then flips
+  /// mobilePageMode so the app actually navigates to that page.
+  void _openMobilePage(String id, {String? contactTab}) {
+    showPage(id);
+    setState(() => mobilePageMode = true);
+    if (contactTab != null) {
+      setState(() => contactHubTab = contactTab);
+    }
+  }
+
+  /// One of the 4 stat cards at the top (Orders / Revenue / Menu /
+  /// Customers) — light lavender card, coloured icon, big number.
+  Widget _homeStatCard(
+    IconData icon,
+    Color iconColor,
+    String value,
+    String label,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F0FA),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: iconColor, size: 30),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 13, color: muted)),
+        ],
+      ),
+    );
+  }
+
+  /// One tile in the "Management" grid — coloured circle icon + label.
+  Widget _managementTile(
+    IconData icon,
+    Color iconColor,
+    Color circleBg,
+    String label,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 22),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F0FA),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: circleBg,
+              child: Icon(icon, color: iconColor, size: 24),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget mobileMenu() {
-    final items = [
-      ('dashboard', '📊', 'Dashboard'),
-      ('ordersmgmt', '🧾', 'Orders'),
-      ('upload', '📦', 'Product Upload'),
-      ('products', '👗', 'All Products'),
-      ('customorder', '✂️', 'Customized Order'),
-      ('contactform', '👤', 'Customers'),
-      ('contactform2', '🍽️', 'Catering Contact'),
-      ('notifications', '🔔', 'Notifications'),
-      ('datarequests', '❌', 'Cancellation Msg'),
-      ('revenue', '💰', 'Revenue'),
-      ('analysis', '📊', 'Analysis'),
-    ];
+    final pending = pendingOrders.length;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F7),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(14),
+        child: Column(
           children: [
+            // ---------------- TOP APP BAR ----------------
             Container(
-              padding: const EdgeInsets.all(18),
-              margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [sidebar, const Color(0xFF00796B)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x20000000), blurRadius: 18),
-                ],
-              ),
-              child: Column(
+              width: double.infinity,
+              color: loginBlue,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  const Text(
-                    "👗 Sumathi's Styles",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: () => Navigator.maybePop(context),
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      tooltip: 'Back',
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Admin Panel',
+                  const Text(
+                    'Admin Dashboard',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(.8),
-                      fontSize: 12,
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
             ),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 1.35,
-              ),
-              itemCount: items.length,
-              itemBuilder: (_, i) {
-                final item = items[i];
-                return InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    setState(() {
-                      currentPage = item.$1;
-                      mobilePageMode = true;
-                    });
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFD7E5E3)),
-                      boxShadow: const [
-                        BoxShadow(color: Color(0x10000000), blurRadius: 10),
-                      ],
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text(
+                    'Dashboard',
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ---------------- 4 STAT CARDS ----------------
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 1.05,
+                    children: [
+                      _homeStatCard(
+                        Icons.shopping_cart,
+                        const Color(0xFFFF9800),
+                        '$todaysOrdersCount',
+                        'Orders',
+                      ),
+                      _homeStatCard(
+                        Icons.currency_rupee,
+                        const Color(0xFF43A047),
+                        '₹${revenue.toStringAsFixed(0)}',
+                        'Revenue',
+                      ),
+                      _homeStatCard(
+                        Icons.location_on,
+                        const Color(0xFFE53935),
+                        '${products.length}',
+                        'Menu',
+                      ),
+                      _homeStatCard(
+                        Icons.people,
+                        const Color(0xFF2196F3),
+                        '${uniqueCustomers.length}',
+                        'Customers',
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Management',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ---------------- MANAGEMENT GRID ----------------
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 1.05,
+                    children: [
+                      _managementTile(
+                        Icons.receipt_long,
+                        const Color(0xFFFF9800),
+                        const Color(0xFFFFE0B2),
+                        'Manage Orders',
+                        () => _openMobilePage('ordersmgmt'),
+                      ),
+                      _managementTile(
+                        Icons.people,
+                        const Color(0xFF2196F3),
+                        const Color(0xFFBBDEFB),
+                        'Customers',
+                        () => _openMobilePage(
+                          'contactformhub',
+                          contactTab: 'customers',
+                        ),
+                      ),
+                      _managementTile(
+                        Icons.add,
+                        const Color(0xFF4CAF50),
+                        const Color(0xFFC8E6C9),
+                        'Product Upload',
+                        () => _openMobilePage('upload'),
+                      ),
+                      _managementTile(
+                        Icons.edit_note,
+                        const Color(0xFF2196F3),
+                        const Color(0xFFBBDEFB),
+                        'All Products',
+                        () => _openMobilePage('products'),
+                      ),
+                      _managementTile(
+                        Icons.bar_chart,
+                        const Color(0xFF9C27B0),
+                        const Color(0xFFE1BEE7),
+                        'Analytics',
+                        () => _openMobilePage('analysis'),
+                      ),
+                      // NEW — sits opposite Analytics, opens the merged
+                      // Catering / Customized Order / Customers hub.
+                      _managementTile(
+                        Icons.forum,
+                        teal,
+                        tealLight,
+                        'Contact Form',
+                        () => _openMobilePage(
+                          'contactformhub',
+                          contactTab: 'catering',
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Quick Actions',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ---------------- QUICK ACTIONS ----------------
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00B0FF),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () => _openMobilePage('upload'),
+                      icon: const Icon(Icons.add),
+                      label: const Text(
+                        'Add New Menu Item',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD500F9),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () => _openMobilePage('ordersmgmt'),
+                      icon: const Icon(Icons.shopping_bag),
+                      label: Text(
+                        pending > 0 ? 'View Orders ($pending pending)' : 'View Orders',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Today's Overview",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ---------------- TODAY'S OVERVIEW ----------------
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F0FA),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.$2, style: const TextStyle(fontSize: 24)),
-                        const SizedBox(height: 6),
-                        Text(
-                          item.$3,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: tealDark,
+                        const Icon(Icons.trending_up, color: Color(0xFF43A047)),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Dashboard is connected to Firebase.\n'
+                            "Today's statistics update automatically.",
+                            style: TextStyle(fontSize: 13),
                           ),
                         ),
                       ],
                     ),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 46,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFC62828),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: doLogout,
+                      icon: const Icon(Icons.logout),
+                      label: const Text(
+                        'Logout',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   ),
-                ),
-                onPressed: doLogout,
-                child: const Text(
-                  '🚪 Logout',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                ),
+                ],
               ),
             ),
           ],
@@ -4201,9 +4690,7 @@ class _AdminPageState extends State<AdminPage> {
         'Sales',
         [
           ('ordersmgmt', '🧾', 'Orders'),
-          ('customorder', '✂️', 'Customized Order'),
-          ('contactform', '👤', 'Customers'),
-          ('contactform2', '🍽️', 'Catering Contact Form'),
+          ('contactformhub', '📨', 'Contact Form'),
         ],
       ),
       (

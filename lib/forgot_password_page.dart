@@ -17,10 +17,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final Color teal = const Color(0xff0F766E);
   final Color gold = const Color(0xffD4AF37);
 
-  String _generateOtp() {
-    final rand = Random();
-    return (1000 + rand.nextInt(9000)).toString();
-  }
+   String _generateOtp() {
+  final rand = Random();
+  return (100000 + rand.nextInt(900000)).toString();
+}
 
   void _sendOtp() {
     if (_formKey.currentState!.validate()) {
@@ -30,9 +30,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         context,
         MaterialPageRoute(
           builder: (_) => OtpVerifyPage(
-            correctOtp: otp,
-            title: "Verify to Reset Password",
-            onVerified: () {
+  phoneNumber: contactController.text.trim(),
+  correctOtp: otp,
+  onVerified: () {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(

@@ -26,10 +26,10 @@ class _RegisterPageState extends State<RegisterPage> {
   Color gold = const Color(0xffD4AF37);
   Color lightTeal = const Color(0xff4FC3B0);
 
-  String _generateOtp() {
-    final rand = Random();
-    return (1000 + rand.nextInt(9000)).toString();
-  }
+   String _generateOtp() {
+  final rand = Random();
+  return (100000 + rand.nextInt(900000)).toString();
+}
 
   void _startRegistration() {
     if (_formKey.currentState!.validate()) {
@@ -39,9 +39,9 @@ class _RegisterPageState extends State<RegisterPage> {
         context,
         MaterialPageRoute(
           builder: (_) => OtpVerifyPage(
-            correctOtp: otp,
-            title: "Verify to Register",
-            onVerified: () {
+  phoneNumber: mobileController.text.trim(),
+  correctOtp: otp,
+  onVerified: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text("Registration Successful"),

@@ -32,7 +32,7 @@ class _LoginPageState extends State<LoginPage> {
 
   String _generateOtp() {
     final rand = Random();
-    return (1000 + rand.nextInt(9000)).toString();
+    return (100000 + rand.nextInt(900000)).toString();
   }
 
   Future<void> _completeLogin() async {
@@ -61,8 +61,8 @@ class _LoginPageState extends State<LoginPage> {
         context,
         MaterialPageRoute(
           builder: (_) => OtpVerifyPage(
+            phoneNumber: emailController.text.trim(),
             correctOtp: otp,
-            title: "Verify to Login",
             onVerified: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

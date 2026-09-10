@@ -5,6 +5,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'checkout.dart';
 import 'cart_page.dart';
+import 'location_picker_page.dart';
 
 /// ---------------------------------------------------------------------
 /// PRODUCT DETAILS PAGE (Flipkart style)
@@ -14,7 +15,9 @@ import 'cart_page.dart';
 /// if you wire the same onTap there). Shows the product image, price,
 /// rating and a quantity selector, with two bottom actions:
 ///
-///   - Add to Cart  -> adds to the shared cart (AppState) and stays here
+///   - Add to Cart  -> adds to the shared cart (AppState). Once added,
+///                     the button turns into "View Cart" and takes you
+///                     straight to the cart on tap.
 ///   - Buy Now      -> skips the cart entirely and goes straight to
 ///                     CheckoutPage with just this one product
 /// ---------------------------------------------------------------------
@@ -30,6 +33,11 @@ class ProductDetailsPage extends StatefulWidget {
 
 class _ProductDetailsPageState extends State<ProductDetailsPage> {
   int _qty = 1;
+
+  // Tracks whether THIS product has already been added to the cart from
+  // this screen, so the bottom button can flip from "Add to Cart" to
+  // "View Cart" instead of staying static forever.
+  bool _addedToCart = false;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +61,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
                 onPressed: () => state.toggleWishlist(product),
               ),
-                           IconButton(
+              IconButton(
                 icon: const Icon(Icons.shopping_cart_outlined),
                 onPressed: () {
                   Navigator.push(
@@ -177,6 +185,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         ),
                       ),
 
+                      const SizedBox(height: 16),
+
+                      // -----------------------------------------------
+                      // DELIVERY DETAILS (saved address + estimated
+                      // delivery date for custom-stitched orders)
+                      // -----------------------------------------------
+                      _buildDeliveryDetails(state),
+
                       const Divider(height: 32),
 
                       // QUANTITY
@@ -208,29 +224,48 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
                       const Divider(height: 32),
 
-                                            // HIGHLIGHTS (from admin panel description/highlights)
-                      const Text(
-                        'Highlights',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 8),
-                      if (product.highlights.isNotEmpty)
-                        Text(
-                          product.highlights.map((h) => '• $h').join('\n'),
-                          style: const TextStyle(
-                            color: AppColors.textLight,
-                            height: 1.6,
-                          ),
-                        )
-                      else if (product.description.isNotEmpty)
+                      // -----------------------------------------------
+                      // DESCRIPTION (own section, always shown when the
+                      // product has one — separate from Highlights)
+                      // -----------------------------------------------
+                      if (product.description.isNotEmpty) ...[
+                        const Text(
+                          'Description',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
                         Text(
                           product.description,
                           style: const TextStyle(
                             color: AppColors.textLight,
                             height: 1.6,
                           ),
-                        )
-                      else
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // -----------------------------------------------
+                      // HIGHLIGHTS (own section, separate from
+                      // Description — from admin panel highlights list)
+                      // -----------------------------------------------
+                      if (product.highlights.isNotEmpty) ...[
+                        const Text(
+                          'Product Highlights',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          product.highlights.map((h) => '• $h').join('\n'),
+                          style: const TextStyle(
+                            color: AppColors.textLight,
+                            height: 1.6,
+                          ),
+                        ),
+                      ],
+
+                      // Fallback only if BOTH are empty.
+                      if (product.description.isEmpty &&
+                          product.highlights.isEmpty)
                         const Text(
                           'No additional details available for this product.',
                           style: TextStyle(
@@ -260,9 +295,27 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _addToCart(context, state, product),
-                      icon: const Icon(Icons.add_shopping_cart, size: 18),
-                      label: const Text('Add to Cart'),
+                      onPressed: () {
+                        if (_addedToCart) {
+                          // Already added from this screen -> jump straight
+                          // to the cart instead of adding it again.
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CartPage(),
+                            ),
+                          );
+                        } else {
+                          _addToCart(context, state, product);
+                        }
+                      },
+                      icon: Icon(
+                        _addedToCart
+                            ? Icons.shopping_cart
+                            : Icons.add_shopping_cart,
+                        size: 18,
+                      ),
+                      label: Text(_addedToCart ? 'View Cart' : 'Add to Cart'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
                         side: const BorderSide(color: AppColors.primary),
@@ -298,6 +351,161 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     );
   }
 
+  // ===============================================================
+  // DELIVERY DETAILS CARD
+  // ===============================================================
+  //
+  // Shows the customer's SAVED delivery address (from AppState /
+  // SharedPreferences — same source the Home page location picker
+  // writes to) and an estimated delivery date, since these are custom
+  // stitched orders (10-15 days), not next-day dispatch.
+  Widget _buildDeliveryDetails(AppState state) {
+    final hasAddress = state.deliveryLocation.trim().isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.gray),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          // ADDRESS ROW
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () async {
+              final picked = await LocationPickerSheet.show(context);
+              if (picked != null) {
+                final display = picked.addressLine.trim().isNotEmpty
+                    ? picked.addressLine
+                    : (picked.label.isNotEmpty
+                        ? picked.label
+                        : 'Selected location');
+                await state.setDeliveryLocation(
+                  display,
+                  lat: picked.latitude,
+                  lng: picked.longitude,
+                );
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.home_outlined,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      hasAddress
+                          ? state.deliveryLocation
+                          : 'Add a delivery address',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: hasAddress
+                            ? AppColors.text
+                            : AppColors.textLight,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppColors.textLight,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const Divider(height: 1, indent: 12, endIndent: 12),
+
+          // DELIVERY DATE ROW
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.local_shipping_outlined,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.text,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Delivery by '),
+                        TextSpan(
+                          text: _estimatedDeliveryDate(),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Custom-stitched orders take ~10-15 days. Shows a single target
+  // date (midpoint, 12 days out) formatted like "Tuesday, 15 Sep" —
+  // no `intl` package dependency needed.
+  String _estimatedDeliveryDate() {
+    final date = DateTime.now().add(const Duration(days: 12));
+
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    final weekday = weekdays[date.weekday - 1];
+    final month = months[date.month - 1];
+
+    return '$weekday, ${date.day} $month';
+  }
+
   Widget _qtyBtn(IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -314,7 +522,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   }
 
   // ADD TO CART: adds the product then bumps its qty to match the
-  // selector on this page. Stays on this screen (Flipkart behavior).
+  // selector on this page. Stays on this screen (Flipkart behavior),
+  // and flips the button into "View Cart" so tapping again jumps to
+  // the cart instead of re-adding.
   void _addToCart(BuildContext context, AppState state, Product product) {
     state.addToCart(product);
 
@@ -326,6 +536,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       'Added to cart',
       '${product.name} added to your cart.',
     );
+
+    setState(() => _addedToCart = true);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
