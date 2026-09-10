@@ -9,6 +9,7 @@ import 'shop_page.dart';
 import 'notification_service.dart';
 import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 /// ---------------------------------------------------------------------
 /// MODELS
 /// ---------------------------------------------------------------------
@@ -137,6 +138,7 @@ enum _Panel {
   faq,
   help,
   reviews,
+  devices,
 }
 
 /// ---------------------------------------------------------------------
@@ -937,6 +939,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return _buildHelpPanel();
       case _Panel.reviews:
         return _buildReviewsPanel();
+      case _Panel.devices:
+        return _buildDevicesPanel();
     }
   }
 
@@ -1094,7 +1098,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _menuRow(Icons.edit, 'Edit Profile', () => _openPanel(_Panel.profile)),
           _menuRow(Icons.inventory_2_outlined, 'My Orders', () => _openPanel(_Panel.orders)),
           _menuRow(Icons.favorite_border, 'My Wishlist', () => _openPanel(_Panel.wishlist), iconColor: AppColors.danger),
-          _menuRow(Icons.location_on_outlined, 'Saved Addresses', () => _openPanel(_Panel.addresses)),
+          _menuRow(Icons.phone_android, 'Manage Devices', () => _openPanel(_Panel.devices)),
           _menuRow(Icons.notifications_none, 'Notification Settings', () => _openPanel(_Panel.notif),
               iconColor: AppColors.secondary),
           _menuRow(Icons.shield_outlined, 'Privacy Center', () => _openPanel(_Panel.privacyMenu),
@@ -1104,8 +1108,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ]),
 
         _menuCard('FEEDBACK & INFORMATION', [
-          _menuRow(Icons.description_outlined, 'Terms, Policies and Licenses', () => _openPanel(_Panel.terms)),
           _menuRow(Icons.help_outline, 'Browse FAQs', () => _openPanel(_Panel.faq)),
+          _menuRow(Icons.description_outlined, 'Terms, Policies and Licenses', () => _openPanel(_Panel.terms)),
         ]),
 
         // Logout button — always visible directly below Browse FAQs.
@@ -1361,6 +1365,9 @@ class _SettingsPageState extends State<SettingsPage> {
             const Text("Note: changing mobile number here won't move your past orders — those stay linked to the number you logged in with.", style: TextStyle(fontSize: 11.5, color: AppColors.textLight)),
           ]),
         ),
+        _menuCard(null, [
+          _menuRow(Icons.location_on_outlined, 'Add / Manage Addresses', () => _openPanel(_Panel.addresses)),
+        ]),
       ],
     );
   }
@@ -1517,7 +1524,9 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
+          InkWell(
+            onTap: () => _openOrderDetails(o),
+            child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: const BoxDecoration(
               color: Color(0xFFF9F9F9),
@@ -1538,6 +1547,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
             ),
+            ),
           ),
                     if (o.status != 'Cancelled')
             Padding(
@@ -1556,7 +1566,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ),
-          Padding(
+          InkWell(
+            onTap: () => _openOrderDetails(o),
+            child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1597,7 +1609,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
+                const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
               ],
+            ),
             ),
           ),
           if (canCancel)
@@ -1617,6 +1631,20 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  void _openOrderDetails(MyOrder o) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OrderDetailsPage(
+          order: o,
+          savedAddress: _addresses.isNotEmpty ? _addresses.first : null,
+          onCallHelp: _callUs,
+          onMailHelp: _mailUs,
+        ),
       ),
     );
   }
@@ -1860,27 +1888,113 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: const BoxDecoration(color: AppColors.light, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-        child: SafeArea(
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)))),
-                const SizedBox(height: 16),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: AspectRatio(aspectRatio: 1.05, child: Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 64, color: AppColors.primary)))),
+            controller: scrollController,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10, bottom: 4),
+                  child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4))),
                 ),
-                const SizedBox(height: 16),
-                Text(p.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 6),
-                Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                const SizedBox(height: 18),
-                SizedBox(width: double.infinity, height: 48, child: ElevatedButton(onPressed: () => Navigator.pop(sheetContext), style: _saveBtnStyle(), child: const Text('Close'))),
-              ]),
-            ),
+              ),
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                child: AspectRatio(
+                  aspectRatio: 1.1,
+                  child: Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 64, color: AppColors.primary))),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text("SUMATHI'S STYLE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 0.6)),
+                  const SizedBox(height: 4),
+                  Text(p.name, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: AppColors.success, borderRadius: BorderRadius.circular(6)),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text('4.7', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        SizedBox(width: 2),
+                        Icon(Icons.star, color: Colors.white, size: 12),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('New Listing', style: TextStyle(color: AppColors.textLight, fontSize: 12.5)),
+                  ]),
+                  const Divider(height: 28),
+                  Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Free delivery above ₹500', style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          _showToast('Added to cart!');
+                        },
+                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, side: const BorderSide(color: AppColors.primary), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        icon: const Icon(Icons.shopping_cart_outlined, size: 18),
+                        label: const Text('Add to Cart', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: AppColors.dark, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        icon: const Icon(Icons.bolt, size: 18),
+                        label: const Text('Buy Now', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 22),
+                  const Text('Delivery details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 10),
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _addresses.isNotEmpty ? _addresses.first.detail : 'Add a delivery address in your profile',
+                        style: const TextStyle(fontSize: 13, color: AppColors.text),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.local_shipping_outlined, size: 18, color: AppColors.primary),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('Custom stitched — delivered within 10-15 days', style: TextStyle(fontSize: 13, color: AppColors.text))),
+                  ]),
+                  const SizedBox(height: 22),
+                  const Text('Description', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 8),
+                  Text(p.name, style: const TextStyle(fontSize: 13, color: AppColors.textLight)),
+                  const SizedBox(height: 18),
+                  const Text('Product Highlights', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 8),
+                  const Text('• Made to order, custom stitched\n• Quality checked before dispatch', style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6)),
+                ]),
+              ),
+            ]),
           ),
         ),
       ),
@@ -2048,7 +2162,7 @@ class _SettingsPageState extends State<SettingsPage> {
   // ---------------------------------------------------------------
   Widget _buildAddressesPanel() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _panelHeader('Saved Addresses', Icons.location_on_outlined),
+      _panelHeader('Saved Addresses', Icons.location_on_outlined, back: _Panel.profile),
       if (_addresses.isEmpty && !_showAddrForm)
         _emptyState(Icons.location_off_outlined, 'No saved addresses', 'Add your delivery address for faster checkout.', 'Add New Address', () => _openAddressForm(-1))
       else
@@ -2269,6 +2383,64 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         Switch(value: value, onChanged: onChanged, activeThumbColor: AppColors.primary),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // MANAGE DEVICES PANEL — shows where the account is currently
+  // logged in (this device). Real multi-device session tracking
+  // needs a backend "sessions" collection; wire that up later and
+  // populate this list from there.
+  // ---------------------------------------------------------------
+  Widget _buildDevicesPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _panelHeader('Manage Devices', Icons.phone_android),
+        if (!_user.isLoggedIn)
+          _emptyState(Icons.phone_android, 'Login required', 'Login to see your active devices', 'Login', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+          })
+        else ...[
+          _card(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.smartphone, color: AppColors.primary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Text('This Device', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                          child: const Text('Active now', style: TextStyle(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.w700)),
+                        ),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text('Logged in as ${_formatContact(_user.phone)}', style: const TextStyle(fontSize: 12.5, color: AppColors.textLight)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "You're currently logged in on 1 device. Logging out from a device will end its session immediately.",
+            style: TextStyle(fontSize: 11.5, color: AppColors.textLight, height: 1.5),
+          ),
+        ],
       ],
     );
   }
@@ -2675,6 +2847,10 @@ class _SettingsPageState extends State<SettingsPage> {
             }).toList(),
           ),
         ),
+        const SizedBox(height: 4),
+        _menuCard(null, [
+          _menuRow(Icons.description_outlined, 'Terms, Policies & Licenses', () => _openPanel(_Panel.terms)),
+        ]),
       ],
     );
   }
@@ -2687,43 +2863,37 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Help Center', Icons.support_agent),
-        _card(
-          child: Column(
-            children: [
-              const Icon(Icons.support_agent, size: 44, color: AppColors.primary),
-              const SizedBox(height: 12),
-              const Text("We're Here to Help!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 10),
-              const Text(
-                'If you have questions about your order, contact us using the number below. Feedback and suggestions are always welcome via email.',
-                style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _callUs,
-                style: _saveBtnStyle().copyWith(minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 46))),
-                icon: const Icon(Icons.call, size: 16),
-                label: const Text('Call Us'),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton.icon(
-                onPressed: _mailUs,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
-                  foregroundColor: AppColors.dark,
-                  minimumSize: const Size(double.infinity, 46),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                icon: const Icon(Icons.email, size: 16),
-                label: const Text('Mail Us'),
-              ),
-              const SizedBox(height: 14),
-              const Text('We usually respond within 24-48 hours.',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textLight)),
-            ],
-          ),
+        const Icon(Icons.support_agent, size: 44, color: AppColors.primary),
+        const SizedBox(height: 12),
+        const Text("We're Here to Help!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 10),
+        const Text(
+          'If you have questions about your order, contact us using the number below. Feedback and suggestions are always welcome via email.',
+          style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
+          textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 20),
+        ElevatedButton.icon(
+          onPressed: _callUs,
+          style: _saveBtnStyle().copyWith(minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 46))),
+          icon: const Icon(Icons.call, size: 16),
+          label: const Text('Call Us'),
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton.icon(
+          onPressed: _mailUs,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.secondary,
+            foregroundColor: AppColors.dark,
+            minimumSize: const Size(double.infinity, 46),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          ),
+          icon: const Icon(Icons.email, size: 16),
+          label: const Text('Mail Us'),
+        ),
+        const SizedBox(height: 14),
+        const Text('We usually respond within 24-48 hours.',
+            style: TextStyle(fontSize: 11.5, color: AppColors.textLight)),
       ],
     );
   }
@@ -3195,6 +3365,318 @@ class _PolicySection extends StatelessWidget {
           const SizedBox(height: 6),
           Text(body, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6)),
         ],
+      ),
+    );
+  }
+}
+
+/// ---------------------------------------------------------------------
+/// ORDER DETAILS PAGE — Flipkart-style full order detail screen, opened
+/// when a My Orders card is tapped. Shows product, order id (copyable),
+/// the same status timeline used in the orders list, doorstep tips and
+/// our delivery promise. No payment-retry / live-courier UI since this
+/// app doesn't have that data yet.
+/// ---------------------------------------------------------------------
+class OrderDetailsPage extends StatelessWidget {
+  final MyOrder order;
+  final SavedAddress? savedAddress;
+  final VoidCallback onCallHelp;
+  final VoidCallback onMailHelp;
+
+  const OrderDetailsPage({
+    super.key,
+    required this.order,
+    required this.savedAddress,
+    required this.onCallHelp,
+    required this.onMailHelp,
+  });
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Processing':
+        return const Color(0xFFF57F17);
+      case 'Delivered':
+        return const Color(0xFF1565C0);
+      case 'Cancelled':
+        return AppColors.danger;
+      default:
+        return const Color(0xFFC9820A);
+    }
+  }
+
+  void _copyOrderId(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: order.id));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Order ID copied'), duration: Duration(seconds: 2), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Widget _timeline() {
+    final steps = [
+      ('Order Confirmed', order.orderedAt),
+      ('Shipped', order.processingAt),
+      ('Delivery', order.deliveredAt),
+    ];
+    final reachedIndex = order.status == 'Delivered'
+        ? 2
+        : order.status == 'Processing'
+            ? 1
+            : 0;
+
+    return Row(
+      children: List.generate(steps.length * 2 - 1, (i) {
+        if (i.isOdd) {
+          final stepIndex = i ~/ 2;
+          final done = stepIndex < reachedIndex;
+          return Expanded(
+            child: Container(height: 3, color: done ? AppColors.primary : const Color(0xFFE0E0E0)),
+          );
+        }
+        final stepIndex = i ~/ 2;
+        final label = steps[stepIndex].$1;
+        final date = steps[stepIndex].$2;
+        final reached = stepIndex <= reachedIndex;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              reached ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 20,
+              color: reached ? AppColors.primary : const Color(0xFFBDBDBD),
+            ),
+            const SizedBox(height: 5),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
+                  color: reached ? AppColors.text : AppColors.textLight,
+                )),
+            if (reached && date.trim().isNotEmpty)
+              Text(date, style: const TextStyle(fontSize: 9, color: AppColors.textLight)),
+          ],
+        );
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F7),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.text,
+        elevation: 0.5,
+        title: const Text('Order Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.text)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: OutlinedButton(
+              onPressed: onCallHelp,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.text,
+                side: const BorderSide(color: Color(0xFFDDDDDD)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              ),
+              child: const Text('Help', style: TextStyle(fontSize: 12.5)),
+            ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Product row
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(color: AppColors.gray, borderRadius: BorderRadius.circular(10)),
+                    child: order.productImage.trim().isEmpty
+                        ? const Icon(Icons.checkroom, color: AppColors.primary)
+                        : Image.network(order.productImage, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.checkroom, color: AppColors.primary)),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(order.product, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                        const SizedBox(height: 6),
+                        Text('₹${order.amount.toStringAsFixed(0)}',
+                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Order id with copy
+            InkWell(
+              onTap: () => _copyOrderId(context),
+              child: Row(
+                children: [
+                  Text('Order #${order.id}', style: const TextStyle(fontSize: 12.5, color: AppColors.textLight)),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.copy, size: 14, color: AppColors.textLight),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Status card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(order.status,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _statusColor(order.status))),
+                      Icon(Icons.keyboard_arrow_up, color: Colors.grey.shade500),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (order.status == 'Cancelled' && order.cancelledAt.trim().isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(Icons.cancel, size: 16, color: AppColors.danger),
+                        const SizedBox(width: 8),
+                        Text('Cancelled on ${order.cancelledAt}',
+                            style: const TextStyle(fontSize: 12.5, color: AppColors.danger, fontWeight: FontWeight.w600)),
+                      ],
+                    )
+                  else ...[
+                    _timeline(),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(10)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Custom stitched — delivered within 10-15 days from order confirmation.',
+                              style: TextStyle(fontSize: 12, color: AppColors.textLight, height: 1.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+
+            const Text('Keep in mind at doorstep', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(color: AppColors.gray, borderRadius: BorderRadius.circular(8)),
+                    child: order.productImage.trim().isEmpty
+                        ? const Icon(Icons.checkroom, color: AppColors.primary, size: 18)
+                        : Image.network(order.productImage, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.checkroom, color: AppColors.primary, size: 18)),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Verify before accepting', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                        SizedBox(height: 3),
+                        Text('Please check your item at the doorstep before accepting the order.',
+                            style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+
+            if (savedAddress != null) ...[
+              const Text('Delivery Address', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(savedAddress!.name.isNotEmpty ? savedAddress!.name : 'Home',
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                          const SizedBox(height: 3),
+                          Text(savedAddress!.detail, style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.5)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+            ],
+
+            const Text("Sumathi's Style Promise", style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEEEEEE))),
+              child: const Row(
+                children: [
+                  Icon(Icons.autorenew, size: 22, color: AppColors.primary),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Easy Exchange', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                        SizedBox(height: 3),
+                        Text('For sizing issues, contact us within 3 days of delivery.',
+                            style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
