@@ -19,6 +19,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'checkout.dart';
 import 'cart_page.dart';
+import 'location_picker_page.dart';
 
 class ShopPage extends StatefulWidget {
   final String? initialFilter;
@@ -371,7 +372,7 @@ class _ShopPageState extends State<ShopPage> {
                                   ),
                                   const SizedBox(height: 20),
 
-                                  Container(
+                                                        Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
                                       border: Border.all(color: const Color(0xFFE0E0E0)),
@@ -385,6 +386,44 @@ class _ShopPageState extends State<ShopPage> {
                                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                         ),
                                         const SizedBox(height: 10),
+                                        InkWell(
+                                          borderRadius: BorderRadius.circular(8),
+                                          onTap: () async {
+                                            final picked = await LocationPickerSheet.show(context);
+                                            if (picked != null) {
+                                              final display = picked.addressLine.trim().isNotEmpty
+                                                  ? picked.addressLine
+                                                  : (picked.label.isNotEmpty
+                                                      ? picked.label
+                                                      : 'Selected location');
+                                                                            await AppState.instance.setDeliveryLocation(
+                                display,
+                                lat: picked.latitude,
+                                lng: picked.longitude,
+                                pincode: picked.pincode,
+                              );
+                                              setSheetState(() {});
+                                            }
+                                          },
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  AppState.instance.deliveryLocation.trim().isNotEmpty
+                                                      ? AppState.instance.deliveryLocation
+                                                      : 'Add a delivery address',
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                                ),
+                                              ),
+                                              const Icon(Icons.chevron_right, size: 18, color: AppColors.textLight),
+                                            ],
+                                          ),
+                                        ),
+                                        const Divider(height: 20),
                                         Row(
                                           children: const [
                                             Icon(Icons.local_shipping_outlined, size: 18),

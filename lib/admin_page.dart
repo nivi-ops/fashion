@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -100,7 +101,7 @@ class _AdminPageState extends State<AdminPage> {
   bool pdfGenerating = false;
 
   // Which sub-section is showing inside the merged "Contact Form" hub.
-  String contactHubTab = 'catering'; // 'catering' | 'custom' | 'customers'
+  String contactHubTab = 'catering'; // 'catering' | 'custom'
 
   List<Map<String, dynamic>> products = [];
   List<Map<String, dynamic>> orders = [];
@@ -110,9 +111,6 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> grievances = [];
   List<Map<String, dynamic>> deactivated = [];
   List<Map<String, dynamic>> deletedAccounts = [];
-
-  String? selectedCustomerPhone;
-  String? selectedCustomerName;
 
   final TextEditingController productSearch = TextEditingController();
   final TextEditingController orderSearch = TextEditingController();
@@ -272,6 +270,11 @@ class _AdminPageState extends State<AdminPage> {
           'cancelReason': m['cancel_reason'] ?? '',
           'paymentMethod': m['payment_method'] ?? 'N/A',
           'paymentStatus': m['payment_status'] ?? 'Not Required',
+          'address': m['address'] ?? '',
+          'distanceKm': m['distance_km'] ?? '',
+          'deliveryCharge': m['delivery_charge'] ?? '',
+          'rating': m['rating'] ?? '',
+          'feedback': m['feedback_text'] ?? '',
         };
       }).toList();
       // Keep a stable order — newest last, so `.reversed` (used all over
@@ -427,17 +430,56 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
+  // ---------------- Shared blue AppBar + swipe-back navigation ----------------
+  PreferredSizeWidget _blueAppBar(String title) {
+    return AppBar(
+      backgroundColor: loginBlue,
+      elevation: 0,
+      centerTitle: true,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.of(context).maybePop(),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 19,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  /// Pushes a full page with the blue app bar + real swipe-back gesture.
+  /// CupertinoPageRoute gives edge-swipe-to-pop on ALL platforms (not just
+  /// iOS), so this is what makes "page on top of page" feel real instead
+  /// of the old setState()-based content swap.
+  Future<void> _pushPage(String title, Widget body) {
+    return Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: pageBg,
+          appBar: _blueAppBar(title),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: body,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void showPage(String id) {
     setState(() {
       currentPage = id;
-      if (id == 'contactformhub') {
-        selectedCustomerPhone = null;
-        selectedCustomerName = null;
-      }
     });
     if (id == 'dashboard') refreshDashboard();
     if (id == 'products') loadProductsAndSet();
     if (id == 'ordersmgmt') loadOrdersAndSet();
+    if (id == 'customers') loadOrdersAndSet();
     if (id == 'contactformhub') {
       loadContacts();
       loadOrdersAndSet();
@@ -865,6 +907,7 @@ class _AdminPageState extends State<AdminPage> {
       'upload': 'Product Upload',
       'products': 'All Products',
       'ordersmgmt': 'Orders',
+      'customers': 'Customers',
       'contactformhub': 'Contact Form',
       'notifications': 'Send Notification',
       'datarequests': 'Cancellation Msg',
@@ -2960,8 +3003,114 @@ class _AdminPageState extends State<AdminPage> {
                     ),
                   ),
                 ];
-          return DataRow(cells: cells);
+          return DataRow(
+            // Tapping anywhere on a row now pushes the full-screen order
+            // detail page (swipe-back works via CupertinoPageRoute).
+            onSelectChanged: (_) => _pushPage(
+              '${o['orderId']}',
+              _orderDetailBody(o),
+            ),
+            cells: cells,
+          );
         }).toList(),
+      ),
+    );
+  }
+
+  /// Full-screen order detail body — pushed via _pushPage() when an order
+  /// row is tapped. Shows every field currently stored on the order.
+  /// NOTE: address / distance / delivery charge / rating / feedback will
+  /// only show real values once those fields are written by the customer
+  /// app into the `orders` Firestore document (see field mapping in
+  /// loadOrdersFromServer above) — until then they render as "—".
+  Widget _orderDetailBody(Map<String, dynamic> o) {
+    Widget row(String label, String value) {
+      if (value.trim().isEmpty || value == 'null') value = '—';
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 120,
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600),
+              ),
+            ),
+            Expanded(
+              child: Text(value, style: const TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x10000000), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Order ID : ${o['orderId']}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 14),
+          row('Customer', '${o['name']}'),
+          row('Phone', '${o['mobile']}'),
+          row('Product', '${o['product']}'),
+          row('Amount', '₹${o['amount']}'),
+          row('Payment', '${o['paymentMethod']} • ${o['paymentStatus']}'),
+          row('Address', '${o['address'] ?? ''}'),
+          row('Distance', '${o['distanceKm'] ?? ''}'
+              '${'${o['distanceKm'] ?? ''}'.trim().isEmpty ? '' : ' km'}'),
+          row('Delivery Charge', '${o['deliveryCharge'] ?? ''}'
+              '${'${o['deliveryCharge'] ?? ''}'.trim().isEmpty ? '' : ''}'),
+          row('Measurement', '${o['measurement'] ?? ''}'),
+          row('Notes', '${o['notes'] ?? ''}'),
+          row('Date', '${o['date']}'),
+          if ('${o['status']}' == 'Cancelled')
+            row('Cancel Reason', '${o['cancelReason'] ?? ''}'),
+          const SizedBox(height: 6),
+          StatusBadge(status: '${o['status']}'),
+          const SizedBox(height: 16),
+          voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
+          const SizedBox(height: 16),
+          if ('${o['rating'] ?? ''}'.trim().isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: copperLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⭐ Customer Feedback — ${o['rating']}/5',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  ),
+                  if ('${o['feedback'] ?? ''}'.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text('${o['feedback']}', style: const TextStyle(fontSize: 13)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          actionButton(
+            '💬 WhatsApp',
+            () => openWhatsApp('${o['mobile']}', '${o['name']}'),
+          ),
+        ],
       ),
     );
   }
@@ -3079,6 +3228,10 @@ class _AdminPageState extends State<AdminPage> {
                 rows: list
                     .map(
                       (o) => DataRow(
+                        onSelectChanged: (_) => _pushPage(
+                          '${o['name']} — Custom Order',
+                          _orderDetailBody(o),
+                        ),
                         cells: [
                           DataCell(Text('${o['name']}')),
                           DataCell(Text('📞 ${o['mobile']}')),
@@ -3153,10 +3306,13 @@ class _AdminPageState extends State<AdminPage> {
         .toList();
   }
 
-  /// Merged "Contact Form" hub — Catering / Customized Order / Customers
-  /// all live under one menu entry now, switched by the chips below.
-  /// Reuses the existing contactPage(), customOrdersPage() and
-  /// customersPage() bodies untouched — only the navigation changes.
+  num spentByPhone(String phone) => ordersForPhone(
+    phone,
+  ).where((o) => o['status'] == 'Delivered').fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+
+  /// Merged "Contact Form" hub — Catering / Customized Order only now.
+  /// Customers was moved out to its own top-level page (see
+  /// customersPage() + sidebar "Customers" entry).
   Widget contactFormHubPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3185,12 +3341,6 @@ class _AdminPageState extends State<AdminPage> {
                   'custom',
                 ),
               ),
-              Expanded(
-                child: _hubTabButton(
-                  '👤 Customers',
-                  'customers',
-                ),
-              ),
             ],
           ),
         ),
@@ -3199,8 +3349,6 @@ class _AdminPageState extends State<AdminPage> {
             switch (contactHubTab) {
               case 'custom':
                 return customOrdersPage();
-              case 'customers':
-                return customersPage();
               case 'catering':
               default:
                 return contactPage(true);
@@ -3220,7 +3368,6 @@ class _AdminPageState extends State<AdminPage> {
         // Make sure the right data is loaded when switching tabs.
         if (tabId == 'catering') loadContacts();
         if (tabId == 'custom') loadOrdersAndSet();
-        if (tabId == 'customers') loadOrdersAndSet();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -3241,66 +3388,101 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// "Boutique Contact" is now shown to the admin as a Customers list.
-  /// Tapping a customer opens their own order history (customerDetailPage).
-   Widget customersPage() {
-    if (selectedCustomerPhone != null) return customerDetailPage();
-
+  /// Standalone "Customers" page — its own sidebar/management entry now,
+  /// no longer nested inside Contact Form. Card layout matches the
+  /// reference screenshot: avatar, name, phone, Orders + Spent stats,
+  /// "View Order History" pill button. Tapping a card PUSHES a new page
+  /// (real Navigator route — swipe-back works) instead of swapping
+  /// in-place state.
+  Widget customersPage() {
     final list = filteredUniqueCustomers;
     return sectionCard(
       '👤 Customers',
       Column(
         children: [
-          field('', customerListSearch, hint: '🔍 Search by name or mobile number...'),
+          field('', customerListSearch, hint: '🔍 Search customer...'),
           const SizedBox(height: 14),
           if (list.isEmpty)
             const EmptyState(icon: '👤', text: 'No customers found')
           else
             ...list.map((c) {
-              final count = ordersForPhone(c['phone']!).length;
-              return InkWell(
-                onTap: () => setState(() {
-                  selectedCustomerPhone = c['phone'];
-                  selectedCustomerName = c['name'];
-                }),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: pageBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: border),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: tealLight,
-                        child: Text(
-                          c['name']!.isNotEmpty ? c['name']![0].toUpperCase() : '?',
-                          style: TextStyle(color: tealDark, fontWeight: FontWeight.w700),
+              final orderCount = ordersForPhone(c['phone']!).length;
+              final spent = spentByPhone(c['phone']!);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: pageBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundColor: const Color(0xFFFCE4EC),
+                          child: Icon(Icons.person, color: const Color(0xFFE57373)),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(c['name']!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 2),
-                            Text('📞 ${c['phone']}', style: TextStyle(fontSize: 12, color: muted)),
-                          ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(c['name']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 2),
+                              Text(c['phone']!, style: TextStyle(fontSize: 13, color: muted)),
+                            ],
+                          ),
                         ),
+                        Icon(Icons.chevron_right, color: muted),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.shopping_bag, color: Color(0xFFFF9800), size: 22),
+                              const SizedBox(height: 6),
+                              Text('$orderCount', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                              Text('Orders', style: TextStyle(fontSize: 12, color: muted)),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.currency_rupee, color: Color(0xFF43A047), size: 22),
+                              const SizedBox(height: 6),
+                              Text('₹${spent.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                              Text('Spent', style: TextStyle(fontSize: 12, color: muted)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pushPage(
+                          c['name']!,
+                          _customerHistoryBody(c['phone']!, c['name']!),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.history, size: 18),
+                        label: const Text('View Order History'),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(color: tealLight, borderRadius: BorderRadius.circular(20)),
-                        child: Text('$count products',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: tealDark)),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(Icons.chevron_right, color: muted),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             }),
@@ -3309,55 +3491,43 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Shows only the orders belonging to the tapped customer — e.g. tapping
-  /// "Divya" shows just her orders (matched by mobile number), not everyone's.
-    Widget customerDetailPage() {
-    final phone = selectedCustomerPhone!;
-    final name = selectedCustomerName ?? 'Customer';
+  /// Body pushed via _pushPage() when "View Order History" is tapped —
+  /// shows only that customer's orders (matched by mobile number).
+  Widget _customerHistoryBody(String phone, String name) {
     final custOrders = ordersForPhone(phone).reversed.toList();
-
-    return sectionCard(
-      '👤 $name — ${custOrders.length} products ordered',
-      Column(
-        children: [
-                    Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 10,
-            runSpacing: 6,
-            children: [
-              OutlinedButton(
-                onPressed: () => setState(() {
-                  selectedCustomerPhone = null;
-                  selectedCustomerName = null;
-                }),
-                child: const Text('←'),
-              ),
-              Text('📞 $phone', style: TextStyle(fontSize: 13, color: muted)),
-              TextButton(
-                onPressed: () => openWhatsApp(phone, name),
-                child: const Text('💬 WhatsApp'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-               if (custOrders.isEmpty)
-            const EmptyState(icon: '📦', text: 'No products ordered yet')
-          else
-            ...custOrders.map((o) {
-              final image = _productImageFor('${o['product']}');
-              return Container(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('📞 $phone', style: TextStyle(fontSize: 13, color: muted)),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => openWhatsApp(phone, name),
+              icon: const Icon(Icons.chat, size: 16),
+              label: const Text('WhatsApp'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (custOrders.isEmpty)
+          const EmptyState(icon: '📦', text: 'No products ordered yet')
+        else
+          ...custOrders.map((o) {
+            final image = _productImageFor('${o['product']}');
+            return InkWell(
+              onTap: () => _pushPage('${o['orderId']}', _orderDetailBody(o)),
+              child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: pageBg,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: border),
                 ),
-                child: Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    tilePadding: const EdgeInsets.all(14),
-                    childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                    leading: ClipRRect(
+                child: Row(
+                  children: [
+                    ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: image.isNotEmpty
                           ? Image.network(
@@ -3379,42 +3549,26 @@ class _AdminPageState extends State<AdminPage> {
                               child: const Center(child: Text('👗')),
                             ),
                     ),
-                    title: Text('${o['product']}',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                    subtitle: Text('₹${o['amount']}  •  ${o['date']}',
-                        style: TextStyle(fontSize: 12, color: muted)),
-                    trailing: StatusBadge(status: '${o['status']}'),
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Order ID: ${o['orderId']}', style: TextStyle(fontSize: 12, color: muted)),
-                            const SizedBox(height: 4),
-                            Text('Payment: ${o['paymentMethod']} • ${o['paymentStatus']}', style: TextStyle(fontSize: 12, color: muted)),
-                            if ('${o['measurement'] ?? ''}'.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text('Measurement: ${o['measurement']}', style: TextStyle(fontSize: 12, color: muted)),
-                            ],
-                            if ('${o['notes'] ?? ''}'.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text('Notes: ${o['notes']}', style: TextStyle(fontSize: 12, color: muted)),
-                            ],
-                            if ('${o['status']}' == 'Cancelled' && '${o['cancelReason'] ?? ''}'.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text('Cancel Reason: ${o['cancelReason']}', style: TextStyle(fontSize: 12, color: danger)),
-                            ],
-                          ],
-                        ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${o['product']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 3),
+                          Text('₹${o['amount']}  •  ${o['date']}', style: TextStyle(fontSize: 12, color: muted)),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    StatusBadge(status: '${o['status']}'),
+                    const SizedBox(width: 6),
+                    Icon(Icons.chevron_right, color: muted),
+                  ],
                 ),
-              );
-            }),
-        ],
-      ),
+              ),
+            );
+          }),
+      ],
     );
   }
 
@@ -3902,6 +4056,11 @@ class _AdminPageState extends State<AdminPage> {
   /// Product-purchase-percentage page opened via the "📊 Analysis" button
   /// on the Revenue page. Shows what percentage of delivered orders each
   /// product accounts for, so the admin can see what customers buy most.
+  ///
+  /// Sales Comparison is now a TAPPABLE summary card that pushes its own
+  /// full page (via _pushPage) instead of sitting stacked inline with the
+  /// rest of the analysis content — this is what removes the "page inside
+  /// a page" look the analysis page used to have.
   Widget analysisPage() {
     final periodOrders = ordersForPeriod(revenuePeriod);
     final counts = productPurchaseCounts(periodOrders);
@@ -3942,8 +4101,36 @@ class _AdminPageState extends State<AdminPage> {
             ],
           ),
           const SizedBox(height: 18),
-          _salesComparisonBox(),
-          _dayBox(),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _pushPage(
+              'Sales Comparison',
+              Column(children: [_salesComparisonBox(), _dayBox()]),
+            ),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(color: Color(0x10000000), blurRadius: 10)],
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.show_chart, size: 20, color: Color(0xFF616161)),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Sales Comparison — Today / Week / Month / All Time',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: muted),
+                ],
+              ),
+            ),
+          ),
           if (totalOrders == 0)
             const EmptyState(
               icon: '📊',
@@ -4091,6 +4278,8 @@ class _AdminPageState extends State<AdminPage> {
         return productsPage();
       case 'ordersmgmt':
         return ordersPage();
+      case 'customers':
+        return customersPage();
       case 'contactformhub':
         return contactFormHubPage();
       case 'notifications':
@@ -4527,10 +4716,7 @@ class _AdminPageState extends State<AdminPage> {
                         const Color(0xFF2196F3),
                         const Color(0xFFBBDEFB),
                         'Customers',
-                        () => _openMobilePage(
-                          'contactformhub',
-                          contactTab: 'customers',
-                        ),
+                        () => _openMobilePage('customers'),
                       ),
                       _managementTile(
                         Icons.add,
@@ -4553,8 +4739,7 @@ class _AdminPageState extends State<AdminPage> {
                         'Analytics',
                         () => _openMobilePage('analysis'),
                       ),
-                      // NEW — sits opposite Analytics, opens the merged
-                      // Catering / Customized Order / Customers hub.
+                      // Opens the merged Catering / Customized Order hub.
                       _managementTile(
                         Icons.forum,
                         teal,
@@ -4690,6 +4875,7 @@ class _AdminPageState extends State<AdminPage> {
         'Sales',
         [
           ('ordersmgmt', '🧾', 'Orders'),
+          ('customers', '👤', 'Customers'),
           ('contactformhub', '📨', 'Contact Form'),
         ],
       ),

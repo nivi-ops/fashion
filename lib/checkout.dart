@@ -199,33 +199,51 @@ class _CheckoutPageState extends State<CheckoutPage> {
       _prefillSavedAddress();
     }
   }
+ 
+    Future<void> _prefillSavedAddress() async {
+    final state = AppState.instance;
 
-  Future<void> _prefillSavedAddress() async {
     try {
       final addresses = await ApiService.instance.getAddresses();
 
-      if (addresses.isEmpty) return;
+      if (addresses.isNotEmpty) {
+        // Most recently confirmed address is the last one added.
+        final latest = addresses.last;
 
-      // Most recently confirmed address is the last one added.
-      final latest = addresses.last;
+        if (!mounted) return;
 
-      if (!mounted) return;
-
-      setState(() {
-        if (_addressCtrl.text.trim().isEmpty) {
-          _addressCtrl.text = latest.addressLine;
-        }
-        if (_pincodeCtrl.text.trim().isEmpty) {
-          _pincodeCtrl.text = latest.pincode;
-        }
-        if ((latest.phone ?? '').trim().isNotEmpty &&
-            _phoneCtrl.text.trim().isEmpty) {
-          _phoneCtrl.text = latest.phone!.trim();
-        }
-      });
+        setState(() {
+          if (_addressCtrl.text.trim().isEmpty) {
+            _addressCtrl.text = latest.addressLine;
+          }
+          if (_pincodeCtrl.text.trim().isEmpty) {
+            _pincodeCtrl.text = latest.pincode;
+          }
+          if ((latest.phone ?? '').trim().isNotEmpty &&
+              _phoneCtrl.text.trim().isEmpty) {
+            _phoneCtrl.text = latest.phone!.trim();
+          }
+        });
+        return;
+      }
     } catch (_) {
-      // Silently ignore — user can still type address manually.
+      // Fall through to the delivery-location fallback below.
     }
+
+        // No saved address on file yet — fall back to whatever address the
+    // user already picked earlier (Home / Shop / Cart / Product Details
+    // pages all write to AppState.deliveryLocation via LocationPickerSheet).
+    if (!mounted) return;
+    setState(() {
+      if (_addressCtrl.text.trim().isEmpty &&
+          state.deliveryLocation.trim().isNotEmpty) {
+        _addressCtrl.text = state.deliveryLocation;
+      }
+      if (_pincodeCtrl.text.trim().isEmpty &&
+          state.deliveryPincode.trim().isNotEmpty) {
+        _pincodeCtrl.text = state.deliveryPincode;
+      }
+    });
   }
 
   // -------------------------------------------------------------------

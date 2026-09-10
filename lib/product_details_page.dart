@@ -381,10 +381,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                     : (picked.label.isNotEmpty
                         ? picked.label
                         : 'Selected location');
-                await state.setDeliveryLocation(
+                               await state.setDeliveryLocation(
                   display,
                   lat: picked.latitude,
                   lng: picked.longitude,
+                  pincode: picked.pincode,
                 );
               }
             },
@@ -429,7 +430,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
           const Divider(height: 1, indent: 12, endIndent: 12),
 
-          // DELIVERY DATE ROW
+                    // DELIVERY DATE ROW
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 12,
@@ -443,22 +444,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   color: AppColors.primary,
                 ),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: RichText(
-                    text: TextSpan(
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.text,
-                      ),
-                      children: [
-                        const TextSpan(text: 'Delivery by '),
-                        TextSpan(
-                          text: _estimatedDeliveryDate(),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                const Expanded(
+                  child: Text(
+                    'Custom stitched — delivered within 10–15 days',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
                     ),
                   ),
                 ),
@@ -470,41 +462,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     );
   }
 
-  // Custom-stitched orders take ~10-15 days. Shows a single target
-  // date (midpoint, 12 days out) formatted like "Tuesday, 15 Sep" —
-  // no `intl` package dependency needed.
-  String _estimatedDeliveryDate() {
-    final date = DateTime.now().add(const Duration(days: 12));
-
-    const weekdays = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-
-    final weekday = weekdays[date.weekday - 1];
-    final month = months[date.month - 1];
-
-    return '$weekday, ${date.day} $month';
-  }
+ 
 
   Widget _qtyBtn(IconData icon, VoidCallback onTap) {
     return InkWell(

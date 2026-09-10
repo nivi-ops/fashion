@@ -5,6 +5,7 @@ import 'app_colors.dart';
 import 'app_state.dart';
 import 'models.dart';
 import 'checkout.dart';
+import 'location_picker_page.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -1017,7 +1018,7 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
 
                       const SizedBox(height: 10),
 
-                      Container(
+                                     Container(
                         padding:
                             const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -1047,6 +1048,76 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                                 ? Colors.green.shade700
                                 : Colors.orange.shade800,
                           ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.gray),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () async {
+                                final picked = await LocationPickerSheet.show(context);
+                                if (picked != null) {
+                                  final display = picked.addressLine.trim().isNotEmpty
+                                      ? picked.addressLine
+                                      : (picked.label.isNotEmpty
+                                          ? picked.label
+                                          : 'Selected location');
+                                                                    await AppState.instance.setDeliveryLocation(
+                                    display,
+                                    lat: picked.latitude,
+                                    lng: picked.longitude,
+                                    pincode: picked.pincode,
+                                  );
+                                  setState(() {});
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        AppState.instance.deliveryLocation.trim().isNotEmpty
+                                            ? AppState.instance.deliveryLocation
+                                            : 'Add a delivery address',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+                                      ),
+                                    ),
+                                    const Icon(Icons.chevron_right, size: 18, color: AppColors.textLight),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const Divider(height: 1, indent: 12, endIndent: 12),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.local_shipping_outlined, size: 18, color: AppColors.primary),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Custom stitched — delivered within 10–15 days',
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 

@@ -604,10 +604,11 @@ class _HomePageState extends State<HomePage> {
                 // Persist the selection (SharedPreferences) so it
                 // survives app restarts, and updates the header text
                 // immediately via notifyListeners() inside AppState.
-                await state.setDeliveryLocation(
+                                 await state.setDeliveryLocation(
                   display,
                   lat: picked.latitude,
                   lng: picked.longitude,
+                  pincode: picked.pincode,
                 );
               }
             },

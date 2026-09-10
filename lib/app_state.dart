@@ -151,33 +151,43 @@ class AppState extends ChangeNotifier {
     // parse JSON -> _notifications.addAll(...) -> notifyListeners();
   }
 
-  // ---------------- DELIVERY LOCATION ----------------
+    // ---------------- DELIVERY LOCATION ----------------
   String _deliveryLocation = 'Chennai';
   double? _deliveryLat;
   double? _deliveryLng;
+  String _deliveryPincode = '';
 
   String get deliveryLocation => _deliveryLocation;
   double? get deliveryLat => _deliveryLat;
   double? get deliveryLng => _deliveryLng;
+  String get deliveryPincode => _deliveryPincode;
 
   static const _kLocationKey = 'delivery_location';
   static const _kLatKey = 'delivery_lat';
   static const _kLngKey = 'delivery_lng';
+  static const _kPincodeKey = 'delivery_pincode';
 
   Future<void> setDeliveryLocation(
     String location, {
     double? lat,
     double? lng,
+    String? pincode,
   }) async {
     _deliveryLocation = location;
     _deliveryLat = lat;
     _deliveryLng = lng;
+    if (pincode != null && pincode.trim().isNotEmpty) {
+      _deliveryPincode = pincode.trim();
+    }
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kLocationKey, location);
     if (lat != null) await prefs.setDouble(_kLatKey, lat);
     if (lng != null) await prefs.setDouble(_kLngKey, lng);
+    if (pincode != null && pincode.trim().isNotEmpty) {
+      await prefs.setString(_kPincodeKey, pincode.trim());
+    }
   }
 
   Future<void> loadSavedDeliveryLocation() async {
@@ -187,7 +197,9 @@ class AppState extends ChangeNotifier {
       _deliveryLocation = saved;
       _deliveryLat = prefs.getDouble(_kLatKey);
       _deliveryLng = prefs.getDouble(_kLngKey);
+      _deliveryPincode = prefs.getString(_kPincodeKey) ?? '';
       notifyListeners();
     }
   }
+
 }
