@@ -156,22 +156,29 @@ class AppState extends ChangeNotifier {
   double? _deliveryLat;
   double? _deliveryLng;
   String _deliveryPincode = '';
+  String? _deliveryAddressId;
 
   String get deliveryLocation => _deliveryLocation;
   double? get deliveryLat => _deliveryLat;
   double? get deliveryLng => _deliveryLng;
   String get deliveryPincode => _deliveryPincode;
+  // Id of the saved ShopAddress currently used for delivery — used to
+  // show the "Selected" chip against the matching card in the saved
+  // addresses list (Flipkart-style).
+  String? get deliveryAddressId => _deliveryAddressId;
 
   static const _kLocationKey = 'delivery_location';
   static const _kLatKey = 'delivery_lat';
   static const _kLngKey = 'delivery_lng';
   static const _kPincodeKey = 'delivery_pincode';
+  static const _kAddressIdKey = 'delivery_address_id';
 
   Future<void> setDeliveryLocation(
     String location, {
     double? lat,
     double? lng,
     String? pincode,
+    String? addressId,
   }) async {
     _deliveryLocation = location;
     _deliveryLat = lat;
@@ -179,6 +186,13 @@ class AppState extends ChangeNotifier {
     if (pincode != null && pincode.trim().isNotEmpty) {
       _deliveryPincode = pincode.trim();
     }
+    // addressId is passed explicitly (even as null) when the location was
+    // NOT picked from a saved address (e.g. plain map pin), so the old
+    // "Selected" chip doesn't stay stuck on a stale saved address. Only
+    // skip updating it when the caller didn't mention addressId at all
+    // is not distinguishable in Dart optional params, so callers should
+    // always pass addressId (or an empty string) when relevant.
+    _deliveryAddressId = addressId;
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
@@ -187,6 +201,11 @@ class AppState extends ChangeNotifier {
     if (lng != null) await prefs.setDouble(_kLngKey, lng);
     if (pincode != null && pincode.trim().isNotEmpty) {
       await prefs.setString(_kPincodeKey, pincode.trim());
+    }
+    if (addressId != null && addressId.trim().isNotEmpty) {
+      await prefs.setString(_kAddressIdKey, addressId);
+    } else {
+      await prefs.remove(_kAddressIdKey);
     }
   }
 
@@ -198,6 +217,7 @@ class AppState extends ChangeNotifier {
       _deliveryLat = prefs.getDouble(_kLatKey);
       _deliveryLng = prefs.getDouble(_kLngKey);
       _deliveryPincode = prefs.getString(_kPincodeKey) ?? '';
+      _deliveryAddressId = prefs.getString(_kAddressIdKey);
       notifyListeners();
     }
   }

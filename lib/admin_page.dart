@@ -588,16 +588,19 @@ class _AdminPageState extends State<AdminPage> {
   num get salesThisMonth =>
       ordersForPeriod('month').fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
 
+  num get salesThisYear =>
+      ordersForPeriod('year').fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+
   // `revenue` (already defined) = All Time total, reused below.
 
-  /// "Sales Comparison" box — Today / This Week / This Month / All Time,
+  /// "Sales Comparison" box — Today / This Week / This Month / This Year,
   /// each with its own colour bar, matching the reference screenshot.
   Widget _salesComparisonBox() {
     final rows = [
       ('Today', salesToday, const Color(0xFFFB8C00)),
       ('This Week', salesThisWeek, const Color(0xFF1976D2)),
       ('This Month', salesThisMonth, const Color(0xFF43A047)),
-      ('All Time', revenue, const Color(0xFF8E24AA)),
+      ('This Year', salesThisYear, const Color(0xFF8E24AA)),
     ];
 
     return Container(
@@ -1803,6 +1806,9 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> filteredOrders() {
     final s = orderSearch.text.trim().toLowerCase().replaceFirst('#', '');
     return orders.where((o) {
+      // Customized-order requests live only under "Customized Order"
+      // (customOrders()) — keep them out of the main Orders list.
+      if ('${o['source']}'.toLowerCase() == 'custom-order') return false;
       final okSearch =
           s.isEmpty ||
           '${o['name']}'.toLowerCase().contains(s) ||
@@ -3106,7 +3112,62 @@ class _AdminPageState extends State<AdminPage> {
             row('Cancel Reason', '${o['cancelReason'] ?? ''}'),
           ],
           const SizedBox(height: 6),
-          StatusBadge(status: '${o['status']}'),
+          Row(
+            children: [
+              Text(
+                'Status',
+                style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: pageBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: border),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: '${o['status']}',
+                      isExpanded: true,
+                      icon: Icon(Icons.keyboard_arrow_down, color: tealDark),
+                      items:
+                          [
+                                'Ordered',
+                                'Processing',
+                                'Delivered',
+                                'Cancelled',
+                                'Pending',
+                              ]
+                              .map(
+                                (s) => DropdownMenuItem(
+                                  value: s,
+                                  child: StatusBadge(status: s),
+                                ),
+                              )
+                              .toList(),
+                      selectedItemBuilder: (context) => [
+                            'Ordered',
+                            'Processing',
+                            'Delivered',
+                            'Cancelled',
+                            'Pending',
+                          ]
+                          .map((s) => Align(
+                                alignment: Alignment.centerLeft,
+                                child: StatusBadge(status: s),
+                              ))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) updateStatus('${o['id']}', v);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
           const SizedBox(height: 16),
@@ -4160,7 +4221,7 @@ class _AdminPageState extends State<AdminPage> {
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
-                      'Sales Comparison — Today / Week / Month / All Time',
+                      'Sales Comparison — Today / Week / Month / Year',
                       style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -4715,7 +4776,7 @@ class _AdminPageState extends State<AdminPage> {
                         Icons.location_on,
                         const Color(0xFFE53935),
                         '${products.length}',
-                        'Menu',
+                        'Product',
                       ),
                       _homeStatCard(
                         Icons.people,
@@ -4813,7 +4874,7 @@ class _AdminPageState extends State<AdminPage> {
                       onPressed: () => _openMobilePage('upload'),
                       icon: const Icon(Icons.add),
                       label: const Text(
-                        'Add New Menu Item',
+                        'Add New Product ',
                         style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -5060,9 +5121,9 @@ class _AdminPageState extends State<AdminPage> {
   Widget topbarWidget(bool mobile) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: mobile ? 12 : 28, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Color(0x0F000000), blurRadius: 8)],
+      decoration: BoxDecoration(
+        color: loginBlue,
+        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 8)],
       ),
       child: Row(
         children: [
@@ -5073,10 +5134,10 @@ class _AdminPageState extends State<AdminPage> {
               child: Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  boxShadow: const [
+                  boxShadow: [
                     BoxShadow(color: Color(0x1A000000), blurRadius: 6),
                   ],
                 ),
@@ -5086,6 +5147,10 @@ class _AdminPageState extends State<AdminPage> {
           else
             OutlinedButton(
               onPressed: () => Navigator.maybePop(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white70),
+              ),
               child: const Text('← Back', style: TextStyle(fontSize: 12)),
             ),
           const SizedBox(width: 10),
@@ -5095,17 +5160,24 @@ class _AdminPageState extends State<AdminPage> {
               style: TextStyle(
                 fontSize: mobile ? 16 : 18,
                 fontWeight: FontWeight.w700,
-                color: tealDark,
+                color: Colors.white,
               ),
             ),
           ),
           if (!mobile) ...[
             Text(
               '${DateTime.now().weekday.weekdayName()}, ${DateTime.now().day} ${monthName(DateTime.now().month)} ${DateTime.now().year}',
-              style: TextStyle(fontSize: 13, color: muted),
+              style: const TextStyle(fontSize: 13, color: Colors.white70),
             ),
             const SizedBox(width: 14),
-            OutlinedButton(onPressed: () {}, child: const Text('🔔')),
+            OutlinedButton(
+              onPressed: () {},
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white70),
+              ),
+              child: const Text('🔔'),
+            ),
             const SizedBox(width: 10),
             ElevatedButton(
               style: ElevatedButton.styleFrom(

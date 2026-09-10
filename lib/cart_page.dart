@@ -731,6 +731,8 @@ class CartPage extends StatelessWidget {
 class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
   int _qty = 1;
 
+  static const String _brandName = "SUMATHI'S STYLE";
+
   Product get product => widget.product;
 
   double get _rating {
@@ -870,7 +872,6 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
               product.price;
           final description =
               '${data['description'] ?? ''}'.trim();
-          final stock = '${data['stock'] ?? 'Available'}';
 
           final highlights = data['highlights'] is List
               ? List<dynamic>.from(data['highlights'])
@@ -955,6 +956,19 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
+                      // Brand name label
+                      const Text(
+                        _brandName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                          color: AppColors.primary,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
                       Text(
                         name,
                         style: const TextStyle(
@@ -992,7 +1006,7 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                           ),
                           const SizedBox(width: 10),
                           const Text(
-                            'Free Delivery',
+                            'New Listing',
                             style: TextStyle(color: AppColors.textLight, fontSize: 12),
                           ),
                         ],
@@ -1009,115 +1023,24 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                         ),
                       ),
 
-                      const SizedBox(height: 4),
-
-                      const Text(
-                        'Inclusive of all taxes',
-                        style: TextStyle(fontSize: 12, color: AppColors.textLight),
-                      ),
-
                       const SizedBox(height: 10),
 
-                                     Container(
-                        padding:
-                            const EdgeInsets.symmetric(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: stock
-                                  .toLowerCase()
-                                  .contains('available')
-                              ? Colors.green.withValues(
-                                  alpha: 0.10,
-                                )
-                              : Colors.orange.withValues(
-                                  alpha: 0.10,
-                                ),
-                          borderRadius:
-                              BorderRadius.circular(6),
+                          color: Colors.green.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(
-                          stock,
+                        child: const Text(
+                          'Free delivery above ₹500',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: stock
-                                    .toLowerCase()
-                                    .contains('available')
-                                ? Colors.green.shade700
-                                : Colors.orange.shade800,
+                            color: Color(0xFF2E7D32),
                           ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.gray),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          children: [
-                            InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () async {
-                                final picked = await LocationPickerSheet.show(context);
-                                if (picked != null) {
-                                  final display = picked.addressLine.trim().isNotEmpty
-                                      ? picked.addressLine
-                                      : (picked.label.isNotEmpty
-                                          ? picked.label
-                                          : 'Selected location');
-                                                                    await AppState.instance.setDeliveryLocation(
-                                    display,
-                                    lat: picked.latitude,
-                                    lng: picked.longitude,
-                                    pincode: picked.pincode,
-                                  );
-                                  setState(() {});
-                                }
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        AppState.instance.deliveryLocation.trim().isNotEmpty
-                                            ? AppState.instance.deliveryLocation
-                                            : 'Add a delivery address',
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
-                                      ),
-                                    ),
-                                    const Icon(Icons.chevron_right, size: 18, color: AppColors.textLight),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const Divider(height: 1, indent: 12, endIndent: 12),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.local_shipping_outlined, size: 18, color: AppColors.primary),
-                                  SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'Custom stitched — delivered within 10–15 days',
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
                         ),
                       ),
 
@@ -1163,7 +1086,149 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                           ),
                         ],
                       ),
+
+                      const SizedBox(height: 18),
+
+                      // -----------------------------------------------
+                      // ADD TO CART / BUY NOW (moved right under Qty)
+                      // -----------------------------------------------
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 50,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.primary,
+                                  side: const BorderSide(color: AppColors.primary),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                onPressed: () {
+                                  if (_isInCart) {
+                                    _goToCart();
+                                  } else {
+                                    AppState.instance.addToCart(product.copyWith(qty: _qty));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('${product.name} added to cart! 🛒'),
+                                        action: SnackBarAction(label: 'VIEW CART', onPressed: _goToCart),
+                                      ),
+                                    );
+                                  }
+                                  setState(() {});
+                                },
+                                icon: Icon(_isInCart ? Icons.shopping_cart_checkout : Icons.shopping_cart, size: 18),
+                                label: Text(_isInCart ? 'View Cart' : 'Add to Cart'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SizedBox(
+                              height: 50,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CheckoutPage(
+                                        items: [product],
+                                        fromCart: true,
+                                        quantities: {product.id: _qty},
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(
+                                  Icons.flash_on,
+                                  size: 20,
+                                ),
+                                label: const Text(
+                                  'Buy Now',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.gold,
+                                  foregroundColor: AppColors.dark,
+                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
+                  ),
+                ),
+
+                // -------------------------------------------------------
+                // DELIVERY DETAILS (address + custom stitching note)
+                // -------------------------------------------------------
+
+                _detailSection(
+                  title: 'Delivery details',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.gray),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () async {
+                            // LocationPickerSheet already updates AppState
+                            // (including the addressId used for the
+                            // "Selected" chip) before it pops, so nothing
+                            // else needs to happen here.
+                            await LocationPickerSheet.show(context);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    AppState.instance.deliveryLocation.trim().isNotEmpty
+                                        ? AppState.instance.deliveryLocation
+                                        : 'Add a delivery address',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right, size: 18, color: AppColors.textLight),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1, indent: 12, endIndent: 12),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              Icon(Icons.local_shipping_outlined, size: 18, color: AppColors.primary),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Custom stitched — delivered within 10–15 days',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
@@ -1185,10 +1250,19 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                   ),
 
                 // -------------------------------------------------------
-                // HIGHLIGHTS
+                // PRODUCT HIGHLIGHTS
                 // -------------------------------------------------------
 
-                         // -------------------------------------------------------
+                if (highlights.isNotEmpty)
+                  _detailSection(
+                    title: 'Product Highlights',
+                    child: Text(
+                      highlights.map((h) => '• $h').join('\n'),
+                      style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
+                    ),
+                  ),
+
+                // -------------------------------------------------------
                 // PRICE TAGS / VARIATIONS
                 // -------------------------------------------------------
 
@@ -1241,113 +1315,6 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                       }).toList(),
                     ),
                   ),
-
-                // -------------------------------------------------------
-                // BUY NOW
-                // -------------------------------------------------------
-
-                   Padding(
-                  padding:
-                      const EdgeInsets.fromLTRB(
-                    16,
-                    14,
-                    16,
-                    0,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 52,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            onPressed: () {
-                              if (_isInCart) {
-                                _goToCart();
-                              } else {
-                                AppState.instance.addToCart(product.copyWith(qty: _qty));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('${product.name} added to cart! 🛒'),
-                                    action: SnackBarAction(label: 'VIEW CART', onPressed: _goToCart),
-                                  ),
-                                );
-                              }
-                              setState(() {});
-                            },
-                            icon: Icon(_isInCart ? Icons.shopping_cart_checkout : Icons.shopping_cart, size: 18),
-                            label: Text(_isInCart ? 'View Cart' : 'Add to Cart'),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: SizedBox(
-                          height: 52,
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CheckoutPage(
-                                    items: [product],
-                                    fromCart: true,
-                                    quantities: {product.id: _qty},
-                                  ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.flash_on,
-                              size: 20,
-                            ),
-                            label: const Text(
-                              'Buy Now',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.gold,
-                              foregroundColor:
-                                  AppColors.dark,
-                              elevation: 2,
-                              shape:
-                                  RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (highlights.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Product Highlights',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          highlights.map((h) => '• $h').join('\n'),
-                          style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
           );

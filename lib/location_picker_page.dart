@@ -12,10 +12,12 @@
 // Works with:
 //   - location_map_picker_page.dart
 //   - api_service.dart
+//   - app_state.dart
 //   - app_colors.dart
 //
 // Features:
-//   • Saved addresses
+//   • Saved addresses (Flipkart-style card: recipient name, Selected
+//     chip, address, mobile number)
 //   • Search saved addresses
 //   • Use current location
 //   • Add New
@@ -26,6 +28,12 @@
 //   • GPS timeout fallback
 //   • Reverse geocoding
 //
+// Every exit path (pick a saved address, use current location, add/edit
+// on the map) now updates AppState.instance's delivery location itself,
+// including the address id — so the "Selected" chip and the header's
+// deliver-to line always stay correct no matter which page opened this
+// sheet.
+//
 
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
@@ -33,6 +41,7 @@ import 'package:geolocator/geolocator.dart';
 
 import 'api_service.dart';
 import 'app_colors.dart';
+import 'app_state.dart';
 import 'location_map_picker_page.dart';
 
 class LocationPickerSheet extends StatefulWidget {
@@ -147,13 +156,15 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
     }
 
     final results = _allAddresses.where((address) {
+      final name = address.name?.toLowerCase() ?? '';
       final label = address.label.toLowerCase();
       final addressLine = address.addressLine.toLowerCase();
       final city = address.city.toLowerCase();
       final pincode = address.pincode.toLowerCase();
       final phone = address.phone?.toLowerCase() ?? '';
 
-      return label.contains(query) ||
+      return name.contains(query) ||
+          label.contains(query) ||
           addressLine.contains(query) ||
           city.contains(query) ||
           pincode.contains(query) ||
@@ -163,6 +174,27 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
     setState(() {
       _filteredAddresses = results;
     });
+  }
+
+  // ============================================================
+  // FINISH — updates AppState delivery location + pops the sheet.
+  // Used by every exit path (saved address tap, current location,
+  // add/edit via map) so the "Selected" chip and header stay correct
+  // no matter which page opened this sheet.
+  // ============================================================
+
+  Future<void> _finishWithAddress(ShopAddress address) async {
+    await AppState.instance.setDeliveryLocation(
+      _formatAddress(address),
+      lat: address.latitude,
+      lng: address.longitude,
+      pincode: address.pincode,
+      addressId: address.id,
+    );
+
+    if (!mounted) return;
+
+    Navigator.pop(context, address);
   }
 
   // ============================================================
@@ -351,7 +383,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
 
         if (!mounted) return;
 
-        Navigator.pop(context, result);
+        await _finishWithAddress(result);
       }
     } catch (_) {
       if (!mounted) return;
@@ -495,7 +527,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
 
     if (!mounted) return;
 
-    Navigator.pop(context, result);
+    await _finishWithAddress(result);
   }
 
   // ============================================================
@@ -521,7 +553,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
             ),
           ),
           content: Text(
-            'Are you sure you want to remove "${address.label}" from your saved addresses?',
+            'Are you sure you want to remove "${address.name?.trim().isNotEmpty == true ? address.name : address.label}" from your saved addresses?',
           ),
           actions: [
             TextButton(
@@ -568,7 +600,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
   // ============================================================
 
   void _selectAddress(ShopAddress address) {
-    Navigator.pop(context, address);
+    _finishWithAddress(address);
   }
 
   // ============================================================
@@ -615,7 +647,9 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
               top: Radius.circular(20),
             ),
           ),
-          child: ListView(
+          child: AnimatedBuilder(
+            animation: AppState.instance,
+            builder: (context, _) => ListView(
             controller: scrollController,
             padding: const EdgeInsets.fromLTRB(
               16,
@@ -870,6 +904,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                   (address) => _addressCard(address),
                 ),
             ],
+            ),
           ),
         );
       },
@@ -972,13 +1007,22 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
   }
 
   // ============================================================
-  // ADDRESS CARD
+  // ADDRESS CARD (Flipkart-style: name + Selected chip, address,
+  // phone — label/Home-Work only drives the small leading icon)
   // ============================================================
 
   Widget _addressCard(
     ShopAddress address,
   ) {
     final isWork = address.label.toLowerCase() == 'work';
+
+    final bool isSelected =
+        AppState.instance.deliveryAddressId == address.id;
+
+    final String displayName =
+        (address.name != null && address.name!.trim().isNotEmpty)
+            ? address.name!.trim()
+            : (address.label.isNotEmpty ? address.label : 'Address');
 
     return Padding(
       padding: const EdgeInsets.only(
@@ -992,9 +1036,14 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
           child: Container(
             padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isSelected
+                  ? AppColors.primary.withOpacity(0.04)
+                  : Colors.white,
               border: Border.all(
-                color: AppColors.gray,
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.gray,
+                width: isSelected ? 1.4 : 1,
               ),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -1033,14 +1082,46 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        address.label.isNotEmpty
-                            ? address.label
-                            : 'Address',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
+                      Row(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+
+                          if (isSelected) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary
+                                    .withOpacity(0.10),
+                                borderRadius:
+                                    BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Selected',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
 
                       const SizedBox(height: 5),

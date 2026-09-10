@@ -1000,7 +1000,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-                Container(
+                             Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1016,9 +1016,32 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Deliver To',
-                      style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Deliver To',
+                          style: TextStyle(fontSize: 11, color: AppColors.textLight),
+                        ),
+                        InkWell(
+                          onTap: _placingOrder
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _step = 0;
+                                  });
+                                },
+                          child: const Text(
+                            'Change',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -1043,7 +1066,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ],
           ),
-        ),
+        ),  
 
         const SizedBox(height: 12),
 

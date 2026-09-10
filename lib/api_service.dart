@@ -34,6 +34,7 @@ class StitchingService {
 class ShopAddress {
   final String id;
   final String label;
+  final String? name; // recipient full name (Flipkart-style address card)
   final String addressLine;
   final String city;
   final String pincode;
@@ -44,6 +45,7 @@ class ShopAddress {
   const ShopAddress({
     required this.id,
     required this.label,
+    this.name,
     required this.addressLine,
     required this.city,
     required this.pincode,
@@ -227,6 +229,7 @@ class ApiService {
         return ShopAddress(
           id: doc.id,
           label: item['label']?.toString() ?? 'Other',
+          name: item['name']?.toString(),
           addressLine: item['address_line']?.toString() ?? '',
           city: item['city']?.toString() ?? '',
           pincode: item['pincode']?.toString() ?? '',
@@ -252,6 +255,7 @@ class ApiService {
         .doc(address.id)
         .set({
       'label': address.label,
+      'name': address.name,
       'address_line': address.addressLine,
       'city': address.city,
       'pincode': address.pincode,
@@ -277,6 +281,7 @@ class ApiService {
         .doc(address.id)
         .set({
       'label': address.label,
+      'name': address.name,
       'address_line': address.addressLine,
       'city': address.city,
       'pincode': address.pincode,

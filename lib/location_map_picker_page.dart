@@ -14,7 +14,8 @@
 //   - Use my current location
 //   - Resolved locality chip
 //   - Deliver To summary
-//   - Add address Details
+//   - Confirm Location -> opens Address Details sheet (name/phone always
+//     required, matching Flipkart — no more anonymous "Other" saves)
 //
 // STEP 3 - Address Details:
 //   - Flat / House / Building name
@@ -799,6 +800,12 @@ class _LocationMapPickerPageState
   // STEP 3
   // ADDRESS DETAILS SHEET
   // =========================================================================
+  //
+  // This is now the ONLY way to save an address — "Confirm Location"
+  // below opens this same sheet, so every saved address always carries
+  // a recipient name + phone number (matching Flipkart's flow) instead
+  // of silently saving as a nameless "Other" entry.
+  // =========================================================================
 
   Future<void> _openAddressDetailsSheet() async {
     if (_fullAddress.trim().isEmpty) {
@@ -833,6 +840,9 @@ class _LocationMapPickerPageState
           initialFlatHouse:
               widget.editingAddress?.addressLine,
 
+          initialFullName:
+              widget.editingAddress?.name,
+
           initialPhone:
               widget.editingAddress?.phone,
 
@@ -849,57 +859,6 @@ class _LocationMapPickerPageState
     );
   }
 
-    // =========================================================================
-  // CONFIRM LOCATION (quick save — no name/phone form)
-  // =========================================================================
-
-  Future<void> _confirmLocationDirectly() async {
-    if (_fullAddress.trim().isEmpty) {
-      _showSnack(
-        'Please wait for the address to resolve, or search above.',
-      );
-
-      return;
-    }
-
-    final ShopAddress address = ShopAddress(
-      id: widget.editingAddress?.id ??
-          'a${DateTime.now().millisecondsSinceEpoch}',
-
-      label: widget.editingAddress?.label ?? 'Other',
-
-      addressLine: _fullAddress.trim(),
-
-      city: _city.trim(),
-
-      pincode: _pincode.trim(),
-
-      phone: widget.editingAddress?.phone,
-
-      latitude: _pinPosition.latitude,
-
-      longitude: _pinPosition.longitude,
-    );
-
-       try {
-      if (widget.editingAddress != null) {
-        await ApiService.instance.updateAddress(address);
-      } else {
-        await ApiService.instance.addAddress(address);
-      }
-    } catch (e) {
-      debugPrint('❌ Confirm Location save failed: $e');
-      if (mounted) {
-        _showSnack('Could not save address: $e');
-      }
-      return;
-    }
-
-    if (!mounted) return;
-
-    Navigator.pop(context, address);
-  }
-
   // =========================================================================
   // SAVE ADDRESS
   // =========================================================================
@@ -911,17 +870,8 @@ class _LocationMapPickerPageState
     String altPhone,
     String label,
   ) async {
-    // ---------------------------------------------------------------
-    // MODEL DOES NOT HAVE:
-    // recipientName
-    // alternatePhone
-    //
-    // So full name is folded into addressLine.
-    // ---------------------------------------------------------------
-
     final List<String> addressParts = [
       flatHouse,
-      fullName,
       _fullAddress,
     ]
         .where(
@@ -942,6 +892,8 @@ class _LocationMapPickerPageState
           'a${DateTime.now().millisecondsSinceEpoch}',
 
       label: label,
+
+      name: fullName.trim(),
 
       addressLine: addressLine,
 
@@ -1544,7 +1496,9 @@ class _LocationMapPickerPageState
                                 const SizedBox(height: 14),
 
                 // -----------------------------------------------------------
-                // CONFIRM LOCATION (saves immediately, no extra form)
+                // CONFIRM LOCATION — opens the Address Details sheet so a
+                // recipient name + phone is always captured before saving
+                // (matches Flipkart, and fixes the nameless "Other" card).
                 // -----------------------------------------------------------
 
                 SizedBox(
@@ -1552,7 +1506,7 @@ class _LocationMapPickerPageState
 
                   child: FilledButton(
                     onPressed:
-                        _confirmLocationDirectly,
+                        _openAddressDetailsSheet,
 
                     style:
                         FilledButton.styleFrom(
@@ -1565,34 +1519,6 @@ class _LocationMapPickerPageState
 
                     child: const Text(
                       'Confirm Location',
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // -----------------------------------------------------------
-                // ADD ADDRESS DETAILS (optional — name/phone/home-work)
-                // -----------------------------------------------------------
-
-                SizedBox(
-                  width: double.infinity,
-
-                  child: OutlinedButton(
-                    onPressed:
-                        _openAddressDetailsSheet,
-
-                    style:
-                        OutlinedButton.styleFrom(
-                      padding:
-                          const EdgeInsets
-                              .symmetric(
-                        vertical: 14,
-                      ),
-                    ),
-
-                    child: const Text(
-                      'Add more details (optional)',
                     ),
                   ),
                 ),
@@ -1615,6 +1541,7 @@ class _AddressDetailsSheet
   final String resolvedLocality;
 
   final String? initialFlatHouse;
+  final String? initialFullName;
   final String? initialPhone;
   final String? initialLabel;
 
@@ -1633,6 +1560,7 @@ class _AddressDetailsSheet
     required this.onChangeLocation,
     required this.onSave,
     this.initialFlatHouse,
+    this.initialFullName,
     this.initialPhone,
     this.initialLabel,
   });
@@ -1654,9 +1582,8 @@ class _AddressDetailsSheetState
   late final TextEditingController
       _flatHouseController;
 
-  final TextEditingController
-      _fullNameController =
-      TextEditingController();
+  late final TextEditingController
+      _fullNameController;
 
   late final TextEditingController
       _phoneController;
@@ -1684,6 +1611,11 @@ class _AddressDetailsSheetState
     _flatHouseController =
         TextEditingController(
       text: widget.initialFlatHouse ?? '',
+    );
+
+    _fullNameController =
+        TextEditingController(
+      text: widget.initialFullName ?? '',
     );
 
     _phoneController =
