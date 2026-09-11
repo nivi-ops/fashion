@@ -238,7 +238,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Contact details used by Help Center's Call Us / Mail Us buttons.
   static const String _supportPhone = '+918610703658';
-  static const String _supportEmail = 'divyadeveloper2025gmail.com.com';
+  static const String _supportEmail = 'divyadeveloper2025@gmail.com';
 
   final List<Map<String, String>> _faqData = const [
     {
@@ -1779,8 +1779,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _orderCard(MyOrder o) {
-    final canCancel = o.status != 'Cancelled' && o.status != 'Delivered';
+     Widget _orderCard(MyOrder o) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -1881,28 +1880,13 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ),
           ),
-          if (canCancel)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton(
-                  onPressed: () => _confirmCancelOrder(o),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.danger,
-                    side: const BorderSide(color: AppColors.danger),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  ),
-                  child: const Text('Cancel Order', style: TextStyle(fontSize: 12.5)),
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  void _openOrderDetails(MyOrder o) {
+       void _openOrderDetails(MyOrder o) {
+    final canCancel = o.status != 'Cancelled' && o.status != 'Delivered';
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1911,6 +1895,8 @@ class _SettingsPageState extends State<SettingsPage> {
           savedAddress: _addresses.isNotEmpty ? _addresses.first : null,
           onCallHelp: _callUs,
           onMailHelp: _mailUs,
+          onChatHelp: () => _showToast("Chat support coming soon — please call or mail us for now!"),
+          onCancelOrder: canCancel ? () => _confirmCancelOrder(o) : null,
         ),
       ),
     );
@@ -3022,24 +3008,22 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _panelHeader('Help Center', Icons.support_agent),
+        _panelHeader('Customer Support', Icons.support_agent),
         const Icon(Icons.support_agent, size: 44, color: AppColors.primary),
         const SizedBox(height: 12),
-        const Text("We're Here to Help!", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const Text(
+          "We're Happy to Help!",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
         const SizedBox(height: 10),
         const Text(
-          'If you have questions about your order, contact us using the number below. Feedback and suggestions are always welcome via email.',
+          "Have an idea to improve our app or a feature you'd like to see? "
+          'Share your ideas, feedback, or suggestions with us. ' 
+          'Your valuable input may help shape our future updates.',
           style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
-        ElevatedButton.icon(
-          onPressed: _callUs,
-          style: _saveBtnStyle().copyWith(minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 46))),
-          icon: const Icon(Icons.call, size: 16),
-          label: const Text('Call Us'),
-        ),
-        const SizedBox(height: 10),
         ElevatedButton.icon(
           onPressed: _mailUs,
           style: ElevatedButton.styleFrom(
@@ -3051,9 +3035,23 @@ class _SettingsPageState extends State<SettingsPage> {
           icon: const Icon(Icons.email, size: 16),
           label: const Text('Mail Us'),
         ),
+        const SizedBox(height: 10),
+        const Center(
+          child: Text(
+            'divyadeveloper2025@gmail.com',
+            style: TextStyle(
+              fontSize: 11.5,
+              color: AppColors.textLight,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
         const SizedBox(height: 14),
-        const Text('We usually respond within 24-48 hours.',
-            style: TextStyle(fontSize: 11.5, color: AppColors.textLight)),
+                      const Text(
+          "Your feedback helps us make Sumathi's Style better with every update.",
+          style: TextStyle(fontSize: 11.5, color: AppColors.textLight),
+          textAlign: TextAlign.center,
+        ),
       ],
     );
   }
@@ -3537,11 +3535,13 @@ class _PolicySection extends StatelessWidget {
 /// our delivery promise. No payment-retry / live-courier UI since this
 /// app doesn't have that data yet.
 /// ---------------------------------------------------------------------
-class OrderDetailsPage extends StatelessWidget {
+ class OrderDetailsPage extends StatelessWidget {
   final MyOrder order;
   final SavedAddress? savedAddress;
   final VoidCallback onCallHelp;
   final VoidCallback onMailHelp;
+  final VoidCallback? onChatHelp;
+  final VoidCallback? onCancelOrder;
 
   const OrderDetailsPage({
     super.key,
@@ -3549,6 +3549,8 @@ class OrderDetailsPage extends StatelessWidget {
     required this.savedAddress,
     required this.onCallHelp,
     required this.onMailHelp,
+    this.onChatHelp,
+    this.onCancelOrder,
   });
 
   Color _statusColor(String status) {
@@ -3571,6 +3573,117 @@ class OrderDetailsPage extends StatelessWidget {
     );
   }
 
+  // -------------------------------------------------------------------
+  // HELP SHEET — Flipkart-style: Chat / Call / Mail, and Cancel Order
+  // only shown when the order is still cancellable.
+  // -------------------------------------------------------------------
+  void _showHelpSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('How can we help?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 4),
+                Text('Order #${order.id}', style: const TextStyle(fontSize: 12.5, color: AppColors.textLight)),
+                const SizedBox(height: 16),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.chat_bubble_outline,
+                  title: 'Chat with us',
+                  subtitle: 'Get instant help from our support team',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    onChatHelp?.call();
+                  },
+                ),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.call_outlined,
+                  title: 'Call Us',
+                  subtitle: 'Speak directly with our team',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    onCallHelp();
+                  },
+                ),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.email_outlined,
+                  title: 'Mail Us',
+                  subtitle: 'Send us your query via email',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    onMailHelp();
+                  },
+                ),
+                if (onCancelOrder != null)
+                  _helpOption(
+                    sheetCtx,
+                    icon: Icons.cancel_outlined,
+                    title: 'Cancel Order',
+                    subtitle: 'Cancel this order if stitching has not started',
+                    danger: true,
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      onCancelOrder?.call();
+                    },
+                  ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _helpOption(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    final color = danger ? AppColors.danger : AppColors.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: danger ? AppColors.danger : AppColors.text)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(fontSize: 11.5, color: AppColors.textLight)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _timeline() {
     final steps = [
       ('Order Confirmed', order.orderedAt),
@@ -3583,38 +3696,59 @@ class OrderDetailsPage extends StatelessWidget {
             ? 1
             : 0;
 
-    return Row(
-      children: List.generate(steps.length * 2 - 1, (i) {
-        if (i.isOdd) {
-          final stepIndex = i ~/ 2;
-          final done = stepIndex < reachedIndex;
-          return Expanded(
-            child: Container(height: 3, color: done ? AppColors.primary : const Color(0xFFE0E0E0)),
-          );
-        }
-        final stepIndex = i ~/ 2;
-        final label = steps[stepIndex].$1;
-        final date = steps[stepIndex].$2;
-        final reached = stepIndex <= reachedIndex;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              reached ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: 20,
-              color: reached ? AppColors.primary : const Color(0xFFBDBDBD),
-            ),
-            const SizedBox(height: 5),
-            Text(label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
-                  color: reached ? AppColors.text : AppColors.textLight,
-                )),
-            if (reached && date.trim().isNotEmpty)
-              Text(date, style: const TextStyle(fontSize: 9, color: AppColors.textLight)),
-          ],
+    return Column(
+      children: List.generate(steps.length, (index) {
+        final label = steps[index].$1;
+        final date = steps[index].$2;
+        final reached = index <= reachedIndex;
+        final isLast = index == steps.length - 1;
+
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  Icon(
+                    reached ? Icons.check_circle : Icons.radio_button_unchecked,
+                    size: 20,
+                    color: reached ? AppColors.primary : const Color(0xFFBDBDBD),
+                  ),
+                  if (!isLast)
+                    Expanded(
+                      child: Container(
+                        width: 2,
+                        margin: const EdgeInsets.symmetric(vertical: 2),
+                        color: index < reachedIndex ? AppColors.primary : const Color(0xFFE0E0E0),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
+                          color: reached ? AppColors.text : AppColors.textLight,
+                        ),
+                      ),
+                      if (reached && date.trim().isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(date, style: const TextStyle(fontSize: 11, color: AppColors.textLight)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       }),
     );
@@ -3633,7 +3767,7 @@ class OrderDetailsPage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: OutlinedButton(
-              onPressed: onCallHelp,
+              onPressed: () => _showHelpSheet(context),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.text,
                 side: const BorderSide(color: Color(0xFFDDDDDD)),
@@ -3819,15 +3953,15 @@ class OrderDetailsPage extends StatelessWidget {
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEEEEEE))),
               child: const Row(
                 children: [
-                  Icon(Icons.autorenew, size: 22, color: AppColors.primary),
+                  Icon(Icons.content_cut, size: 22, color: AppColors.primary),
                   SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Easy Exchange', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                        Text('Alteration Available', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                         SizedBox(height: 3),
-                        Text('For sizing issues, contact us within 3 days of delivery.',
+                        Text('For fitting issues, contact us within 3 days of delivery for alteration.',
                             style: TextStyle(fontSize: 12, color: AppColors.textLight)),
                       ],
                     ),
@@ -3841,3 +3975,4 @@ class OrderDetailsPage extends StatelessWidget {
     );
   }
 }
+

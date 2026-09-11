@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:razorpay_flutter/razorpay_flutter.dart';
@@ -54,9 +55,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _addressCtrl = TextEditingController();
   final TextEditingController _pincodeCtrl = TextEditingController();
 
+  // Card fields shown on the Payments step. Actual secure card entry
+  // still happens inside Razorpay's own checkout sheet (PCI-compliant) —
+  // these are just the visible Flipkart-style fields on our screen.
+  final TextEditingController _cardNumberCtrl = TextEditingController();
+  final TextEditingController _cardExpiryCtrl = TextEditingController();
+  final TextEditingController _cardCvvCtrl = TextEditingController();
+
   PaymentMethod _payment = PaymentMethod.upi;
 
-    bool _placingOrder = false;
+  // Which accordion section is open on the Payments step. UPI is
+  // expanded by default, matching the reference screenshots.
+  PaymentMethod? _expandedMethod = PaymentMethod.upi;
+
+  bool _placingOrder = false;
   String? _previewOrderId;
 
   Future<String> _getOrGenerateOrderId() async {
@@ -142,7 +154,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       _nameCtrl.text = state.userName ?? '';
       _phoneCtrl.text = state.userId ?? '';
     }
-          // Auto-fill the delivery address fields from the most recently
+    // Auto-fill the delivery address fields from the most recently
     // confirmed/saved address (via LocationMapPickerPage).
     _prefillSavedAddress();
 
@@ -166,6 +178,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
     _pincodeCtrl.dispose();
+
+    _cardNumberCtrl.dispose();
+    _cardExpiryCtrl.dispose();
+    _cardCvvCtrl.dispose();
 
     super.dispose();
   }
@@ -192,15 +208,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // PREFILL SAVED ADDRESS
   // -------------------------------------------------------------------
 
-    @override
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_addressCtrl.text.trim().isEmpty) {
       _prefillSavedAddress();
     }
   }
- 
-    Future<void> _prefillSavedAddress() async {
+
+  Future<void> _prefillSavedAddress() async {
     final state = AppState.instance;
 
     try {
@@ -230,7 +246,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Fall through to the delivery-location fallback below.
     }
 
-        // No saved address on file yet — fall back to whatever address the
+    // No saved address on file yet — fall back to whatever address the
     // user already picked earlier (Home / Shop / Cart / Product Details
     // pages all write to AppState.deliveryLocation via LocationPickerSheet).
     if (!mounted) return;
@@ -295,7 +311,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    // PAYMENT
+    // PAYMENT — handled inline by each accordion section's own button now,
+    // but the bottom bar still works as a fallback trigger for whichever
+    // method is currently selected.
     if (_step == 2) {
       if (_payment == PaymentMethod.cod) {
         _placeCodOrder();
@@ -375,7 +393,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       // Razorpay's own checkout sheet — this is what shows the native
       // UPI app picker (Google Pay / PhonePe / Paytm) and the card
-      // entry screen. We don't need to build those ourselves.
+      // entry screen. We don't need to build those ourselves; the card
+      // fields on our screen are only a Flipkart-style visual cue.
       final options = {
         'key': razorpayKeyId,
         'amount': amountInPaise,
@@ -524,11 +543,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final double orderTotal = _total;
     final phone = _phoneCtrl.text.trim();
 
-        final orderId = await _getOrGenerateOrderId();
+    final orderId = await _getOrGenerateOrderId();
 
     final productNames = widget.items.map((p) => p.name).join(', ');
 
-         await db.collection('orders').add({
+    await db.collection('orders').add({
       'order_id': orderId,
       'name': _nameCtrl.text.trim(),
       'mobile': phone,
@@ -575,11 +594,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final double orderTotal = _total;
       final phone = _phoneCtrl.text.trim();
 
-            final orderId = await _getOrGenerateOrderId();
+      final orderId = await _getOrGenerateOrderId();
 
       final productNames = widget.items.map((p) => p.name).join(', ');
 
-           await db.collection('orders').add({
+      await db.collection('orders').add({
         'order_id': orderId,
         'name': _nameCtrl.text.trim(),
         'mobile': phone,
@@ -702,39 +721,38 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
 
       // ---------------------------------------------------------------
-      // BOTTOM BUTTON
+      // BOTTOM BUTTON — hidden on the Payments step since each accordion
+      // section now has its own inline Pay / Place Order button.
       // ---------------------------------------------------------------
 
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: ElevatedButton(
-            onPressed: _placingOrder ? null : _goNext,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.gold,
-              foregroundColor: AppColors.dark,
-              minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
+      bottomNavigationBar: _step == 2
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: ElevatedButton(
+                  onPressed: _placingOrder ? null : _goNext,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: AppColors.dark,
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: _placingOrder
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        )
+                      : const Text(
+                          'Continue',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                ),
               ),
             ),
-            child: _placingOrder
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : Text(
-                    _step < 2
-                        ? 'Continue'
-                        : _payment == PaymentMethod.cod
-                            ? 'Place Order  •  ₹${_total.toStringAsFixed(0)}'
-                            : 'Pay  •  ₹${_total.toStringAsFixed(0)}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1000,7 +1018,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-                             Container(
+        Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1066,7 +1084,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ],
           ),
-        ),  
+        ),
 
         const SizedBox(height: 12),
 
@@ -1094,7 +1112,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
 
         const SizedBox(height: 18),
-         
 
         const Text(
           'Items',
@@ -1250,7 +1267,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // ===================================================================
-  // PAYMENT SCREEN (compact, Flipkart/Razorpay-native style)
+  // PAYMENT SCREEN — Flipkart/Razorpay-native accordion style
   // ===================================================================
 
   Widget _buildPaymentStep() {
@@ -1312,29 +1329,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
         const SizedBox(height: 14),
 
         // -------------------------------------------------------------
-        // UPI — opens Razorpay's own UPI app picker (GPay/PhonePe/etc.)
+        // UPI — expands to Google Pay + "Pay with other UPI Apps",
+        // both open Razorpay's own native UPI picker.
         // -------------------------------------------------------------
 
-        _paymentTile(
+        _accordionTile(
+          method: PaymentMethod.upi,
           icon: Icons.qr_code_2,
           title: 'UPI',
           subtitle: 'GPay, PhonePe, Paytm & more',
-          selected: _payment == PaymentMethod.upi,
-          onTap: () => setState(() => _payment = PaymentMethod.upi),
+          content: _upiExpandedContent(),
         ),
 
         const SizedBox(height: 10),
 
         // -------------------------------------------------------------
-        // CARD — opens Razorpay's own card entry screen
+        // CARD — expands to Card Number / Valid Thru / CVV fields +
+        // Pay button. Actual entry happens in Razorpay's secure sheet.
         // -------------------------------------------------------------
 
-        _paymentTile(
+        _accordionTile(
+          method: PaymentMethod.card,
           icon: Icons.credit_card_outlined,
           title: 'Credit / Debit / ATM Card',
-          subtitle: 'Secure card payment',
-          selected: _payment == PaymentMethod.card,
-          onTap: () => setState(() => _payment = PaymentMethod.card),
+          subtitle: 'Add and secure cards as per RBI guidelines',
+          content: _cardExpandedContent(),
         ),
 
         const SizedBox(height: 10),
@@ -1343,12 +1362,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
         // COD — fully available, places order directly (no Razorpay)
         // -------------------------------------------------------------
 
-        _paymentTile(
+        _accordionTile(
+          method: PaymentMethod.cod,
           icon: Icons.payments_outlined,
           title: 'Cash on Delivery',
           subtitle: 'Pay when your order arrives',
-          selected: _payment == PaymentMethod.cod,
-          onTap: () => setState(() => _payment = PaymentMethod.cod),
+          availableTag: true,
+          content: _codExpandedContent(),
+        ),
+
+        const SizedBox(height: 10),
+
+        // EMI — not offered, shown disabled to match the reference layout.
+        _disabledTile(
+          icon: Icons.calendar_month_outlined,
+          title: 'EMI',
+        ),
+
+        const SizedBox(height: 20),
+
+        const Center(
+          child: Text(
+            '35 Crore happy customers and counting!',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textLight, fontSize: 13),
+          ),
         ),
 
         const SizedBox(height: 16),
@@ -1379,52 +1417,381 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // ===================================================================
-  // COMPACT PAYMENT TILE (Flipkart-style row, not a huge box)
+  // ACCORDION TILE — header (icon, title, subtitle/tag, chevron) +
+  // collapsible content, single-open behaviour.
   // ===================================================================
 
-  Widget _paymentTile({
+  Widget _accordionTile({
+    required PaymentMethod method,
     required IconData icon,
     required String title,
     required String subtitle,
-    required bool selected,
-    required VoidCallback onTap,
+    required Widget content,
+    bool availableTag = false,
   }) {
-    return InkWell(
-      onTap: _placingOrder ? null : onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? AppColors.primary : Colors.grey.shade300,
-            width: selected ? 1.4 : 1,
-          ),
+    final expanded = _expandedMethod == method;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: expanded ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey.shade300,
         ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: selected ? AppColors.primary : Colors.grey.shade700),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: _placingOrder
+                ? null
+                : () {
+                    setState(() {
+                      _payment = method;
+                      _expandedMethod = expanded ? null : method;
+                    });
+                  },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 1),
-                  Text(subtitle, style: const TextStyle(fontSize: 10.5, color: AppColors.textLight)),
+                  Icon(icon, size: 20, color: Colors.black87),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                        if (!expanded) ...[
+                          const SizedBox(height: 2),
+                          Text(subtitle, style: const TextStyle(fontSize: 11.5, color: AppColors.textLight)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (availableTag)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Available',
+                        style: TextStyle(color: Color(0xFF2E7D32), fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20),
                 ],
               ),
             ),
-            Icon(
-              selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              size: 18,
-              color: selected ? AppColors.primary : AppColors.textLight,
+          ),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: content,
             ),
-          ],
-        ),
+        ],
       ),
+    );
+  }
+
+  // ===================================================================
+  // EMI — always disabled/unavailable, non-interactive
+  // ===================================================================
+
+  Widget _disabledTile({required IconData icon, required String title}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.grey.shade400),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: Colors.grey.shade400)),
+          ),
+          Row(
+            children: [
+              Text('Unavailable', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+              const SizedBox(width: 4),
+              Icon(Icons.help_outline, size: 14, color: Colors.grey.shade400),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===================================================================
+  // UPI EXPANDED CONTENT
+  // ===================================================================
+
+  Widget _upiExpandedContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.primary, width: 1.4),
+          ),
+          child: Column(
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.radio_button_checked, color: AppColors.primary, size: 18),
+                  SizedBox(width: 10),
+                  Text('Google Pay', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  Spacer(),
+                  Icon(Icons.g_mobiledata, size: 26, color: AppColors.primary),
+                ],
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: _placingOrder ? null : _startRazorpayPayment,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: AppColors.dark,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  child: _placingOrder
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                        )
+                      : Text(
+                          'Pay ₹${_total.toStringAsFixed(0)}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: _placingOrder ? null : _startRazorpayPayment,
+          child: Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pay with other UPI Apps',
+                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13.5),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Offers not valid if chosen from here',
+                      style: TextStyle(color: AppColors.textLight, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.primary, size: 18),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ===================================================================
+  // CARD EXPANDED CONTENT
+  // ===================================================================
+
+  Widget _cardExpandedContent() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Card Number', style: TextStyle(fontSize: 12.5, color: AppColors.textLight)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _cardNumberCtrl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(16),
+            ],
+            decoration: InputDecoration(
+              hintText: 'XXXX XXXX XXXX XXXX',
+              hintStyle: TextStyle(color: Colors.grey.shade400, letterSpacing: 2),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+              ),
+              suffixIcon: const Icon(Icons.credit_card, size: 18),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Valid Thru', style: TextStyle(fontSize: 12.5, color: AppColors.textLight)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _cardExpiryCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(4),
+                      ],
+                      decoration: InputDecoration(
+                        hintText: 'MM / YY',
+                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('CVV', style: TextStyle(fontSize: 12.5, color: AppColors.textLight)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _cardCvvCtrl,
+                      keyboardType: TextInputType.number,
+                      obscureText: true,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(3),
+                      ],
+                      decoration: InputDecoration(
+                        hintText: 'CVV',
+                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+                        ),
+                        suffixIcon: const Icon(Icons.help_outline, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton(
+              onPressed: _placingOrder ? null : _startRazorpayPayment,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: AppColors.dark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              ),
+              child: _placingOrder
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : Text(
+                      'Pay ₹${_total.toStringAsFixed(0)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Note: Please ensure your card can be used for online transactions.',
+            style: TextStyle(fontSize: 11, color: AppColors.textLight),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===================================================================
+  // COD EXPANDED CONTENT
+  // ===================================================================
+
+  Widget _codExpandedContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Pay in cash when your order is delivered to your doorstep.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          height: 46,
+          child: ElevatedButton(
+            onPressed: _placingOrder ? null : _placeCodOrder,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: AppColors.dark,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            ),
+            child: _placingOrder
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : Text(
+                    'Place Order  •  ₹${_total.toStringAsFixed(0)}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }
