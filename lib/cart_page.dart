@@ -827,10 +827,10 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
+                   IconButton(
             icon: Icon(
               _isWishlisted ? Icons.favorite : Icons.favorite_border,
-              color: Colors.white,
+              color: _isWishlisted ? Colors.red : Colors.white,
             ),
             onPressed: () => AppState.instance.toggleWishlist(product),
           ),
@@ -904,21 +904,18 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                 // FULL PRODUCT IMAGE / GALLERY
                 // -------------------------------------------------------
 
-                Container(
-                  width: double.infinity,
-                  color: Colors.white,
-                  child: SizedBox(
-                    height: 360,
-                    child: PageView.builder(
-                      itemCount: photos.length,
-                      itemBuilder: (context, index) {
-                        return _detailImage(
-                          photos[index],
-                        );
-                      },
-                    ),
+                                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: PageView.builder(
+                    itemCount: photos.length,
+                    itemBuilder: (context, index) {
+                      return _detailImage(
+                        photos[index],
+                      );
+                    },
                   ),
                 ),
+        
 
                 if (photos.length > 1)
                   Padding(
@@ -1006,7 +1003,7 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                           ),
                           const SizedBox(width: 10),
                           const Text(
-                            'New Listing',
+                            ' ',
                             style: TextStyle(color: AppColors.textLight, fontSize: 12),
                           ),
                         ],
@@ -1035,7 +1032,7 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
-                          'Free delivery above ₹500',
+                          '',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -1362,11 +1359,10 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
         path.startsWith('https://');
 
     if (isNetwork) {
-      return Image.network(
+           return Image.network(
         path,
         width: double.infinity,
-        height: 360,
-        fit: BoxFit.contain,
+        fit: BoxFit.cover,
         loadingBuilder:
             (context, child, loadingProgress) {
           if (loadingProgress == null) {
@@ -1390,11 +1386,10 @@ class _CartProductDetailsPageState extends State<CartProductDetailsPage> {
       );
     }
 
-    return Image.asset(
+        return Image.asset(
       path,
       width: double.infinity,
-      height: 360,
-      fit: BoxFit.contain,
+      fit: BoxFit.cover,
       errorBuilder: (_, __, ___) {
         return const Center(
           child: Icon(

@@ -149,13 +149,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
             ),
             actions: [
-              IconButton(
+                           IconButton(
                 tooltip: 'Wishlist',
                 icon: Icon(
                   isWishlisted
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
                   size: 24,
+                  color: isWishlisted ? Colors.red : Colors.white,
                 ),
                 onPressed: () => state.toggleWishlist(_productWithQty(1)),
               ),
@@ -284,7 +285,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
               ),
               const SizedBox(width: 10),
-              const Text('Free Delivery', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const Text('', style: TextStyle(color: Colors.grey, fontSize: 12)),
             ],
           ),
           const Divider(height: 26),
@@ -294,7 +295,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Inclusive of all taxes',
+            '',
             style: TextStyle(color: Colors.grey, fontSize: 12),
           ),
           const SizedBox(height: 16),

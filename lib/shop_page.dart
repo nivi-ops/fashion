@@ -246,7 +246,7 @@ class _ShopPageState extends State<ShopPage> {
                                       ),
                                       const SizedBox(width: 10),
                                       const Text(
-                                        'New Listing',
+                                        '',
                                         style: TextStyle(color: AppColors.textLight, fontSize: 12),
                                       ),
                                     ],
@@ -264,7 +264,7 @@ class _ShopPageState extends State<ShopPage> {
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Text(
-                                      'Free delivery above ₹500',
+                                      '',
                                       style: TextStyle(
                                         color: Color(0xFF2E7D32),
                                         fontSize: 12,

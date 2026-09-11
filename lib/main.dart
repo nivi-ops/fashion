@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 
 import 'app_colors.dart';
+import 'app_state.dart';
 import 'main_nav_page.dart';
 import 'notification_service.dart';
 
@@ -22,7 +23,11 @@ void main() async {
   // OS Allow/Block permission popup, saving the FCM token to the backend,
   // and the foreground push listener — now lives in ONE place:
   // NotificationService. main.dart no longer duplicates any of that.
-  await NotificationService.instance.init();
+    await NotificationService.instance.init();
+
+  // Restore saved login (userId) so it survives app restarts —
+  // needed for product details page to fetch the saved delivery address.
+  await AppState.instance.loadSavedLogin();
 
   runApp(const MyApp());
 }

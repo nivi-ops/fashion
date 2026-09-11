@@ -24,19 +24,42 @@ class AppState extends ChangeNotifier {
   bool get isLoggedIn => _isLoggedIn;
   String? get userName => _userName;
   String? get userId => _userId;
+ 
+    static const _kUserIdKey = 'user_id';
+  static const _kUserNameKey = 'user_name';
 
-  void login({required String userId, required String userName}) {
+  Future<void> login({required String userId, required String userName}) async {
     _isLoggedIn = true;
     _userId = userId;
     _userName = userName;
     notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kUserIdKey, userId);
+    await prefs.setString(_kUserNameKey, userName);
   }
 
-  void logout() {
+  Future<void> logout() async {
     _isLoggedIn = false;
     _userId = null;
     _userName = null;
     notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kUserIdKey);
+    await prefs.remove(_kUserNameKey);
+  }
+
+  Future<void> loadSavedLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedId = prefs.getString(_kUserIdKey);
+    final savedName = prefs.getString(_kUserNameKey);
+    if (savedId != null && savedId.trim().isNotEmpty) {
+      _isLoggedIn = true;
+      _userId = savedId;
+      _userName = savedName;
+      notifyListeners();
+    }
   }
 
   // ---------------- CART ----------------
