@@ -110,6 +110,8 @@ class _ShopPageState extends State<ShopPage> {
       image: service.imageUrl,
       rating: _ratingFor(service.id),
       qty: qty,
+      description: service.description.trim(),
+      highlights: List<String>.from(service.highlights),
     );
   }
 
@@ -131,346 +133,341 @@ class _ShopPageState extends State<ShopPage> {
           builder: (context, setSheetState) {
             final isWishlisted = AppState.instance.wishlistIds.contains(_productIdFor(service));
             final inCart = _isInCart(service);
+            // Opens almost fully expanded right away so the user isn't stuck
+            // doing a two-step drag (sheet-grow, then list-scroll) before
+            // the content below the fold responds — matches the smoother
+            // single-scroll feel of the Home page product detail screen.
             return DraggableScrollableSheet(
-              initialChildSize: 0.85,
+              initialChildSize: 0.93,
               minChildSize: 0.5,
-              maxChildSize: 0.95,
+              maxChildSize: 1.0,
               expand: false,
               builder: (context, scrollController) {
-                return Container(
-                  decoration: const BoxDecoration(
+                return ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: Container(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView(
-                          controller: scrollController,
-                          padding: EdgeInsets.zero,
-                          children: [
-                            Stack(
+                    // Respects the status bar when the sheet is dragged to
+                    // full height, so the product image never sits flush
+                    // under the clock/notch like it did before.
+                    child: SafeArea(
+                      top: true,
+                      bottom: false,
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 10),
+                          Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView(
+                              controller: scrollController,
+                              padding: EdgeInsets.zero,
                               children: [
-                                AspectRatio(
-                                  aspectRatio: 4 / 3,
-                                  child: Image.network(
-                                    service.imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: AppColors.light,
-                                      alignment: Alignment.center,
-                                      child: const Icon(Icons.checkroom, size: 50),
+                                Stack(
+                                  children: [
+                                    AspectRatio(
+                                      aspectRatio: 4 / 3,
+                                      child: Image.network(
+                                        service.imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          color: AppColors.light,
+                                          alignment: Alignment.center,
+                                          child: const Icon(Icons.checkroom, size: 50),
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    Positioned(
+                                      top: 12,
+                                      right: 12,
+                                      child: InkWell(
+                                                                          onTap: () {
+                                          AppState.instance.toggleWishlist(_productFrom(service, 1));
+                                          setSheetState(() {});
+                                        },
+                                        child: Container(
+                                          width: 36,
+                                          height: 36,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(color: Colors.black26, blurRadius: 6),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            isWishlisted ? Icons.favorite : Icons.favorite_border,
+                                            color: isWishlisted ? const Color(0xFFE53935) : Colors.grey,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Positioned(
-                                  top: 12,
-                                  right: 12,
-                                  child: InkWell(
-                                                                      onTap: () {
-                                      AppState.instance.toggleWishlist(_productFrom(service, 1));
-                                      setSheetState(() {});
-                                    },
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(color: Colors.black26, blurRadius: 6),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        "SUMATHI'S STYLE",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 1,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        service.name,
+                                        style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF388E3C),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _ratingFor(service.id).toStringAsFixed(1),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 3),
+                                                const Icon(Icons.star, color: Colors.white, size: 11),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          const Text(
+                                            '',
+                                            style: TextStyle(color: AppColors.textLight, fontSize: 12),
+                                          ),
                                         ],
                                       ),
-                                      child: Icon(
-                                        isWishlisted ? Icons.favorite : Icons.favorite_border,
-                                        color: isWishlisted ? const Color(0xFFE53935) : Colors.grey,
-                                        size: 18,
+                                      const Divider(height: 26),
+                                      Text(
+                                        '₹${service.price.toStringAsFixed(0)}',
+                                        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                                       ),
-                                    ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          const Text('Qty:', style: TextStyle(fontWeight: FontWeight.w600)),
+                                          const SizedBox(width: 12),
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: const Color(0xFFE0E0E0)),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                IconButton(
+                                                  onPressed: () {
+                                                    if (qty > 1) setSheetState(() => qty--);
+                                                  },
+                                                  icon: const Icon(Icons.remove, size: 16),
+                                                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                                                  padding: EdgeInsets.zero,
+                                                ),
+                                                SizedBox(
+                                                  width: 28,
+                                                  child: Text(
+                                                    '$qty',
+                                                    textAlign: TextAlign.center,
+                                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                                IconButton(
+                                                  onPressed: () {
+                                                    if (qty < 10) setSheetState(() => qty++);
+                                                  },
+                                                  icon: const Icon(Icons.add, size: 16),
+                                                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                                                  padding: EdgeInsets.zero,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 18),
+
+                                      // Add to Cart / View Cart + Buy Now
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: SizedBox(
+                                              height: 46,
+                                              child: ElevatedButton.icon(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: AppColors.primary,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                ),
+                                                onPressed: () {
+                                                  if (inCart) {
+                                                    Navigator.pop(context);
+                                                    _goToCart();
+                                                  } else {
+                                                    _addToCart(service, qty);
+                                                    setSheetState(() {}); // flips this sheet's button
+                                                    setState(() {}); // keeps grid/other state in sync
+                                                  }
+                                                },
+                                                icon: Icon(
+                                                  inCart ? Icons.shopping_cart_checkout : Icons.shopping_cart,
+                                                  size: 16,
+                                                ),
+                                                label: Text(inCart ? 'View Cart' : 'Add to Cart'),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: SizedBox(
+                                              height: 46,
+                                              child: ElevatedButton.icon(
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: AppColors.secondary,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                ),
+                                                onPressed: () {
+                                                  Navigator.pop(context);
+                                                  _bookService(service, qty: qty);
+                                                },
+                                                icon: const Icon(Icons.bolt, size: 16),
+                                                label: const Text('Buy Now'),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+
+                                                            Container(
+                                        padding: const EdgeInsets.all(14),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: const Color(0xFFE0E0E0)),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Delivery details',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            InkWell(
+                                              borderRadius: BorderRadius.circular(8),
+                                              onTap: () async {
+                                                final picked = await LocationPickerSheet.show(context);
+                                                if (picked != null) {
+                                                  final display = picked.addressLine.trim().isNotEmpty
+                                                      ? picked.addressLine
+                                                      : (picked.label.isNotEmpty
+                                                          ? picked.label
+                                                          : 'Selected location');
+                                                                                await AppState.instance.setDeliveryLocation(
+                                    display,
+                                    lat: picked.latitude,
+                                    lng: picked.longitude,
+                                    pincode: picked.pincode,
+                                  );
+                                                  setSheetState(() {});
+                                                }
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Text(
+                                                      AppState.instance.deliveryLocation.trim().isNotEmpty
+                                                          ? AppState.instance.deliveryLocation
+                                                          : 'Add a delivery address',
+                                                      maxLines: 2,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                                    ),
+                                                  ),
+                                                  const Icon(Icons.chevron_right, size: 18, color: AppColors.textLight),
+                                                ],
+                                              ),
+                                            ),
+                                            const Divider(height: 20),
+                                            Row(
+                                              children: const [
+                                                Icon(Icons.local_shipping_outlined, size: 18),
+                                                SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Custom stitched — delivered within 10–15 days',
+                                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+
+                                                                        if (service.description.trim().isNotEmpty) ...[
+                                        const Text(
+                                          'Description',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          service.description,
+                                          style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.5),
+                                        ),
+                                        const SizedBox(height: 20),
+                                      ],
+                                      if (service.highlights.isNotEmpty) ...[
+                                        const Text(
+                                          'Product Highlights',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          service.highlights.map((h) => '• $h').join('\n'),
+                                          style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    "SUMATHI'S STYLE",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 1,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    service.name,
-                                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF388E3C),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              _ratingFor(service.id).toStringAsFixed(1),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 3),
-                                            const Icon(Icons.star, color: Colors.white, size: 11),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      const Text(
-                                        '',
-                                        style: TextStyle(color: AppColors.textLight, fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                  const Divider(height: 26),
-                                  Text(
-                                    '₹${service.price.toStringAsFixed(0)}',
-                                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE8F5E9),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text(
-                                      '',
-                                      style: TextStyle(
-                                        color: Color(0xFF2E7D32),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Row(
-                                    children: [
-                                      const Text('Qty:', style: TextStyle(fontWeight: FontWeight.w600)),
-                                      const SizedBox(width: 12),
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          border: Border.all(color: const Color(0xFFE0E0E0)),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            IconButton(
-                                              onPressed: () {
-                                                if (qty > 1) setSheetState(() => qty--);
-                                              },
-                                              icon: const Icon(Icons.remove, size: 16),
-                                              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                                              padding: EdgeInsets.zero,
-                                            ),
-                                            SizedBox(
-                                              width: 28,
-                                              child: Text(
-                                                '$qty',
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(fontWeight: FontWeight.w600),
-                                              ),
-                                            ),
-                                            IconButton(
-                                              onPressed: () {
-                                                if (qty < 10) setSheetState(() => qty++);
-                                              },
-                                              icon: const Icon(Icons.add, size: 16),
-                                              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                                              padding: EdgeInsets.zero,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 18),
-
-                                  // Add to Cart / View Cart + Buy Now
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: SizedBox(
-                                          height: 46,
-                                          child: ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.primary,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                            ),
-                                            onPressed: () {
-                                              if (inCart) {
-                                                Navigator.pop(context);
-                                                _goToCart();
-                                              } else {
-                                                _addToCart(service, qty);
-                                                setSheetState(() {}); // flips this sheet's button
-                                                setState(() {}); // keeps grid/other state in sync
-                                              }
-                                            },
-                                            icon: Icon(
-                                              inCart ? Icons.shopping_cart_checkout : Icons.shopping_cart,
-                                              size: 16,
-                                            ),
-                                            label: Text(inCart ? 'View Cart' : 'Add to Cart'),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: SizedBox(
-                                          height: 46,
-                                          child: ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.secondary,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                            ),
-                                            onPressed: () {
-                                              Navigator.pop(context);
-                                              _bookService(service, qty: qty);
-                                            },
-                                            icon: const Icon(Icons.bolt, size: 16),
-                                            label: const Text('Buy Now'),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 20),
-
-                                                        Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: const Color(0xFFE0E0E0)),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Delivery details',
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        InkWell(
-                                          borderRadius: BorderRadius.circular(8),
-                                          onTap: () async {
-                                            final picked = await LocationPickerSheet.show(context);
-                                            if (picked != null) {
-                                              final display = picked.addressLine.trim().isNotEmpty
-                                                  ? picked.addressLine
-                                                  : (picked.label.isNotEmpty
-                                                      ? picked.label
-                                                      : 'Selected location');
-                                                                            await AppState.instance.setDeliveryLocation(
-                                display,
-                                lat: picked.latitude,
-                                lng: picked.longitude,
-                                pincode: picked.pincode,
-                              );
-                                              setSheetState(() {});
-                                            }
-                                          },
-                                          child: Row(
-                                            children: [
-                                              const Icon(Icons.home_outlined, size: 18, color: AppColors.primary),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Text(
-                                                  AppState.instance.deliveryLocation.trim().isNotEmpty
-                                                      ? AppState.instance.deliveryLocation
-                                                      : 'Add a delivery address',
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                                ),
-                                              ),
-                                              const Icon(Icons.chevron_right, size: 18, color: AppColors.textLight),
-                                            ],
-                                          ),
-                                        ),
-                                        const Divider(height: 20),
-                                        Row(
-                                          children: const [
-                                            Icon(Icons.local_shipping_outlined, size: 18),
-                                            SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                'Custom stitched — delivered within 10–15 days',
-                                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-
-                                                                    if (service.description.trim().isNotEmpty) ...[
-                                    const Text(
-                                      'Description',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      service.description,
-                                      style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.5),
-                                    ),
-                                    const SizedBox(height: 20),
-                                  ],
-                                  if (service.highlights.isNotEmpty) ...[
-                                    const Text(
-                                      'Product Highlights',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      service.highlights.map((h) => '• $h').join('\n'),
-                                      style: const TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },

@@ -46,6 +46,13 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   static const Color cream = Color(0xFFF7F3EA);
   static const Color greyText = Color(0xFFA9B8B6);
 
+  // ------------------------------------------------------------
+  // LOGO ASSET PATH
+  // ------------------------------------------------------------
+  // Add this image to your project (e.g. assets/images/logo.png)
+  // and register it under `flutter -> assets` in pubspec.yaml.
+  static const String logoAsset = 'assets/images/app.png';
+
   @override
   void initState() {
     super.initState();
@@ -75,7 +82,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
     );
 
     // ----------------------------------------------------------
-    // SCISSOR ANIMATION
+    // SCISSOR ANIMATION (kept for arrow-nudge + footer motifs)
     // ----------------------------------------------------------
 
     _scissorController = AnimationController(
@@ -144,23 +151,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Scissor icon
-                  Container(
-                    height: 62,
-                    width: 62,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: gold.withValues(alpha: 0.12),
-                      border: Border.all(
-                        color: gold.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.content_cut_rounded,
-                      color: gold,
-                      size: 30,
-                    ),
-                  ),
+                  // Logo badge (replaces the old scissor icon)
+                  _logoBadge(size: 62),
 
                   const SizedBox(height: 18),
 
@@ -312,45 +304,55 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   }
 
   // ------------------------------------------------------------
-  // ANIMATED SCISSOR
+  // ROUND LOGO BADGE (replaces the old animated scissor icon)
   // ------------------------------------------------------------
 
-  Widget _animatedScissors() {
+  Widget _logoBadge({double size = 84}) {
     return AnimatedBuilder(
-      animation: _scissorController,
+      animation: _glowController,
       builder: (context, child) {
-        final value = Curves.easeInOut.transform(
-          _scissorController.value,
-        );
-
-        final rotation = math.sin(value * math.pi * 2) * 0.10;
-        final moveX = math.sin(value * math.pi * 2) * 8;
-
-        return Transform.translate(
-          offset: Offset(moveX, 0),
-          child: Transform.rotate(
-            angle: rotation,
-            child: Container(
-              height: 76,
-              width: 76,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: gold.withValues(alpha: 0.09),
-                border: Border.all(
-                  color: gold.withValues(alpha: 0.25),
+        return Container(
+          height: size,
+          width: size,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: cardColor,
+            border: Border.all(
+              color: gold.withValues(
+                alpha: 0.45 + (_glowController.value * 0.25),
+              ),
+              width: 1.6,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: teal.withValues(
+                  alpha: 0.10 + (_glowController.value * 0.10),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: gold.withValues(alpha: 0.08),
-                    blurRadius: 25,
+                blurRadius: 22,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              logoAsset,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                // Fallback if the asset hasn't been wired up yet.
+                return Container(
+                  color: cardColor,
+                  alignment: Alignment.center,
+                  child: Text(
+                    "S",
+                    style: TextStyle(
+                      color: gold,
+                      fontWeight: FontWeight.bold,
+                      fontSize: size * 0.42,
+                    ),
                   ),
-                ],
-              ),
-              child: const Icon(
-                Icons.content_cut_rounded,
-                color: teal,
-                size: 36,
-              ),
+                );
+              },
             ),
           ),
         );
@@ -626,7 +628,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
 
               const SizedBox(height: 25),
 
-              _animatedScissors(),
+              _logoBadge(size: 76),
             ],
           ),
         );
@@ -804,10 +806,10 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
                                     ),
 
                                     // ------------------------------------------------
-                                    // SCISSOR ANIMATION
+                                    // ROUND LOGO (scissor icon removed from here)
                                     // ------------------------------------------------
 
-                                    _animatedScissors(),
+                                    _logoBadge(size: 92),
 
                                     const SizedBox(height: 18),
 

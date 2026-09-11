@@ -1,5 +1,5 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'dart:math';
 import 'otp_verify_page.dart';
 import 'reset_password_page.dart';
 
@@ -14,13 +14,20 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final _formKey = GlobalKey<FormState>();
   final contactController = TextEditingController();
 
-  final Color teal = const Color(0xff0F766E);
-  final Color gold = const Color(0xffD4AF37);
+  // ------------------------------------------------------------
+  // SUMATHI STYLES COLORS (same as OTP page)
+  // ------------------------------------------------------------
+  static const Color background = Color(0xFF061312);
+  static const Color cardColor = Color(0xFF0F1D1C);
+  static const Color teal = Color(0xFF18C7B7);
+  static const Color gold = Color(0xFFFFC44D);
+  static const Color cream = Color(0xFFF7F3EA);
+  static const Color greyText = Color(0xFFA9B8B6);
 
-   String _generateOtp() {
-  final rand = Random();
-  return (100000 + rand.nextInt(900000)).toString();
-}
+  String _generateOtp() {
+    final rand = Random();
+    return (100000 + rand.nextInt(900000)).toString();
+  }
 
   void _sendOtp() {
     if (_formKey.currentState!.validate()) {
@@ -30,9 +37,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         context,
         MaterialPageRoute(
           builder: (_) => OtpVerifyPage(
-  phoneNumber: contactController.text.trim(),
-  correctOtp: otp,
-  onVerified: () {
+            phoneNumber: contactController.text.trim(),
+            correctOtp: otp,
+            onVerified: () {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
@@ -46,67 +53,121 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     }
   }
 
+  InputDecoration _fieldDecoration({
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      prefixIcon: Icon(icon, color: gold),
+      hintText: hint,
+      hintStyle: const TextStyle(color: greyText),
+      filled: true,
+      fillColor: cardColor,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(15),
+        borderSide: BorderSide(color: teal.withValues(alpha: 0.25)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(15),
+        borderSide: BorderSide(color: teal.withValues(alpha: 0.25)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(15),
+        borderSide: BorderSide(color: gold, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(15),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffF8F4EC),
+      backgroundColor: background,
       appBar: AppBar(
-        backgroundColor: teal,
-        title: const Text("Forgot Password"),
+        backgroundColor: cardColor,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: cream),
+        title: const Text(
+          "Forgot Password",
+          style: TextStyle(color: cream, fontWeight: FontWeight.w600),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.lock_reset, size: 60, color: gold),
-              const SizedBox(height: 20),
-              const Text(
-                "Enter your registered Email or Mobile Number. "
-                "We'll send you an OTP to reset your password.",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15),
-              ),
-              const SizedBox(height: 25),
-              TextFormField(
-                controller: contactController,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.email_outlined, color: gold),
-                  hintText: "Email / Mobile Number",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 10),
+
+                // ------------------------------------------------
+                // APP LOGO (medium size)
+                // ------------------------------------------------
+                Image.asset(
+                  'assets/app.png',
+                  height: 110,
+                  width: 110,
+                  fit: BoxFit.contain,
+                ),
+
+                const SizedBox(height: 25),
+
+                const Text(
+                  "Enter your registered Email or Mobile Number.\n"
+                  "We'll send you an OTP to reset your password.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, color: greyText, height: 1.5),
+                ),
+
+                const SizedBox(height: 25),
+
+                TextFormField(
+                  controller: contactController,
+                  style: const TextStyle(color: cream),
+                  decoration: _fieldDecoration(
+                    hint: "Email / Mobile Number",
+                    icon: Icons.email_outlined,
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return "Please enter your Email or Mobile Number";
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 25),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: gold,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                    ),
+                    onPressed: _sendOtp,
+                    child: const Text(
+                      "SEND OTP",
+                      style: TextStyle(
+                        color: background,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
                   ),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Please enter your Email or Mobile Number";
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 25),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: teal,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                ),
-                onPressed: _sendOtp,
-                child: Text(
-                  "SEND OTP",
-                  style: TextStyle(
-                    color: gold,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

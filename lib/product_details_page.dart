@@ -6,6 +6,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'checkout.dart';
 import 'cart_page.dart';
+import 'login_page.dart';
 
 /// ---------------------------------------------------------------------
 /// PRODUCT DETAILS PAGE — Sumathi's Styles
@@ -30,6 +31,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   String _recipient = '';
   String _addressPhone = '';
 
+  bool _loadingReviews = true;
+  List<Map<String, dynamic>> _productReviews = [];
+  bool _checkingEligibility = true;
+  bool _eligibleToReview = false;
+  Map<String, dynamic>? _myReview;
+  final _reviewCommentCtrl = TextEditingController();
+  int _reviewRating = 0;
+
   static const Color teal = Color(0xFF008C8C);
   static const Color tealDark = Color(0xFF007777);
   static const Color tealLight = Color(0xFFF1FFFB);
@@ -39,6 +48,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   void initState() {
     super.initState();
     _loadSavedAddress();
+    _loadProductReviews();
+    _checkReviewEligibility();
+  }
+
+  @override
+  void dispose() {
+    _reviewCommentCtrl.dispose();
+    super.dispose();
   }
 
   // -------------------------------------------------------------------
@@ -54,11 +71,22 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     }
 
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('saved_addresses')
-          .doc(phone)
-          .collection('addresses')
-          .get();
+      QuerySnapshot<Map<String, dynamic>> snap =
+          await FirebaseFirestore.instance
+              .collection('saved_addresses')
+              .doc(phone)
+              .collection('addresses')
+              .get();
+
+      // Backward-compatible fallback for addresses saved by the ApiService
+      // address flow under users/{userId}/addresses.
+      if (snap.docs.isEmpty) {
+        snap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(phone)
+            .collection('addresses')
+            .get();
+      }
 
       if (!mounted) return;
 
@@ -96,6 +124,206 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   }
 
   // -------------------------------------------------------------------
+  // REVIEWS
+  // -------------------------------------------------------------------
+
+  Future<void> _loadProductReviews() async {
+    setState(() => _loadingReviews = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('reviews')
+          .where('product', isEqualTo: widget.product.name)
+          .get();
+      final loaded = snap.docs.map((doc) {
+        final m = doc.data();
+        return {
+          'id': doc.id,
+          'mobile': '${m['mobile'] ?? ''}',
+          'name': '${m['name'] ?? ''}',
+          'rating': (num.tryParse('${m['rating'] ?? 5}') ?? 5).toInt(),
+          'comment': '${m['comment'] ?? ''}',
+        };
+      }).toList();
+      if (!mounted) return;
+      setState(() => _productReviews = loaded);
+    } catch (_) {
+      // reviews are supplementary — fail silently
+    } finally {
+      if (mounted) setState(() => _loadingReviews = false);
+    }
+  }
+
+  Future<void> _checkReviewEligibility() async {
+    final phone = (AppState.instance.userId ?? '').trim();
+    if (phone.isEmpty) {
+      if (mounted) setState(() => _checkingEligibility = false);
+      return;
+    }
+    try {
+      final orderSnap = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('mobile', isEqualTo: phone)
+          .where('product', isEqualTo: widget.product.name)
+          .where('status', isEqualTo: 'Delivered')
+          .limit(1)
+          .get();
+      final reviewSnap = await FirebaseFirestore.instance
+          .collection('reviews')
+          .where('mobile', isEqualTo: phone)
+          .where('product', isEqualTo: widget.product.name)
+          .limit(1)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _eligibleToReview = orderSnap.docs.isNotEmpty;
+        _myReview = reviewSnap.docs.isNotEmpty
+            ? {'id': reviewSnap.docs.first.id, ...reviewSnap.docs.first.data()}
+            : null;
+      });
+    } catch (_) {
+      // ignore — treat as not eligible
+    } finally {
+      if (mounted) setState(() => _checkingEligibility = false);
+    }
+  }
+
+  double get _averageRating {
+    if (_productReviews.isEmpty) return widget.product.rating;
+    final total = _productReviews.fold<int>(0, (s, r) => s + ((r['rating'] as num?)?.toInt() ?? 0));
+    return total / _productReviews.length;
+  }
+
+  Future<void> _submitProductReview() async {
+    final phone = (AppState.instance.userId ?? '').trim();
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to write a review!')),
+      );
+      return;
+    }
+    try {
+      final data = {
+        'mobile': phone,
+        'name': AppState.instance.userName ?? '',
+        'product': widget.product.name,
+        'productImage': widget.product.image,
+        'rating': _reviewRating,
+        'comment': _reviewCommentCtrl.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      final existingId = _myReview?['id']?.toString() ?? '';
+      if (existingId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('reviews').doc(existingId).update(data);
+      } else {
+        await FirebaseFirestore.instance.collection('reviews').add({
+          ...data,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thank you for your review!')),
+      );
+      await _loadProductReviews();
+      await _checkReviewEligibility();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not submit review: $e')),
+        );
+      }
+    }
+  }
+
+  void _openWriteReviewSheet() {
+    _reviewCommentCtrl.text = _myReview?['comment']?.toString() ?? '';
+    _reviewRating = (_myReview?['rating'] as num?)?.toInt() ?? 0;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) => Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: tealLight,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _myReview != null ? 'Edit Your Review' : 'Rate this Product',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: tealDark),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (i) {
+                        final star = i + 1;
+                        final selected = star <= _reviewRating;
+                        return IconButton(
+                          onPressed: () => setSheet(() => _reviewRating = star),
+                          iconSize: 34,
+                          icon: Icon(
+                            selected ? Icons.star_rounded : Icons.star_border_rounded,
+                            color: selected ? gold : Colors.grey.shade400,
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _reviewCommentCtrl,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Tell others about this product...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (_reviewRating == 0) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Please select a star rating!')),
+                            );
+                            return;
+                          }
+                          _submitProductReview();
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: teal, foregroundColor: Colors.white),
+                        child: const Text('Submit Review', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // -------------------------------------------------------------------
   // CART HELPERS
   // -------------------------------------------------------------------
 
@@ -111,6 +339,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       image: p.image,
       rating: p.rating,
       qty: qty,
+      description: p.description,
+      highlights: List<String>.from(p.highlights),
     );
   }
 
@@ -272,7 +502,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      product.rating.toStringAsFixed(1),
+                      _averageRating.toStringAsFixed(1),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -285,7 +515,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 ),
               ),
               const SizedBox(width: 10),
-              const Text('', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              Text(
+                '${_productReviews.length} review${_productReviews.length == 1 ? '' : 's'}',
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
             ],
           ),
           const Divider(height: 26),
@@ -318,6 +551,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
           // DESCRIPTION + HIGHLIGHTS — at the very end
           _buildDescription(product),
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 18),
+
+          // RATINGS & REVIEWS
+          _buildReviewsSection(product),
         ],
       ),
     );
@@ -501,10 +740,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                 _isInCart ? 'View Cart' : 'Add to Cart',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: tealDark,
-                side: const BorderSide(color: teal, width: 1.4),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isInCart ? tealDark : teal,
+                foregroundColor: Colors.white,
+                elevation: 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -535,31 +777,176 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   // -------------------------------------------------------------------
 
   Widget _buildDescription(Product product) {
-    final hasDescription = product.description.trim().isNotEmpty;
-    final hasHighlights = product.highlights.isNotEmpty;
+    final description = product.description.trim();
+    final highlights = product.highlights
+        .map((h) => h.trim())
+        .where((h) => h.isNotEmpty)
+        .toList();
+
+    final hasDescription = description.isNotEmpty;
+    final hasHighlights = highlights.isNotEmpty;
+
+    // Do not show a Description/Highlights area at all when the admin
+    // has not entered either field.
+    if (!hasDescription && !hasHighlights) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Description', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        const SizedBox(height: 8),
-        Text(
-          hasDescription
-              ? product.description
-              : 'Made to order, custom stitched with quality checked finishing.',
-          style: const TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
-        ),
-        if (hasHighlights) ...[
-          const SizedBox(height: 18),
-          const Text('Product Highlights', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        if (hasDescription) ...[
+          const Text(
+            'Description',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
           const SizedBox(height: 8),
           Text(
-            product.highlights.map((h) => '• $h').join('\n'),
-            style: const TextStyle(fontSize: 13, color: Colors.grey, height: 1.5),
+            description,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.grey,
+              height: 1.5,
+            ),
+          ),
+        ],
+        if (hasDescription && hasHighlights)
+          const SizedBox(height: 18),
+        if (hasHighlights) ...[
+          const Text(
+            'Product Highlights',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            highlights.map((h) => '• $h').join('\n'),
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.grey,
+              height: 1.5,
+            ),
           ),
         ],
         const SizedBox(height: 10),
       ],
+    );
+  }
+
+  // -------------------------------------------------------------------
+  // RATINGS & REVIEWS SECTION
+  // -------------------------------------------------------------------
+
+  Widget _buildReviewsSection(Product product) {
+    final avg = _averageRating;
+    final phone = (AppState.instance.userId ?? '').trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Ratings & Reviews', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            if (!_checkingEligibility)
+              TextButton.icon(
+                onPressed: phone.isEmpty
+                    ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()))
+                    : (_eligibleToReview ? _openWriteReviewSheet : null),
+                icon: Icon(_myReview != null ? Icons.edit_outlined : Icons.star_border_rounded, size: 17),
+                label: Text(
+                  phone.isEmpty ? 'Login to Review' : (_myReview != null ? 'Edit Review' : 'Write a Review'),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                ),
+                style: TextButton.styleFrom(foregroundColor: teal),
+              ),
+          ],
+        ),
+        if (phone.isNotEmpty && !_checkingEligibility && !_eligibleToReview && _myReview == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 8),
+            child: Text(
+              'Buy this product and once it is delivered, you can write a review.',
+              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+            ),
+          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            const Icon(Icons.star_rounded, color: gold, size: 20),
+            const SizedBox(width: 4),
+            Text(avg.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(width: 6),
+            Text(
+              '(${_productReviews.length} review${_productReviews.length == 1 ? '' : 's'})',
+              style: const TextStyle(fontSize: 12.5, color: Colors.grey),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (_loadingReviews)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator(color: teal)),
+          )
+        else if (_productReviews.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              'No reviews yet. Be the first to review this product!',
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+            ),
+          )
+        else
+          ..._productReviews.map((r) => _productReviewCard(r, phone)),
+      ],
+    );
+  }
+
+  Widget _productReviewCard(Map<String, dynamic> review, String myPhone) {
+    final rating = (review['rating'] as num?)?.toInt() ?? 5;
+    final comment = review['comment']?.toString() ?? '';
+    final rawName = review['name']?.toString().trim() ?? '';
+    final name = rawName.isNotEmpty ? rawName : 'Customer';
+    final isMine = myPhone.isNotEmpty && review['mobile'] == myPhone;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tealLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5EEE9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: teal,
+                child: Text(
+                  name[0].toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isMine ? '$name (You)' : name,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+              Text('★' * rating + '☆' * (5 - rating), style: const TextStyle(color: gold, fontSize: 13)),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(comment, style: const TextStyle(fontSize: 12.5, color: Color(0xFF30363B), height: 1.5)),
+          ],
+        ],
+      ),
     );
   }
 

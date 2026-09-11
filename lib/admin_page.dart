@@ -540,12 +540,12 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> get cateringContacts =>
       contacts.where(isCatering).toList();
 
-  List<Map<String, dynamic>> get pendingOrders => orders
+    List<Map<String, dynamic>> get pendingOrders => orders
       .where(
         (o) =>
             o['status'] == 'Ordered' ||
             o['status'] == 'Processing' ||
-            o['status'] == 'Pending',
+            o['status'] == 'Shipping',
       )
       .toList();
 
@@ -1802,14 +1802,18 @@ if (result != null && result.isSuccess) {
     return result == true;
   }
 
-  List<Map<String, dynamic>> filteredProducts() {
+   List<Map<String, dynamic>> filteredProducts() {
     final s = productSearch.text.trim().toLowerCase();
     return products.where((p) {
       final okSearch =
           s.isEmpty ||
           '${p['name']}'.toLowerCase().contains(s) ||
           '${p['cat']}'.toLowerCase().contains(s);
-      final okCat = productCategory.isEmpty || p['cat'] == productCategory;
+      // "All" in the category filter now means "no category filter" —
+      // shows every product, regardless of its actual category.
+      final okCat = productCategory.isEmpty ||
+          productCategory == 'All' ||
+          p['cat'] == productCategory;
       final okStock = productStock.isEmpty || p['stock'] == productStock;
       return okSearch && okCat && okStock;
     }).toList();
@@ -2774,12 +2778,27 @@ if (result != null && result.isSuccess) {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
+                                            Expanded(
                         child: image.isNotEmpty
                             ? Image.network(
                                 image,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return Container(
+                                    color: tealLight,
+                                    child: const Center(
+                                      child: SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
                                 errorBuilder: (_, __, ___) => Container(
                                   color: tealLight,
                                   child: const Center(
@@ -3006,16 +3025,16 @@ if (result != null && result.isSuccess) {
                   ),
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
-                  DataCell(
+                                     DataCell(
                     DropdownButton<String>(
                       value: '${o['status']}',
                       items:
                           [
                                 'Ordered',
                                 'Processing',
+                                'Shipping',
                                 'Delivered',
                                 'Cancelled',
-                                'Pending',
                               ]
                               .map(
                                 (s) => DropdownMenuItem(
@@ -3104,11 +3123,7 @@ if (result != null && result.isSuccess) {
           row('Product', '${o['product']}'),
           row('Amount', '₹${o['amount']}'),
           row('Payment', '${o['paymentMethod']} • ${o['paymentStatus']}'),
-          row('Address', '${o['address'] ?? ''}'),
-          row('Distance', '${o['distanceKm'] ?? ''}'
-              '${'${o['distanceKm'] ?? ''}'.trim().isEmpty ? '' : ' km'}'),
-          row('Delivery Charge', '${o['deliveryCharge'] ?? ''}'
-              '${'${o['deliveryCharge'] ?? ''}'.trim().isEmpty ? '' : ''}'),
+                    row('Address', '${o['address'] ?? ''}'),
           row('Measurement', '${o['measurement'] ?? ''}'),
                     row('Notes', '${o['notes'] ?? ''}'),
           row('Date', '${o['date']}'),
@@ -3144,13 +3159,13 @@ if (result != null && result.isSuccess) {
                       value: '${o['status']}',
                       isExpanded: true,
                       icon: Icon(Icons.keyboard_arrow_down, color: tealDark),
-                      items:
+                                            items:
                           [
                                 'Ordered',
                                 'Processing',
+                                'Shipping',
                                 'Delivered',
                                 'Cancelled',
-                                'Pending',
                               ]
                               .map(
                                 (s) => DropdownMenuItem(
@@ -3162,9 +3177,9 @@ if (result != null && result.isSuccess) {
                       selectedItemBuilder: (context) => [
                             'Ordered',
                             'Processing',
+                            'Shipping',
                             'Delivered',
                             'Cancelled',
-                            'Pending',
                           ]
                           .map((s) => Align(
                                 alignment: Alignment.centerLeft,
@@ -3269,15 +3284,15 @@ if (result != null && result.isSuccess) {
                 ),
               ),
               const SizedBox(width: 10),
-              SizedBox(
+                             SizedBox(
                 width: 170,
                 child: dropdownField('Status', orderStatus, [
                   '',
                   'Ordered',
                   'Processing',
+                  'Shipping',
                   'Delivered',
                   'Cancelled',
-                  'Pending',
                 ], (v) => setState(() => orderStatus = v ?? '')),
               ),
             ],
@@ -5302,9 +5317,13 @@ class StatusBadge extends StatelessWidget {
         bg = const Color(0xFFE3F2FD);
         fg = const Color(0xFF1565C0);
         break;
-      case 'Processing':
+              case 'Processing':
         bg = const Color(0xFFEDE7F6);
         fg = const Color(0xFF4527A0);
+        break;
+      case 'Shipping':
+        bg = const Color(0xFFE1F5FE);
+        fg = const Color(0xFF0277BD);
         break;
       case 'Delivered':
         bg = const Color(0xFFE8F5E9);
@@ -5475,12 +5494,12 @@ class StatusChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final counts = <String, int>{
+      final counts = <String, int>{
       'Ordered': 0,
       'Processing': 0,
+      'Shipping': 0,
       'Delivered': 0,
       'Cancelled': 0,
-      'Pending': 0,
     };
     for (final o in orders) {
       final s = '${o['status']}';

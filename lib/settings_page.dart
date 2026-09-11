@@ -7,12 +7,11 @@ import 'app_state.dart';
 import 'login_page.dart';
 import 'shop_page.dart';
 import 'product_details_page.dart';
+import 'cart_page.dart';
 import 'notification_service.dart';
 import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 /// ---------------------------------------------------------------------
 /// MODELS
 /// ---------------------------------------------------------------------
@@ -351,7 +350,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _panel = p);
     if (p == _Panel.orders || p == _Panel.coins) _loadOrders();
     if (p == _Panel.coins) _loadCoins();
-    if (p == _Panel.addresses) _loadAddresses();
+    if (p == _Panel.addresses || p == _Panel.profile) _loadAddresses();
     if (p == _Panel.reviews) _loadReviews();
   }
 
@@ -1817,7 +1816,12 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ),
           ),
-                    if (o.status == 'Cancelled' && o.cancelledAt.trim().isNotEmpty)
+                    if (o.status != 'Cancelled')
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _orderTimeline(o),
+            )
+          else if (o.cancelledAt.trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               child: Row(
@@ -1894,70 +1898,60 @@ class _SettingsPageState extends State<SettingsPage> {
           onMailHelp: _mailUs,
           onChatHelp: () => _showToast("Chat support coming soon — please call or mail us for now!"),
           onCancelOrder: canCancel ? () => _confirmCancelOrder(o) : null,
-          onDownloadInvoice: o.status != 'Cancelled' ? () => _downloadInvoice(o) : null,
         ),
       ),
     );
   }
 
-  // Generates a simple invoice PDF for the order and opens the native
-  // share/save sheet so the user can download or send it.
-  Future<void> _downloadInvoice(MyOrder o) async {
-    try {
-      final doc = pw.Document();
-      doc.addPage(
-        pw.Page(
-          build: (context) => pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text("Sumathi's Style",
-                  style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-              pw.Text('Tailoring Boutique — Invoice', style: const pw.TextStyle(fontSize: 12)),
-              pw.SizedBox(height: 4),
-              pw.Text('Phone: $_supportPhone | Email: $_supportEmail',
-                  style: const pw.TextStyle(fontSize: 9)),
-              pw.Divider(height: 24),
-              pw.Text('Order ID: #${o.id}', style: const pw.TextStyle(fontSize: 12)),
-              pw.SizedBox(height: 4),
-              pw.Text('Product: ${o.product}', style: const pw.TextStyle(fontSize: 12)),
-              pw.SizedBox(height: 4),
-              pw.Text('Status: ${o.status}', style: const pw.TextStyle(fontSize: 12)),
-              if (o.orderedAt.trim().isNotEmpty) ...[
-                pw.SizedBox(height: 4),
-                pw.Text('Ordered On: ${o.orderedAt}', style: const pw.TextStyle(fontSize: 12)),
-              ],
-              if (o.deliveredAt.trim().isNotEmpty) ...[
-                pw.SizedBox(height: 4),
-                pw.Text('Delivered On: ${o.deliveredAt}', style: const pw.TextStyle(fontSize: 12)),
-              ],
-              pw.SizedBox(height: 16),
-              pw.Divider(),
-              pw.SizedBox(height: 8),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Total Amount Paid', style: const pw.TextStyle(fontSize: 13)),
-                  pw.Text('Rs. ${o.amount.toStringAsFixed(0)}',
-                      style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
-                ],
-              ),
-              pw.SizedBox(height: 24),
-              pw.Text('Billed To:', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-              pw.Text(_user.name.isNotEmpty ? _user.name : 'Customer', style: const pw.TextStyle(fontSize: 11)),
-              pw.Text(_formatContact(_user.phone), style: const pw.TextStyle(fontSize: 11)),
-              pw.SizedBox(height: 30),
-              pw.Text("Thank you for shopping with Sumathi's Style!",
-                  style: const pw.TextStyle(fontSize: 10)),
-            ],
-          ),
-        ),
-      );
-      final bytes = await doc.save();
-      if (!mounted) return;
-      await Printing.sharePdf(bytes: bytes, filename: 'invoice_${o.id}.pdf');
-    } catch (e) {
-      if (mounted) _showToast('Could not generate invoice: $e', error: true);
-    }
+      // Flipkart-style horizontal step tracker: Ordered → Processing →
+  // Delivered, each dot with its date once that stage is reached.
+  Widget _orderTimeline(MyOrder o) {
+    final steps = [
+      ('Ordered', o.orderedAt),
+      ('Processing', o.processingAt),
+      ('Delivered', o.deliveredAt),
+    ];
+    // How far along the order is, so earlier dots also show filled.
+    final reachedIndex = o.status == 'Delivered'
+        ? 2
+        : o.status == 'Processing'
+            ? 1
+            : 0;
+
+    return Row(
+      children: List.generate(steps.length * 2 - 1, (i) {
+        if (i.isOdd) {
+          final stepIndex = i ~/ 2;
+          final done = stepIndex < reachedIndex;
+          return Expanded(
+            child: Container(height: 2, color: done ? AppColors.primary : const Color(0xFFE0E0E0)),
+          );
+        }
+        final stepIndex = i ~/ 2;
+        final label = steps[stepIndex].$1;
+        final date = steps[stepIndex].$2;
+        final reached = stepIndex <= reachedIndex;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              reached ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 16,
+              color: reached ? AppColors.primary : const Color(0xFFBDBDBD),
+            ),
+            const SizedBox(height: 4),
+            Text(label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
+                  color: reached ? AppColors.text : AppColors.textLight,
+                )),
+            if (reached && date.trim().isNotEmpty)
+              Text(date, style: const TextStyle(fontSize: 9, color: AppColors.textLight)),
+          ],
+        );
+      }),
+    );
   }
 
   Color _statusColor(String status) {
@@ -2088,7 +2082,37 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  bool _wishlistItemInCart(Product p) {
+    return AppState.instance.cartItems.any((item) => item.id == p.id);
+  }
+
+  void _addWishlistItemToCart(Product p) {
+    if (_wishlistItemInCart(p)) {
+      _goToWishlistCart();
+      return;
+    }
+
+    AppState.instance.addToCart(p.copyWith(qty: 1));
+    AppState.instance.addNotification(
+      'Added to cart',
+      '${p.name} added to your cart.',
+    );
+
+    if (mounted) {
+      _showToast('${p.name} added to cart! 🛒');
+    }
+  }
+
+  void _goToWishlistCart() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CartPage()),
+    );
+  }
+
   Widget _wishlistCard(Product p) {
+    final inCart = _wishlistItemInCart(p);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2098,7 +2122,13 @@ class _SettingsPageState extends State<SettingsPage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -2108,7 +2138,31 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 48, color: AppColors.primary))),
+                    p.isNetworkImage
+                        ? Image.network(
+                            p.image,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: AppColors.gray,
+                              child: const Icon(
+                                Icons.checkroom,
+                                size: 48,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          )
+                        : Image.asset(
+                            p.image,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: AppColors.gray,
+                              child: const Icon(
+                                Icons.checkroom,
+                                size: 48,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
                     Positioned(
                       top: 8,
                       right: 8,
@@ -2118,8 +2172,13 @@ class _SettingsPageState extends State<SettingsPage> {
                         elevation: 2,
                         child: IconButton(
                           visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.favorite, color: AppColors.danger, size: 20),
-                          onPressed: () => AppState.instance.toggleWishlist(p),
+                          icon: const Icon(
+                            Icons.favorite,
+                            color: AppColors.danger,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              AppState.instance.toggleWishlist(p),
                         ),
                       ),
                     ),
@@ -2128,13 +2187,59 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 5),
-                  Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                  const SizedBox(height: 9),
-                  SizedBox(width: double.infinity, height: 40, child: ElevatedButton(onPressed: () => _showWishlistProduct(p), style: _saveBtnStyle(), child: const Text('View Product'))),
-                ]),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '₹${p.price.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _addWishlistItemToCart(p),
+                        icon: Icon(
+                          inCart
+                              ? Icons.shopping_cart_checkout
+                              : Icons.add_shopping_cart,
+                          size: 17,
+                        ),
+                        label: Text(
+                          inCart ? 'View Cart' : 'Add to Cart',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              inCart ? AppColors.primaryDark : AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -3054,8 +3159,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 14),
-                      const Text(
-          "Your feedback helps us make Sumathi's Style better with every update.",
+        const Text(
+           "Your feedback helps us make Sumathi's Style better with every update.",
           style: TextStyle(fontSize: 11.5, color: AppColors.textLight),
           textAlign: TextAlign.center,
         ),
@@ -3549,7 +3654,6 @@ class _PolicySection extends StatelessWidget {
   final VoidCallback onMailHelp;
   final VoidCallback? onChatHelp;
   final VoidCallback? onCancelOrder;
-  final VoidCallback? onDownloadInvoice;
 
   const OrderDetailsPage({
     super.key,
@@ -3559,7 +3663,6 @@ class _PolicySection extends StatelessWidget {
     required this.onMailHelp,
     this.onChatHelp,
     this.onCancelOrder,
-    this.onDownloadInvoice,
   });
 
   Color _statusColor(String status) {
@@ -3583,8 +3686,8 @@ class _PolicySection extends StatelessWidget {
   }
 
   // -------------------------------------------------------------------
-  // HELP SHEET — Chat with Us / Cancel Order (with a processing-stage
-  // note when relevant) / Download Invoice.
+  // HELP SHEET — Flipkart-style: Chat / Call / Mail, and Cancel Order
+  // only shown when the order is still cancellable.
   // -------------------------------------------------------------------
   void _showHelpSheet(BuildContext context) {
     showModalBottomSheet(
@@ -3605,27 +3708,34 @@ class _PolicySection extends StatelessWidget {
                 _helpOption(
                   sheetCtx,
                   icon: Icons.chat_bubble_outline,
-                  title: 'Chat with Us',
+                  title: 'Chat with us',
                   subtitle: 'Get instant help from our support team',
                   onTap: () {
                     Navigator.pop(sheetCtx);
                     onChatHelp?.call();
                   },
                 ),
-                if (onCancelOrder != null) ...[
-                  if (order.status == 'Processing')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4, bottom: 6),
-                      child: Text(
-                        "Note: This order is already in processing, so cancellation may not be possible — we'll check with the team and confirm.",
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textLight,
-                          fontStyle: FontStyle.italic,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.call_outlined,
+                  title: 'Call Us',
+                  subtitle: 'Speak directly with our team',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    onCallHelp();
+                  },
+                ),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.email_outlined,
+                  title: 'Mail Us',
+                  subtitle: 'Send us your query via email',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    onMailHelp();
+                  },
+                ),
+                if (onCancelOrder != null)
                   _helpOption(
                     sheetCtx,
                     icon: Icons.cancel_outlined,
@@ -3635,18 +3745,6 @@ class _PolicySection extends StatelessWidget {
                     onTap: () {
                       Navigator.pop(sheetCtx);
                       onCancelOrder?.call();
-                    },
-                  ),
-                ],
-                if (onDownloadInvoice != null)
-                  _helpOption(
-                    sheetCtx,
-                    icon: Icons.receipt_long_outlined,
-                    title: 'Download Invoice',
-                    subtitle: 'Get a copy of your order bill',
-                    onTap: () {
-                      Navigator.pop(sheetCtx);
-                      onDownloadInvoice?.call();
                     },
                   ),
                 const SizedBox(height: 8),
@@ -3989,3 +4087,4 @@ class _PolicySection extends StatelessWidget {
     );
   }
 }
+

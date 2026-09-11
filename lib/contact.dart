@@ -17,7 +17,7 @@ class ContactPage extends StatelessWidget {
 
   static const String phoneNumber = '8610703658';
   static const String whatsappNumber = '918610703658';
-  static const String email = 'divyadeveloper2025gmail.com.com';
+  static const String email = 'sumathisstyles@gmail.com';
   static const String address = 'Injambakkam, Chennai';
   static const String instagramUrl =
       'https://www.instagram.com/_bridal__designer_/';
