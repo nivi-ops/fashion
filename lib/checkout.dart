@@ -12,6 +12,56 @@ import 'models.dart';
 import 'api_service.dart';
 
 /// ---------------------------------------------------------------------
+/// CARD INPUT FORMATTERS — auto space every 4 digits on Card Number,
+/// auto insert "/" after MM on Expiry (MM/YY).
+/// ---------------------------------------------------------------------
+
+class _CardNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limited = digits.length > 16 ? digits.substring(0, 16) : digits;
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < limited.length; i++) {
+      buffer.write(limited[i]);
+      if ((i + 1) % 4 == 0 && i + 1 != limited.length) {
+        buffer.write(' ');
+      }
+    }
+
+    final text = buffer.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+class _CardExpiryFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limited = digits.length > 4 ? digits.substring(0, 4) : digits;
+
+    final text = limited.length <= 2
+        ? limited
+        : '${limited.substring(0, 2)}/${limited.substring(2)}';
+
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+/// ---------------------------------------------------------------------
 /// PAYMENT METHOD
 /// ---------------------------------------------------------------------
 
@@ -58,9 +108,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // Card fields shown on the Payments step. Actual secure card entry
   // still happens inside Razorpay's own checkout sheet (PCI-compliant) —
   // these are just the visible Flipkart-style fields on our screen.
-  final TextEditingController _cardNumberCtrl = TextEditingController();
+   final TextEditingController _cardNumberCtrl = TextEditingController();
   final TextEditingController _cardExpiryCtrl = TextEditingController();
   final TextEditingController _cardCvvCtrl = TextEditingController();
+
+  bool _cardNumberError = false;
+  bool _cardExpiryError = false;
 
   PaymentMethod _payment = PaymentMethod.upi;
 
@@ -1629,13 +1682,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
         children: [
           const Text('Card Number', style: TextStyle(fontSize: 12.5, color: AppColors.textLight)),
           const SizedBox(height: 6),
-          TextField(
+                    TextField(
             controller: _cardNumberCtrl,
             keyboardType: TextInputType.number,
             inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(16),
+              _CardNumberFormatter(),
             ],
+            onChanged: (value) {
+              final digits = value.replaceAll(' ', '');
+              setState(() {
+                _cardNumberError = digits.isNotEmpty && digits.length < 16;
+              });
+            },
             decoration: InputDecoration(
               hintText: 'XXXX XXXX XXXX XXXX',
               hintStyle: TextStyle(color: Colors.grey.shade400, letterSpacing: 2),
@@ -1644,11 +1702,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                borderSide: BorderSide(color: _cardNumberError ? Colors.red : Colors.grey.shade300),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+                borderSide: BorderSide(color: _cardNumberError ? Colors.red : AppColors.primary, width: 1.4),
               ),
               suffixIcon: const Icon(Icons.credit_card, size: 18),
             ),
@@ -1662,13 +1720,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   children: [
                     const Text('Valid Thru', style: TextStyle(fontSize: 12.5, color: AppColors.textLight)),
                     const SizedBox(height: 6),
-                    TextField(
+                                        TextField(
                       controller: _cardExpiryCtrl,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(4),
+                        _CardExpiryFormatter(),
                       ],
+                      onChanged: (value) {
+                        final digits = value.replaceAll('/', '');
+                        bool invalid = false;
+                        if (digits.length >= 2) {
+                          final month = int.tryParse(digits.substring(0, 2)) ?? 0;
+                          if (month < 1 || month > 12) invalid = true;
+                        }
+                        setState(() => _cardExpiryError = invalid);
+                      },
                       decoration: InputDecoration(
                         hintText: 'MM / YY',
                         hintStyle: TextStyle(color: Colors.grey.shade400),
@@ -1677,11 +1743,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
+                          borderSide: BorderSide(color: _cardExpiryError ? Colors.red : Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+                          borderSide: BorderSide(color: _cardExpiryError ? Colors.red : AppColors.primary, width: 1.4),
                         ),
                       ),
                     ),
