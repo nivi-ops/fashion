@@ -11,6 +11,9 @@ import 'notification_service.dart';
 import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 /// ---------------------------------------------------------------------
 /// MODELS
 /// ---------------------------------------------------------------------
@@ -1904,9 +1907,8 @@ class _SettingsPageState extends State<SettingsPage> {
         builder: (_) => OrderDetailsPage(
           order: o,
           savedAddress: _addresses.isNotEmpty ? _addresses.first : null,
-          onCallHelp: _callUs,
-          onMailHelp: _mailUs,
-          onChatHelp: () => _showToast("Chat support coming soon — please call or mail us for now!"),
+          customerName: _user.name,
+          customerPhone: _user.phone,
           onCancelOrder: canCancel ? () => _confirmCancelOrder(o) : null,
         ),
       ),
@@ -1946,18 +1948,18 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             Icon(
               reached ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: 16,
+              size: 18,
               color: reached ? AppColors.primary : const Color(0xFFBDBDBD),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
             Text(label,
                 style: TextStyle(
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
                   color: reached ? AppColors.text : AppColors.textLight,
                 )),
             if (reached && date.trim().isNotEmpty)
-              Text(date, style: const TextStyle(fontSize: 9, color: AppColors.textLight)),
+              Text(date, style: const TextStyle(fontSize: 9.5, color: AppColors.textLight)),
           ],
         );
       }),
@@ -1991,6 +1993,7 @@ class _SettingsPageState extends State<SettingsPage> {
           'Other reason',
         ];
         String? selected;
+        final otherCtrl = TextEditingController();
         return StatefulBuilder(
           builder: (ctx, setSheet) => Padding(
             padding: EdgeInsets.only(
@@ -2017,6 +2020,18 @@ class _SettingsPageState extends State<SettingsPage> {
                       contentPadding: EdgeInsets.zero,
                       activeColor: AppColors.primary,
                     )),
+                if (selected == 'Other reason') ...[
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: otherCtrl,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Please type your reason...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -2029,7 +2044,14 @@ class _SettingsPageState extends State<SettingsPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: selected == null ? null : () => Navigator.pop(ctx, selected),
+                        onPressed: selected == null
+                            ? null
+                            : () {
+                                final finalReason = selected == 'Other reason'
+                                    ? (otherCtrl.text.trim().isNotEmpty ? otherCtrl.text.trim() : 'Other reason')
+                                    : selected;
+                                Navigator.pop(ctx, finalReason);
+                              },
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
                         child: const Text('Cancel Order'),
                       ),
@@ -3543,24 +3565,27 @@ class _PolicySection extends StatelessWidget {
 /// ORDER DETAILS PAGE — Flipkart-style full order detail screen, opened
 /// when a My Orders card is tapped. Shows product, order id (copyable),
 /// the same status timeline used in the orders list, doorstep tips and
-/// our delivery promise. No payment-retry / live-courier UI since this
-/// app doesn't have that data yet.
+/// our delivery promise. Help sheet has 3 actions: Chat with us (an
+/// automated FAQ-style assistant), Cancel Order (only while eligible),
+/// and Download Invoice (generates a Sumathi's Style bill PDF).
 /// ---------------------------------------------------------------------
  class OrderDetailsPage extends StatelessWidget {
   final MyOrder order;
   final SavedAddress? savedAddress;
-  final VoidCallback onCallHelp;
-  final VoidCallback onMailHelp;
-  final VoidCallback? onChatHelp;
+  final String customerName;
+  final String customerPhone;
   final VoidCallback? onCancelOrder;
+
+  // Business contact/details used on the generated invoice.
+  static const String _bizPhone = '+91 86107 03658';
+  static const String _bizEmail = 'divyadeveloper2025@gmail.com';
 
   const OrderDetailsPage({
     super.key,
     required this.order,
     required this.savedAddress,
-    required this.onCallHelp,
-    required this.onMailHelp,
-    this.onChatHelp,
+    this.customerName = '',
+    this.customerPhone = '',
     this.onCancelOrder,
   });
 
@@ -3585,8 +3610,8 @@ class _PolicySection extends StatelessWidget {
   }
 
   // -------------------------------------------------------------------
-  // HELP SHEET — Flipkart-style: Chat / Call / Mail, and Cancel Order
-  // only shown when the order is still cancellable.
+  // HELP SHEET — 3 actions: Chat with us, Cancel Order (only when
+  // eligible), Download Invoice.
   // -------------------------------------------------------------------
   void _showHelpSheet(BuildContext context) {
     showModalBottomSheet(
@@ -3608,30 +3633,10 @@ class _PolicySection extends StatelessWidget {
                   sheetCtx,
                   icon: Icons.chat_bubble_outline,
                   title: 'Chat with us',
-                  subtitle: 'Get instant help from our support team',
+                  subtitle: 'Get instant automated answers, or type your own question',
                   onTap: () {
                     Navigator.pop(sheetCtx);
-                    onChatHelp?.call();
-                  },
-                ),
-                _helpOption(
-                  sheetCtx,
-                  icon: Icons.call_outlined,
-                  title: 'Call Us',
-                  subtitle: 'Speak directly with our team',
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    onCallHelp();
-                  },
-                ),
-                _helpOption(
-                  sheetCtx,
-                  icon: Icons.email_outlined,
-                  title: 'Mail Us',
-                  subtitle: 'Send us your query via email',
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    onMailHelp();
+                    _showChatSheet(sheetCtx.mounted ? context : context);
                   },
                 ),
                 if (onCancelOrder != null)
@@ -3646,6 +3651,16 @@ class _PolicySection extends StatelessWidget {
                       onCancelOrder?.call();
                     },
                   ),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Download Invoice',
+                  subtitle: 'Get a PDF bill for this order',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _downloadInvoice(context);
+                  },
+                ),
                 const SizedBox(height: 8),
               ],
             ),
@@ -3692,6 +3707,338 @@ class _PolicySection extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  // -------------------------------------------------------------------
+  // CHAT WITH US — a lightweight automated assistant. Tapping a preset
+  // question instantly shows a canned answer, chat-bubble style. Typed
+  // questions that don't match anything get a generic "we'll follow up"
+  // reply, same as a real live-chat placeholder would.
+  // -------------------------------------------------------------------
+  void _showChatSheet(BuildContext context) {
+    final answers = <String, String>{
+      'Where is my order?':
+          'Your order is currently "${order.status}". You can also see the live status tracker on this page.',
+      'How long does delivery take?':
+          'Custom stitched orders are usually delivered within 10-15 days from order confirmation.',
+      'Can I cancel my order?': onCancelOrder != null
+          ? "Yes, this order is still eligible for cancellation. Use the 'Cancel Order' option in Help."
+          : "This order can no longer be cancelled from the app. Please call or mail us if it's urgent.",
+      'I have a fitting issue':
+          'For fitting issues, please contact us within 3 days of delivery — alteration is free of cost.',
+      'How do I get a refund?':
+          'Refunds (if applicable) are processed within 5-7 business days after a cancellation is confirmed.',
+    };
+    final messageCtrl = TextEditingController();
+    final List<Map<String, String>> chat = [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) => Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: SizedBox(
+              height: MediaQuery.of(ctx).size.height * 0.75,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          backgroundColor: AppColors.primary,
+                          child: Icon(Icons.support_agent, color: Colors.white, size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text('Chat with us', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ),
+                        IconButton(onPressed: () => Navigator.pop(sheetCtx), icon: const Icon(Icons.close)),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: const Color(0xFFF0F0F0), borderRadius: BorderRadius.circular(12)),
+                          child: const Text(
+                            "Hi! I'm Sumathi's Style assistant. Tap a question below or type your own.",
+                            style: TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: answers.keys
+                              .map((q) => ActionChip(
+                                    label: Text(q, style: const TextStyle(fontSize: 11.5)),
+                                    backgroundColor: Colors.white,
+                                    side: const BorderSide(color: AppColors.primary),
+                                    onPressed: () {
+                                      setSheet(() {
+                                        chat.add({'from': 'user', 'text': q});
+                                        chat.add({'from': 'bot', 'text': answers[q]!});
+                                      });
+                                    },
+                                  ))
+                              .toList(),
+                        ),
+                        const SizedBox(height: 14),
+                        ...chat.map((m) => Align(
+                              alignment: m['from'] == 'user' ? Alignment.centerRight : Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                constraints: BoxConstraints(maxWidth: MediaQuery.of(ctx).size.width * 0.72),
+                                decoration: BoxDecoration(
+                                  color: m['from'] == 'user' ? AppColors.primary : const Color(0xFFF0F0F0),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Text(
+                                  m['text']!,
+                                  style: TextStyle(fontSize: 12.5, color: m['from'] == 'user' ? Colors.white : AppColors.text),
+                                ),
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: messageCtrl,
+                            decoration: InputDecoration(
+                              hintText: 'Type your question...',
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Material(
+                          color: AppColors.primary,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () {
+                              final text = messageCtrl.text.trim();
+                              if (text.isEmpty) return;
+                              setSheet(() {
+                                chat.add({'from': 'user', 'text': text});
+                                chat.add({
+                                  'from': 'bot',
+                                  'text':
+                                      "Thanks for your message! Our team will get back to you shortly. For urgent help, call $_bizPhone or mail $_bizEmail.",
+                                });
+                              });
+                              messageCtrl.clear();
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.all(10),
+                              child: Icon(Icons.send, color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // -------------------------------------------------------------------
+  // DOWNLOAD INVOICE — builds a one-page Sumathi's Style bill PDF with
+  // a QR code (encodes the order id), business + customer details,
+  // date/time, order id, product details, delivery charge, product
+  // amount and total, then opens the native share/print sheet.
+  //
+  // NOTE: the product description printed here is exactly what's saved
+  // in the order's `product` field at checkout — if you want it to say
+  // something like "Zari Silver Blouse" instead of just "blouse", save
+  // that fuller description in the `product` field when the order is
+  // placed (in your checkout code), not here.
+  // -------------------------------------------------------------------
+  Future<void> _downloadInvoice(BuildContext context) async {
+    try {
+      final doc = pw.Document();
+      final now = DateTime.now();
+      final dateStr =
+          '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
+      final hour12 = now.hour % 12 == 0 ? 12 : now.hour % 12;
+      final ampm = now.hour >= 12 ? 'PM' : 'AM';
+      final timeStr = '$hour12:${now.minute.toString().padLeft(2, '0')} $ampm';
+
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(28),
+          build: (pwContext) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text("Sumathi's Style",
+                            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 2),
+                        pw.Text('Tailoring Boutique — 30 Years of Experience',
+                            style: const pw.TextStyle(fontSize: 10)),
+                        pw.SizedBox(height: 2),
+                        pw.Text('GSTIN: N/A', style: const pw.TextStyle(fontSize: 9)),
+                      ],
+                    ),
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.qrCode(),
+                      data: 'Order #${order.id}',
+                      width: 60,
+                      height: 60,
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 10),
+                pw.Divider(),
+                pw.Center(
+                  child: pw.Text('INVOICE / BILL OF SUPPLY',
+                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Center(
+                  child: pw.Text("Thank you for shopping with Sumathi's Style!",
+                      style: const pw.TextStyle(fontSize: 10)),
+                ),
+                pw.SizedBox(height: 16),
+                pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text('Mobile Number: $_bizPhone', style: const pw.TextStyle(fontSize: 10)),
+                          pw.SizedBox(height: 3),
+                          pw.Text('Address: Sumathi\'s Style, Tailoring Boutique', style: const pw.TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text('Date: $dateStr', style: const pw.TextStyle(fontSize: 10)),
+                          pw.SizedBox(height: 3),
+                          pw.Text('Time: $timeStr', style: const pw.TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 18),
+                pw.Text('Customer Details', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 6),
+                pw.Text('Customer Name: ${customerName.isNotEmpty ? customerName : '-'}',
+                    style: const pw.TextStyle(fontSize: 10)),
+                pw.SizedBox(height: 3),
+                pw.Text(
+                    'Customer Mobile Number: ${customerPhone.isNotEmpty ? '+91 $customerPhone' : '-'}',
+                    style: const pw.TextStyle(fontSize: 10)),
+                pw.SizedBox(height: 3),
+                pw.Text(
+                    'Customer Address: ${savedAddress != null && savedAddress!.detail.isNotEmpty ? savedAddress!.detail : '-'}',
+                    style: const pw.TextStyle(fontSize: 10)),
+                pw.SizedBox(height: 18),
+                pw.Text('Order Id: #${order.id}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 14),
+                pw.Table(
+                  border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.6),
+                  columnWidths: const {
+                    0: pw.FlexColumnWidth(4),
+                    1: pw.FlexColumnWidth(1),
+                    2: pw.FlexColumnWidth(2),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                      children: [
+                        _pdfCell('Product Details', bold: true),
+                        _pdfCell('Qty', bold: true),
+                        _pdfCell('Amount', bold: true),
+                      ],
+                    ),
+                    pw.TableRow(children: [
+                      _pdfCell(order.product.isNotEmpty ? order.product : '-'),
+                      _pdfCell('1'),
+                      _pdfCell('Rs. ${order.amount.toStringAsFixed(0)}'),
+                    ]),
+                  ],
+                ),
+                pw.SizedBox(height: 14),
+                pw.Align(
+                  alignment: pw.Alignment.centerRight,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('Product Amount: Rs. ${order.amount.toStringAsFixed(0)}',
+                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.SizedBox(height: 3),
+                      const pw.Text('Delivery Charge: Rs. 0', style: pw.TextStyle(fontSize: 10)),
+                      pw.SizedBox(height: 3),
+                      pw.Text('Total: Rs. ${order.amount.toStringAsFixed(0)}',
+                          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 26),
+                pw.Divider(),
+                pw.Center(
+                  child: pw.Text("This is a computer-generated invoice from Sumathi's Style.",
+                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      await Printing.sharePdf(
+        bytes: await doc.save(),
+        filename: 'SumathiStyle_Invoice_${order.id}.pdf',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not generate invoice: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  pw.Widget _pdfCell(String text, {bool bold = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Text(text, style: pw.TextStyle(fontSize: 10, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
     );
   }
 
@@ -3986,4 +4333,3 @@ class _PolicySection extends StatelessWidget {
     );
   }
 }
-

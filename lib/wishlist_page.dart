@@ -37,8 +37,8 @@ class WishlistPage extends StatelessWidget {
             title: const Text(
               'My Wishlist',
               style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.w500,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -54,20 +54,20 @@ class WishlistPage extends StatelessWidget {
 
                     // Responsive:
                     // Small mobile  -> 2 columns
-                    // Tablet/Desktop -> 3 columns
-                    final crossAxisCount = width >= 700 ? 3 : 2;
+                    // Tablet/Desktop -> 4 columns
+                    final crossAxisCount = width >= 700 ? 4 : 2;
 
                     final horizontalPadding =
-                        width >= 700 ? 24.0 : 12.0;
+                        width >= 700 ? 20.0 : 10.0;
 
-                    final spacing = width >= 700 ? 18.0 : 12.0;
+                    final spacing = width >= 700 ? 14.0 : 10.0;
 
                     return GridView.builder(
                       padding: EdgeInsets.fromLTRB(
                         horizontalPadding,
-                        14,
+                        12,
                         horizontalPadding,
-                        24,
+                        20,
                       ),
                       physics: const BouncingScrollPhysics(),
                       gridDelegate:
@@ -76,7 +76,7 @@ class WishlistPage extends StatelessWidget {
                         crossAxisSpacing: spacing,
                         mainAxisSpacing: spacing,
                         childAspectRatio:
-                            width >= 700 ? 0.72 : 0.68,
+                            width >= 700 ? 0.78 : 0.62,
                       ),
                       itemCount: items.length,
                       itemBuilder: (context, index) {
@@ -334,10 +334,10 @@ class _WishlistProductCard extends StatelessWidget {
                 flex: 3,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    10,
-                    9,
-                    10,
-                    9,
+                    8,
+                    6,
+                    8,
+                    6,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -355,19 +355,19 @@ class _WishlistProductCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 13,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w500,
                                 color: AppColors.text,
                               ),
                             ),
 
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
 
                             // FIXED PRODUCT PRICE
                             Text(
                               '₹${product.price.toStringAsFixed(0)}',
                               style: const TextStyle(
-                                fontSize: 18,
+                                fontSize: 15,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.text,
                               ),
@@ -388,8 +388,8 @@ class _WishlistProductCard extends StatelessWidget {
                           onTap: onCartTap,
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
-                            width: 46,
-                            height: 46,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: AppColors.light,
                               borderRadius: BorderRadius.circular(10),
@@ -397,7 +397,7 @@ class _WishlistProductCard extends StatelessWidget {
                             child: const Icon(
                               Icons.shopping_cart_checkout,
                               color: AppColors.primary,
-                              size: 22,
+                              size: 20,
                             ),
                           ),
                         ),
