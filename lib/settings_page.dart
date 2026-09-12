@@ -3057,16 +3057,36 @@ class _SettingsPageState extends State<SettingsPage> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
-        ElevatedButton.icon(
-          onPressed: _mailUs,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.secondary,
-            foregroundColor: AppColors.dark,
-            minimumSize: const Size(double.infinity, 46),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          ),
-          icon: const Icon(Icons.email, size: 16),
-          label: const Text('Mail Us'),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _callUs,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                icon: const Icon(Icons.call, size: 16),
+                label: const Text('Call Us'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _mailUs,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.secondary,
+                  foregroundColor: AppColors.dark,
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                icon: const Icon(Icons.email, size: 16),
+                label: const Text('Mail Us'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         const Center(
@@ -4003,7 +4023,7 @@ class _PolicySection extends StatelessWidget {
                       pw.Text('Product Amount: Rs. ${order.amount.toStringAsFixed(0)}',
                           style: const pw.TextStyle(fontSize: 10)),
                       pw.SizedBox(height: 3),
-                      const pw.Text('Delivery Charge: Rs. 0', style: pw.TextStyle(fontSize: 10)),
+                      pw.Text('Delivery Charge: Rs. 0', style: const pw.TextStyle(fontSize: 10)),
                       pw.SizedBox(height: 3),
                       pw.Text('Total: Rs. ${order.amount.toStringAsFixed(0)}',
                           style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
