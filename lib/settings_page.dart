@@ -7,7 +7,6 @@ import 'app_state.dart';
 import 'login_page.dart';
 import 'shop_page.dart';
 import 'product_details_page.dart';
-import 'cart_page.dart';
 import 'notification_service.dart';
 import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -350,7 +349,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _panel = p);
     if (p == _Panel.orders || p == _Panel.coins) _loadOrders();
     if (p == _Panel.coins) _loadCoins();
-    if (p == _Panel.addresses || p == _Panel.profile) _loadAddresses();
+    if (p == _Panel.addresses) _loadAddresses();
     if (p == _Panel.reviews) _loadReviews();
   }
 
@@ -1095,23 +1094,34 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 20),
 
-        // Account settings menu card
+        // My Shopping
+        _menuCard('MY SHOPPING', [
+          _menuRow(Icons.shopping_bag_outlined, 'My Shopping', () => _openPanel(_Panel.orders)),
+          _menuRow(Icons.favorite_border, 'My Wishlist', () => _openPanel(_Panel.wishlist),
+              iconColor: AppColors.danger),
+        ]),
+
+        // Account Settings
         _menuCard('ACCOUNT SETTINGS', [
-          _menuRow(Icons.edit, 'Edit Profile', () => _openPanel(_Panel.profile)),
-          _menuRow(Icons.inventory_2_outlined, 'My Orders', () => _openPanel(_Panel.orders)),
-          _menuRow(Icons.favorite_border, 'My Wishlist', () => _openPanel(_Panel.wishlist), iconColor: AppColors.danger),
           _menuRow(Icons.phone_android, 'Manage Devices', () => _openPanel(_Panel.devices)),
+          _menuRow(Icons.edit, 'Edit Profile', () => _openPanel(_Panel.profile)),
           _menuRow(Icons.notifications_none, 'Notification Settings', () => _openPanel(_Panel.notif),
               iconColor: AppColors.secondary),
           _menuRow(Icons.shield_outlined, 'Privacy Center', () => _openPanel(_Panel.privacyMenu),
               iconColor: AppColors.success),
-          _menuRow(Icons.star_outline, 'My Reviews', () => _openPanel(_Panel.reviews),
-              iconColor: AppColors.secondary),
         ]),
 
+        // My Activity
+        _menuCard('MY ACTIVITY', [
+          _menuRow(Icons.star_outline, 'Reviews', () => _openPanel(_Panel.reviews),
+              iconColor: AppColors.secondary),
+          _menuRow(Icons.question_answer_outlined, 'Question and Answer', () => _openPanel(_Panel.faq)),
+        ]),
+
+        // Feedback & Information
         _menuCard('FEEDBACK & INFORMATION', [
-          _menuRow(Icons.help_outline, 'Browse FAQs', () => _openPanel(_Panel.faq)),
           _menuRow(Icons.description_outlined, 'Terms, Policies and Licenses', () => _openPanel(_Panel.terms)),
+          _menuRow(Icons.help_outline, 'Browse FAQs', () => _openPanel(_Panel.faq)),
         ]),
 
         // Logout button — always visible directly below Browse FAQs.
@@ -2082,37 +2092,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  bool _wishlistItemInCart(Product p) {
-    return AppState.instance.cartItems.any((item) => item.id == p.id);
-  }
-
-  void _addWishlistItemToCart(Product p) {
-    if (_wishlistItemInCart(p)) {
-      _goToWishlistCart();
-      return;
-    }
-
-    AppState.instance.addToCart(p.copyWith(qty: 1));
-    AppState.instance.addNotification(
-      'Added to cart',
-      '${p.name} added to your cart.',
-    );
-
-    if (mounted) {
-      _showToast('${p.name} added to cart! 🛒');
-    }
-  }
-
-  void _goToWishlistCart() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CartPage()),
-    );
-  }
-
   Widget _wishlistCard(Product p) {
-    final inCart = _wishlistItemInCart(p);
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2122,13 +2102,7 @@ class _SettingsPageState extends State<SettingsPage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3))],
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -2138,31 +2112,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    p.isNetworkImage
-                        ? Image.network(
-                            p.image,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: AppColors.gray,
-                              child: const Icon(
-                                Icons.checkroom,
-                                size: 48,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          )
-                        : Image.asset(
-                            p.image,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: AppColors.gray,
-                              child: const Icon(
-                                Icons.checkroom,
-                                size: 48,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ),
+                    Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 48, color: AppColors.primary))),
                     Positioned(
                       top: 8,
                       right: 8,
@@ -2172,13 +2122,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         elevation: 2,
                         child: IconButton(
                           visualDensity: VisualDensity.compact,
-                          icon: const Icon(
-                            Icons.favorite,
-                            color: AppColors.danger,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              AppState.instance.toggleWishlist(p),
+                          icon: const Icon(Icons.favorite, color: AppColors.danger, size: 20),
+                          onPressed: () => AppState.instance.toggleWishlist(p),
                         ),
                       ),
                     ),
@@ -2187,59 +2132,13 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      p.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '₹${p.price.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 9),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _addWishlistItemToCart(p),
-                        icon: Icon(
-                          inCart
-                              ? Icons.shopping_cart_checkout
-                              : Icons.add_shopping_cart,
-                          size: 17,
-                        ),
-                        label: Text(
-                          inCart ? 'View Cart' : 'Add to Cart',
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              inCart ? AppColors.primaryDark : AppColors.primary,
-                          foregroundColor: Colors.white,
-                          elevation: 1,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 5),
+                  Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  const SizedBox(height: 9),
+                  SizedBox(width: double.infinity, height: 40, child: ElevatedButton(onPressed: () => _showWishlistProduct(p), style: _saveBtnStyle(), child: const Text('View Product'))),
+                ]),
               ),
             ],
           ),
@@ -3160,10 +3059,10 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 14),
         const Text(
-           "Your feedback helps us make Sumathi's Style better with every update.",
-          style: TextStyle(fontSize: 11.5, color: AppColors.textLight),
-          textAlign: TextAlign.center,
-        ),
+  "Your feedback helps us make Sumathi's Style better with every update.",
+  style: TextStyle(fontSize: 11.5, color: AppColors.textLight),
+  textAlign: TextAlign.center,
+),
       ],
     );
   }

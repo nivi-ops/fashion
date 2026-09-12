@@ -14,123 +14,476 @@ class WishlistPage extends StatelessWidget {
       builder: (context, _) {
         final state = AppState.instance;
         final items = state.wishlistItems;
+
         return Scaffold(
           backgroundColor: AppColors.light,
+
+          // ----------------------------------------------------------
+          // APP BAR
+          // ----------------------------------------------------------
           appBar: AppBar(
-            title: const Text('My Wishlist'),
+            elevation: 0,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back,
+                size: 28,
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+            title: const Text(
+              'My Wishlist',
+              style: TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
+
+          // ----------------------------------------------------------
+          // BODY
+          // ----------------------------------------------------------
           body: items.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.favorite_border, size: 64, color: AppColors.textLight),
-                      const SizedBox(height: 12),
-                      const Text('No items in wishlist yet', style: TextStyle(color: AppColors.textLight)),
-                    ],
-                  ),
-                )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.68,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) => _wishlistCard(context, state, items[i]),
+              ? _buildEmptyWishlist()
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+
+                    // Responsive:
+                    // Small mobile  -> 2 columns
+                    // Tablet/Desktop -> 3 columns
+                    final crossAxisCount = width >= 700 ? 3 : 2;
+
+                    final horizontalPadding =
+                        width >= 700 ? 24.0 : 12.0;
+
+                    final spacing = width >= 700 ? 18.0 : 12.0;
+
+                    return GridView.builder(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        14,
+                        horizontalPadding,
+                        24,
+                      ),
+                      physics: const BouncingScrollPhysics(),
+                      gridDelegate:
+                          SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: spacing,
+                        mainAxisSpacing: spacing,
+                        childAspectRatio:
+                            width >= 700 ? 0.72 : 0.68,
+                      ),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        return _WishlistProductCard(
+                          product: items[index],
+                          onTap: () {
+                            _openProductDetails(
+                              context,
+                              items[index],
+                            );
+                          },
+                          onWishlistTap: () {
+                            state.toggleWishlist(items[index]);
+                          },
+                          onCartTap: () {
+                            _addToCart(
+                              context,
+                              state,
+                              items[index],
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
                 ),
         );
       },
     );
   }
 
-  Widget _wishlistCard(BuildContext context, AppState state, Product product) {
-    void openDetails() {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProductDetailsPage(product: product),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.08), blurRadius: 8)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: openDetails,
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                  child: product.isNetworkImage
-                      ? Image.network(product.image, width: double.infinity, height: 130, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(height: 130, color: AppColors.gray))
-                      : Image.asset(product.image, width: double.infinity, height: 130, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(height: 130, color: AppColors.gray)),
-                ),
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: InkWell(
-                    onTap: () => state.toggleWishlist(product),
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                      child: const Icon(Icons.favorite, size: 14, color: AppColors.danger),
-                    ),
+  // ----------------------------------------------------------
+  // EMPTY WISHLIST
+  // ----------------------------------------------------------
+  Widget _buildEmptyWishlist() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 82,
+              height: 82,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
                   ),
-                ),
-              ],
+                ],
+              ),
+              child: const Icon(
+                Icons.favorite_border,
+                size: 42,
+                color: AppColors.primary,
+              ),
             ),
+            const SizedBox(height: 18),
+            const Text(
+              'Your Wishlist is empty',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 7),
+            const Text(
+              'Save your favourite styles here',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textLight,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------
+  // OPEN FULL PRODUCT DETAILS
+  // ----------------------------------------------------------
+  void _openProductDetails(
+    BuildContext context,
+    Product product,
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductDetailsPage(
+          product: product,
+        ),
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------
+  // ADD TO CART
+  // ----------------------------------------------------------
+  void _addToCart(
+    BuildContext context,
+    AppState state,
+    Product product,
+  ) {
+    state.addToCart(product);
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${product.name} added to cart 🛒',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+}
+
+// ==================================================================
+// WISHLIST PRODUCT CARD
+// Same visual style as Home page product card
+// ==================================================================
+
+class _WishlistProductCard extends StatelessWidget {
+  final Product product;
+  final VoidCallback onTap;
+  final VoidCallback onWishlistTap;
+  final VoidCallback onCartTap;
+
+  const _WishlistProductCard({
+    required this.product,
+    required this.onTap,
+    required this.onWishlistTap,
+    required this.onCartTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: openDetails,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              // ----------------------------------------------------
+              // IMAGE + WISHLIST + RATING
+              // ----------------------------------------------------
+              Expanded(
+                flex: 7,
+                child: Stack(
                   children: [
-                    Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-                    const SizedBox(height: 4),
-                    Text('₹${product.price.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          state.addToCart(product);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('${product.name} moved to cart'), duration: const Duration(seconds: 1)),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          textStyle: const TextStyle(fontSize: 11),
+
+                    // PRODUCT IMAGE
+                    Positioned.fill(
+                      child: _ProductImage(
+                        product: product,
+                      ),
+                    ),
+
+                    // ------------------------------------------------
+                    // HEART BUTTON
+                    // ------------------------------------------------
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: onWishlistTap,
+                          customBorder: const CircleBorder(),
+                          child: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.favorite,
+                              color: AppColors.danger,
+                              size: 23,
+                            ),
+                          ),
                         ),
-                        child: const Text('Add to Cart'),
+                      ),
+                    ),
+
+                    // ------------------------------------------------
+                    // RATING BADGE
+                    // ------------------------------------------------
+                    Positioned(
+                      bottom: 9,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF388E3C),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              product.rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            const Icon(
+                              Icons.star,
+                              color: Colors.white,
+                              size: 11,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+
+              // ----------------------------------------------------
+              // PRODUCT INFORMATION
+              // ----------------------------------------------------
+              Expanded(
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    10,
+                    9,
+                    10,
+                    9,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+
+                      // NAME + PRICE
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.text,
+                              ),
+                            ),
+
+                            const SizedBox(height: 4),
+
+                            // FIXED PRODUCT PRICE
+                            Text(
+                              '₹${product.price.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.text,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(width: 6),
+
+                      // ------------------------------------------------
+                      // CART ICON
+                      // Same compact style as Home page
+                      // ------------------------------------------------
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: onCartTap,
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: AppColors.light,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.shopping_cart_checkout,
+                              color: AppColors.primary,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+// ==================================================================
+// PRODUCT IMAGE
+// ==================================================================
+
+class _ProductImage extends StatelessWidget {
+  final Product product;
+
+  const _ProductImage({
+    required this.product,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (product.image.trim().isEmpty) {
+      return _placeholder();
+    }
+
+    if (product.isNetworkImage) {
+      return Image.network(
+        product.image,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return _placeholder();
+        },
+        loadingBuilder: (
+          context,
+          child,
+          loadingProgress,
+        ) {
+          if (loadingProgress == null) {
+            return child;
+          }
+
+          return Container(
+            color: AppColors.light,
+            alignment: Alignment.center,
+            child: const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return Image.asset(
+      product.image,
+      width: double.infinity,
+      height: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) {
+        return _placeholder();
+      },
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: AppColors.light,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.checkroom,
+        size: 38,
+        color: AppColors.primary,
       ),
     );
   }
