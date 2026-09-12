@@ -1117,6 +1117,7 @@ class _SettingsPageState extends State<SettingsPage> {
         // My Wishlist (the duplicate "My Shopping" row that pointed to the
         // same place as the "Orders" quick-action above has been removed).
         _menuCard('MY SHOPPING', [
+          _menuRow(Icons.inventory_2_outlined, 'My Orders', () => _openPanel(_Panel.orders)),
           _menuRow(Icons.favorite_border, 'My Wishlist', () => _openPanel(_Panel.wishlist),
               iconColor: AppColors.danger),
         ]),
@@ -1846,12 +1847,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ),
           ),
-                    if (o.status != 'Cancelled')
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: _orderTimeline(o),
-            )
-          else if (o.cancelledAt.trim().isNotEmpty)
+          if (o.status == 'Cancelled' && o.cancelledAt.trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               child: Row(
@@ -1929,60 +1925,6 @@ class _SettingsPageState extends State<SettingsPage> {
           onCancelOrder: canCancel ? () => _confirmCancelOrder(o) : null,
         ),
       ),
-    );
-  }
-
-      // Horizontal step tracker: Ordered → Processing → Shipping →
-  // Delivered, each dot with its date once that stage is reached.
-  Widget _orderTimeline(MyOrder o) {
-    final steps = [
-      ('Ordered', o.orderedAt),
-      ('Processing', o.processingAt),
-      ('Shipping', o.shippingAt),
-      ('Delivered', o.deliveredAt),
-    ];
-    // How far along the order is, so earlier dots also show filled.
-    final reachedIndex = o.status == 'Delivered'
-        ? 3
-        : o.status == 'Shipping'
-            ? 2
-            : o.status == 'Processing'
-                ? 1
-                : 0;
-
-    return Row(
-      children: List.generate(steps.length * 2 - 1, (i) {
-        if (i.isOdd) {
-          final stepIndex = i ~/ 2;
-          final done = stepIndex < reachedIndex;
-          return Expanded(
-            child: Container(height: 2, color: done ? AppColors.primary : const Color(0xFFE0E0E0)),
-          );
-        }
-        final stepIndex = i ~/ 2;
-        final label = steps[stepIndex].$1;
-        final date = steps[stepIndex].$2;
-        final reached = stepIndex <= reachedIndex;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              reached ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: 18,
-              color: reached ? AppColors.primary : const Color(0xFFBDBDBD),
-            ),
-            const SizedBox(height: 5),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
-                  color: reached ? AppColors.text : AppColors.textLight,
-                )),
-            if (reached && date.trim().isNotEmpty)
-              Text(date, style: const TextStyle(fontSize: 9.5, color: AppColors.textLight)),
-          ],
-        );
-      }),
     );
   }
 
@@ -2647,23 +2589,239 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // PRIVACY CENTER MENU
+  // PRIVACY CENTER — all sections shown directly as plain wording
+  // (no button list, no white card boxes). Interactive bits (Request
+  // Data button, Grievance form, De-activate/Delete forms) stay
+  // functional but sit directly on the page background.
   // ---------------------------------------------------------------
   Widget _buildPrivacyMenuPanel() {
+    final allChecked = _deleteAgreeTerms && _deleteAgreeBalance && _deleteAgreeNoService;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Privacy Center', Icons.shield_outlined),
-        _menuCard(null, [
-          _menuRow(Icons.description_outlined, 'Privacy Policy', () => _openPanel(_Panel.privacyPolicy)),
-          _menuRow(Icons.download_outlined, 'Request My Data', () => _openPanel(_Panel.requestData)),
-          _menuRow(Icons.gavel_outlined, 'Grievance Redressal', () => _openPanel(_Panel.grievance)),
-          _menuRow(Icons.person_off_outlined, 'De-activate my Account', () => _openPanel(_Panel.deactivate),
-              iconColor: AppColors.secondary),
-          _menuRow(Icons.delete_outline, 'Delete my Account', () => _openPanel(_Panel.deleteAccount),
-              iconColor: AppColors.danger, labelColor: AppColors.danger),
-        ]),
+
+        // Privacy Policy — plain wording, no box.
+        _plainSectionTitle('Privacy Policy'),
+        const _PolicySection(
+          title: '1. Introduction',
+          body:
+              "We value the trust you place in us and recognize the importance of secure transactions and information privacy. This Privacy Policy describes how Sumathi's Style (\"we\", \"our\", \"us\") collect, use, share, store, and otherwise process your personal data through our website, mobile application, and related services (the \"Platform\"). By using the Platform, you agree to be bound by this Privacy Policy.",
+        ),
+        const _PolicySection(
+          title: '2. Information We Collect',
+          body:
+              'Name, phone number, email address, delivery address, body measurements, fitting notes, fabric/design preferences, reference images you upload, and payment-related details (such as UPI ID or transaction reference — we never store full card numbers). We also collect browsing patterns, order history, and technical details like IP address and device/browser information.',
+        ),
+        const _PolicySection(
+          title: '3. How We Use Your Data',
+          body:
+              'To process and fulfil your custom orders, coordinate tailoring and alteration work, deliver products, process payments, communicate order updates via SMS/WhatsApp/Email, improve our fabric and design catalog, resolve disputes, prevent fraud, and comply with legal obligations.',
+        ),
+        const _PolicySection(
+          title: '4. Data Sharing & Disclosure',
+          body:
+              'We never sell your personal data. We only share it with delivery/logistics partners (to complete delivery), payment gateway providers (to process payments securely), our internal tailoring staff (to fulfil measurements), and legal authorities when required by law.',
+        ),
+        const _PolicySection(
+          title: '5. Your Rights',
+          body:
+              'You may access, correct, or update your personal data through your profile, request deletion of your account (see De-activate / Delete my Account below), and withdraw consent for any specific use of your data at any time.',
+        ),
+
+        const SizedBox(height: 8),
+
+        // Request My Data — plain wording + a single button, no box.
+        _plainSectionTitle('Request My Data'),
+        const Text(
+          'You have the right to access a full copy of the personal data we hold about you — profile info, order history, saved addresses, wishlist, and Super Coins balance.',
+          style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: _requestDataDownload,
+          style: _saveBtnStyle(),
+          icon: const Icon(Icons.download, size: 16),
+          label: const Text('Request Data Export'),
+        ),
+        const SizedBox(height: 22),
+
+        // Grievance Redressal — plain wording + form, no box.
+        _plainSectionTitle('Grievance Redressal'),
+        const Text(
+          'Grievance Officer\nName: Sumathi.M\nDesignation: Proprietor, Sumathi\'s Style\nEmail: sumathisstyles@gmail.com\nPhone: +91 86107 03658',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.7),
+        ),
+        const SizedBox(height: 16),
+        const Text('Submit a Complaint', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 12),
+        _textField(_grievanceSubjectCtrl, 'Complaint Subject'),
+        const SizedBox(height: 10),
+        _textField(_grievanceOrderIdCtrl, 'Order ID (if applicable)'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _grievanceDescCtrl,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: 'Please describe your issue in detail...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        const SizedBox(height: 14),
+        ElevatedButton.icon(
+          onPressed: _submitGrievance,
+          style: _saveBtnStyle(),
+          icon: const Icon(Icons.send, size: 16),
+          label: const Text('Submit Complaint'),
+        ),
+        const SizedBox(height: 22),
+
+        // De-activate my Account — plain wording + form, no box.
+        _plainSectionTitle('De-activate my Account'),
+        const Text('When you de-activate your account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 10),
+        const _BulletLine('You are logged out of your Sumathi\'s Style account'),
+        const _BulletLine('Your public profile is no longer visible'),
+        const _BulletLine('Your reviews/ratings remain visible, while your profile information is shown as "unavailable"'),
+        const _BulletLine('Your wishlist items are no longer accessible; the wishlist is shown as "unavailable"'),
+        const _BulletLine('You will be unsubscribed from promotional emails and notifications'),
+        const _BulletLine('Your account data is retained and is restored in case you choose to re-activate your account'),
+        const SizedBox(height: 12),
+        const Text('How do I re-activate my account?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+        const SizedBox(height: 6),
+        const Text(
+          'Simply login again with your registered mobile number. Your account data is fully restored, and default notification settings will apply.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
+        ),
+        const SizedBox(height: 16),
+        const Text('Are you sure you want to leave?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 12),
+        _textField(_deactivatePhoneCtrl, 'Registered mobile number', keyboardType: TextInputType.phone, maxLength: 10),
+        const SizedBox(height: 10),
+        if (_deactivateOtpSent)
+          _textField(_deactivateOtpCtrl, 'Enter received OTP', keyboardType: TextInputType.number, maxLength: 6),
+        const SizedBox(height: 10),
+        _textField(_deactivateReasonCtrl, 'Reason for de-activation (optional)'),
+        const SizedBox(height: 14),
+        if (!_deactivateOtpSent)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _sendDeactivateOtp,
+              style: _saveBtnStyle(),
+              child: const Text('Send OTP'),
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _deactivateAccount,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              child: const Text('Confirm De-activation'),
+            ),
+          ),
+        const SizedBox(height: 24),
+
+        // Delete my Account — plain wording + form, no box.
+        _plainSectionTitle('Delete my Account'),
+        const Text(
+          'If you wish to proceed with an account deletion request, please ensure that you have read and understood the following:',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, height: 1.5),
+        ),
+        const SizedBox(height: 10),
+        const _BulletLine(
+            'There are no pending orders, cancellations, alterations or refund requests. If there are pending requests, please raise your account deletion request once they are completed.'),
+        const _BulletLine('You will lose all Super Coins, gift card balance, or loyalty benefits associated with your account immediately upon deletion.'),
+        const _BulletLine('You will not be able to access order history, profile, wishlist, saved addresses, previous orders and invoices immediately on deletion, and will have to create a new account to use our Platform again.'),
+        const _BulletLine('We may choose to refuse deletion of your account in case you have any pending dispute or grievance relating to your orders.'),
+        const _BulletLine('We may retain certain data for legitimate reasons (fraud prevention, regulatory compliance, or to comply with legal orders) even after deletion.'),
+        const _BulletLine('After your account is deleted, if you log in again using the same phone number, a fresh new account will be created and your old account data will not be accessible.'),
+        const _BulletLine('Please uninstall the app after your account is deleted to stop receiving any notifications, as notifications are an app-level setting.'),
+        const SizedBox(height: 10),
+        const Text('Deleting account is a permanent action', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+        const SizedBox(height: 6),
+        const Text(
+          'Please be advised that the deletion of your account is a permanent action. Once your account is deleted, you will lose all Sumathi\'s Style data including order history & it will no longer be accessible and cannot be restored under any circumstances.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
+        ),
+        const SizedBox(height: 12),
+        CheckboxListTile(
+          value: _deleteAgreeTerms,
+          onChanged: (v) => setState(() => _deleteAgreeTerms = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('I have read and agreed to the Terms and Conditions.', style: TextStyle(fontSize: 13)),
+        ),
+        CheckboxListTile(
+          value: _deleteAgreeBalance,
+          onChanged: (v) => setState(() => _deleteAgreeBalance = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text(
+            'I acknowledge that I do not have any Super Coin balance in my account, or I am willing to forfeit any such balance available in my account.',
+            style: TextStyle(fontSize: 13),
+          ),
+        ),
+        CheckboxListTile(
+          value: _deleteAgreeNoService,
+          onChanged: (v) => setState(() => _deleteAgreeNoService = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text(
+            'I acknowledge that I will not be able to return/replace or seek any service regarding any past order & transactions.',
+            style: TextStyle(fontSize: 13),
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text('Please tell us why you\'re leaving us', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _deleteFeedbackCtrl,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: 'Your feedback will help us improve Sumathi\'s Style.',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: allChecked ? _deleteAccountFinal : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: AppColors.danger.withValues(alpha: 0.35),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            child: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _plainSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontFamily: 'PlayfairDisplay',
+          fontSize: 17,
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+        ),
+      ),
     );
   }
 
@@ -2672,66 +2830,59 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Privacy Policy', Icons.description_outlined, back: _Panel.privacyMenu),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              _PolicySection(
-                title: '1. Introduction',
-                body:
-                    "We value the trust you place in us and recognize the importance of secure transactions and information privacy. This Privacy Policy describes how Sumathi's Style (\"we\", \"our\", \"us\") collect, use, share, store, and otherwise process your personal data through our website, mobile application, and related services (the \"Platform\"). By using the Platform, you agree to be bound by this Privacy Policy.",
-              ),
-              _PolicySection(
-                title: '2. Information We Collect',
-                body:
-                    'Name, phone number, email address, delivery address, body measurements, fitting notes, fabric/design preferences, reference images you upload, and payment-related details (such as UPI ID or transaction reference — we never store full card numbers). We also collect browsing patterns, order history, and technical details like IP address and device/browser information.',
-              ),
-              _PolicySection(
-                title: '3. How We Use Your Data',
-                body:
-                    'To process and fulfil your custom orders, coordinate tailoring and alteration work, deliver products, process payments, communicate order updates via SMS/WhatsApp/Email, improve our fabric and design catalog, resolve disputes, prevent fraud, and comply with legal obligations.',
-              ),
-              _PolicySection(
-                title: '4. Cookies',
-                body:
-                    'Our website uses small data files ("cookies") to remember your cart, wishlist and session preferences. Cookies never contain your payment details, and you can disable them from your browser settings at any time.',
-              ),
-              _PolicySection(
-                title: '5. Data Sharing & Disclosure',
-                body:
-                    'We never sell your personal data. We only share it with delivery/logistics partners (to complete delivery), payment gateway providers (to process payments securely), our internal tailoring staff (to fulfil measurements), and legal authorities when required by law.',
-              ),
-              _PolicySection(
-                title: "6. Children's Information",
-                body:
-                    'Our Platform is intended for individuals capable of entering into a binding contract. We do not knowingly collect data from children without a parent or guardian\'s involvement.',
-              ),
-              _PolicySection(
-                title: '7. Data Retention & Security',
-                body:
-                    'We retain your data only as long as necessary to fulfil your order, handle alterations, or meet legal record-keeping requirements, and take reasonable technical and organisational measures to protect it from unauthorized access.',
-              ),
-              _PolicySection(
-                title: '8. Your Rights',
-                body:
-                    'You may access, correct, or update your personal data through your profile, request deletion of your account (see De-activate / Delete my Account), and withdraw consent for any specific use of your data at any time.',
-              ),
-              _PolicySection(
-                title: '9. Choice / Opt-Out & Advertisements',
-                body:
-                    'You can opt out of promotional communications anytime from Notification Settings. We may use limited third-party analytics to understand app usage; these tools never access your name, address, or payment details directly.',
-              ),
-              _PolicySection(
-                title: '10. Changes to This Policy',
-                body:
-                    'We may update this Privacy Policy periodically to reflect changes in our practices or applicable law. Updates will be posted here with a revised date.',
-              ),
-              _PolicySection(
-                title: '11. Contact Us',
-                body: 'For privacy questions, contact sumathisstyles@gmail.com or WhatsApp +91 86107 03658.',
-              ),
-            ],
-          ),
+        const _PolicySection(
+          title: '1. Introduction',
+          body:
+              "We value the trust you place in us and recognize the importance of secure transactions and information privacy. This Privacy Policy describes how Sumathi's Style (\"we\", \"our\", \"us\") collect, use, share, store, and otherwise process your personal data through our website, mobile application, and related services (the \"Platform\"). By using the Platform, you agree to be bound by this Privacy Policy.",
+        ),
+        const _PolicySection(
+          title: '2. Information We Collect',
+          body:
+              'Name, phone number, email address, delivery address, body measurements, fitting notes, fabric/design preferences, reference images you upload, and payment-related details (such as UPI ID or transaction reference — we never store full card numbers). We also collect browsing patterns, order history, and technical details like IP address and device/browser information.',
+        ),
+        const _PolicySection(
+          title: '3. How We Use Your Data',
+          body:
+              'To process and fulfil your custom orders, coordinate tailoring and alteration work, deliver products, process payments, communicate order updates via SMS/WhatsApp/Email, improve our fabric and design catalog, resolve disputes, prevent fraud, and comply with legal obligations.',
+        ),
+        const _PolicySection(
+          title: '4. Cookies',
+          body:
+              'Our website uses small data files ("cookies") to remember your cart, wishlist and session preferences. Cookies never contain your payment details, and you can disable them from your browser settings at any time.',
+        ),
+        const _PolicySection(
+          title: '5. Data Sharing & Disclosure',
+          body:
+              'We never sell your personal data. We only share it with delivery/logistics partners (to complete delivery), payment gateway providers (to process payments securely), our internal tailoring staff (to fulfil measurements), and legal authorities when required by law.',
+        ),
+        const _PolicySection(
+          title: "6. Children's Information",
+          body:
+              'Our Platform is intended for individuals capable of entering into a binding contract. We do not knowingly collect data from children without a parent or guardian\'s involvement.',
+        ),
+        const _PolicySection(
+          title: '7. Data Retention & Security',
+          body:
+              'We retain your data only as long as necessary to fulfil your order, handle alterations, or meet legal record-keeping requirements, and take reasonable technical and organisational measures to protect it from unauthorized access.',
+        ),
+        const _PolicySection(
+          title: '8. Your Rights',
+          body:
+              'You may access, correct, or update your personal data through your profile, request deletion of your account (see De-activate / Delete my Account), and withdraw consent for any specific use of your data at any time.',
+        ),
+        const _PolicySection(
+          title: '9. Choice / Opt-Out & Advertisements',
+          body:
+              'You can opt out of promotional communications anytime from Notification Settings. We may use limited third-party analytics to understand app usage; these tools never access your name, address, or payment details directly.',
+        ),
+        const _PolicySection(
+          title: '10. Changes to This Policy',
+          body:
+              'We may update this Privacy Policy periodically to reflect changes in our practices or applicable law. Updates will be posted here with a revised date.',
+        ),
+        const _PolicySection(
+          title: '11. Contact Us',
+          body: 'For privacy questions, contact sumathisstyles@gmail.com or WhatsApp +91 86107 03658.',
         ),
       ],
     );
@@ -2742,25 +2893,18 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Request My Data', Icons.download_outlined, back: _Panel.privacyMenu),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Download Your Personal Data', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 10),
-              const Text(
-                'You have the right to access a full copy of the personal data we hold about you — profile info, order history, saved addresses, wishlist, and Super Coins balance.',
-                style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.5),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _requestDataDownload,
-                style: _saveBtnStyle(),
-                icon: const Icon(Icons.download, size: 16),
-                label: const Text('Request Data Export'),
-              ),
-            ],
-          ),
+        const Text('Download Your Personal Data', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 10),
+        const Text(
+          'You have the right to access a full copy of the personal data we hold about you — profile info, order history, saved addresses, wishlist, and Super Coins balance.',
+          style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.5),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: _requestDataDownload,
+          style: _saveBtnStyle(),
+          icon: const Icon(Icons.download, size: 16),
+          label: const Text('Request Data Export'),
         ),
       ],
     );
@@ -2781,46 +2925,33 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Grievance Redressal', Icons.gavel_outlined, back: _Panel.privacyMenu),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Grievance Officer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              SizedBox(height: 8),
-              Text(
-                'Name: Sumathi.M\nDesignation: Proprietor, Sumathi\'s Style\nEmail: sumathisstyles@gmail.com\nPhone: +91 86107 03658',
-                style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.7),
-              ),
-            ],
+        const Text('Grievance Officer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 8),
+        const Text(
+          'Name: Sumathi.M\nDesignation: Proprietor, Sumathi\'s Style\nEmail: sumathisstyles@gmail.com\nPhone: +91 86107 03658',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.7),
+        ),
+        const SizedBox(height: 20),
+        const Text('Submit a Complaint', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        _textField(_grievanceSubjectCtrl, 'Complaint Subject'),
+        const SizedBox(height: 10),
+        _textField(_grievanceOrderIdCtrl, 'Order ID (if applicable)'),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _grievanceDescCtrl,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: 'Please describe your issue in detail...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Submit a Complaint', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 12),
-              _textField(_grievanceSubjectCtrl, 'Complaint Subject'),
-              const SizedBox(height: 10),
-              _textField(_grievanceOrderIdCtrl, 'Order ID (if applicable)'),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _grievanceDescCtrl,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Please describe your issue in detail...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-              const SizedBox(height: 14),
-              ElevatedButton.icon(
-                onPressed: _submitGrievance,
-                style: _saveBtnStyle(),
-                icon: const Icon(Icons.send, size: 16),
-                label: const Text('Submit Complaint'),
-              ),
-            ],
-          ),
+        const SizedBox(height: 14),
+        ElevatedButton.icon(
+          onPressed: _submitGrievance,
+          style: _saveBtnStyle(),
+          icon: const Icon(Icons.send, size: 16),
+          label: const Text('Submit Complaint'),
         ),
       ],
     );
@@ -2850,71 +2981,58 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('De-activate my Account', Icons.person_off_outlined, back: _Panel.privacyMenu),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('When you de-activate your account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              SizedBox(height: 12),
-              _BulletLine('You are logged out of your Sumathi\'s Style account'),
-              _BulletLine('Your public profile is no longer visible'),
-              _BulletLine('Your reviews/ratings remain visible, while your profile information is shown as "unavailable"'),
-              _BulletLine('Your wishlist items are no longer accessible; the wishlist is shown as "unavailable"'),
-              _BulletLine('You will be unsubscribed from promotional emails and notifications'),
-              _BulletLine('Your account data is retained and is restored in case you choose to re-activate your account'),
-              SizedBox(height: 16),
-              Text('How do I re-activate my account?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              SizedBox(height: 8),
-              Text(
-                'Simply login again with your registered mobile number. Your account data is fully restored, and default notification settings will apply.',
-                style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
-              ),
-            ],
-          ),
+        const Text('When you de-activate your account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        const _BulletLine('You are logged out of your Sumathi\'s Style account'),
+        const _BulletLine('Your public profile is no longer visible'),
+        const _BulletLine('Your reviews/ratings remain visible, while your profile information is shown as "unavailable"'),
+        const _BulletLine('Your wishlist items are no longer accessible; the wishlist is shown as "unavailable"'),
+        const _BulletLine('You will be unsubscribed from promotional emails and notifications'),
+        const _BulletLine('Your account data is retained and is restored in case you choose to re-activate your account'),
+        const SizedBox(height: 16),
+        const Text('How do I re-activate my account?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 8),
+        const Text(
+          'Simply login again with your registered mobile number. Your account data is fully restored, and default notification settings will apply.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
         ),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Are you sure you want to leave?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 14),
-              _textField(_deactivatePhoneCtrl, 'Registered mobile number', keyboardType: TextInputType.phone, maxLength: 10),
-              const SizedBox(height: 10),
-              if (_deactivateOtpSent)
-                _textField(_deactivateOtpCtrl, 'Enter received OTP', keyboardType: TextInputType.number, maxLength: 6),
-              const SizedBox(height: 10),
-              _textField(_deactivateReasonCtrl, 'Reason for de-activation (optional)'),
-              const SizedBox(height: 16),
-              if (!_deactivateOtpSent)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _sendDeactivateOtp,
-                    style: _saveBtnStyle(),
-                    child: const Text('Send OTP'),
-                  ),
-                )
-              else
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _deactivateAccount,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: const Text('Confirm De-activation'),
-                  ),
-                ),
-              const SizedBox(height: 10),
-              Center(
-                child: TextButton(
-                  onPressed: () => _openPanel(_Panel.privacyMenu),
-                  child: const Text('No, let me stay!'),
-                ),
+        const SizedBox(height: 20),
+        const Text('Are you sure you want to leave?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 14),
+        _textField(_deactivatePhoneCtrl, 'Registered mobile number', keyboardType: TextInputType.phone, maxLength: 10),
+        const SizedBox(height: 10),
+        if (_deactivateOtpSent)
+          _textField(_deactivateOtpCtrl, 'Enter received OTP', keyboardType: TextInputType.number, maxLength: 6),
+        const SizedBox(height: 10),
+        _textField(_deactivateReasonCtrl, 'Reason for de-activation (optional)'),
+        const SizedBox(height: 16),
+        if (!_deactivateOtpSent)
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _sendDeactivateOtp,
+              style: _saveBtnStyle(),
+              child: const Text('Send OTP'),
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _deactivateAccount,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
-            ],
+              child: const Text('Confirm De-activation'),
+            ),
+          ),
+        const SizedBox(height: 10),
+        Center(
+          child: TextButton(
+            onPressed: () => _openPanel(_Panel.privacyMenu),
+            child: const Text('No, let me stay!'),
           ),
         ),
       ],
@@ -2979,109 +3097,82 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Delete my Account', Icons.delete_outline, back: _Panel.privacyMenu),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'If you wish to proceed with an account deletion request, please ensure that you have read and understood the following:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, height: 1.5),
-              ),
-              SizedBox(height: 12),
-              _BulletLine(
-                  'There are no pending orders, cancellations, alterations or refund requests. If there are pending requests, please raise your account deletion request once they are completed.'),
-              _BulletLine('You will lose all Super Coins, gift card balance, or loyalty benefits associated with your account immediately upon deletion.'),
-              _BulletLine('You will not be able to access order history, profile, wishlist, saved addresses, previous orders and invoices immediately on deletion, and will have to create a new account to use our Platform again.'),
-              _BulletLine('We may choose to refuse deletion of your account in case you have any pending dispute or grievance relating to your orders.'),
-              _BulletLine('We may retain certain data for legitimate reasons (fraud prevention, regulatory compliance, or to comply with legal orders) even after deletion.'),
-              _BulletLine('After your account is deleted, if you log in again using the same phone number, a fresh new account will be created and your old account data will not be accessible.'),
-              _BulletLine('Please uninstall the app after your account is deleted to stop receiving any notifications, as notifications are an app-level setting.'),
-            ],
+        const Text(
+          'If you wish to proceed with an account deletion request, please ensure that you have read and understood the following:',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, height: 1.5),
+        ),
+        const SizedBox(height: 12),
+        const _BulletLine(
+            'There are no pending orders, cancellations, alterations or refund requests. If there are pending requests, please raise your account deletion request once they are completed.'),
+        const _BulletLine('You will lose all Super Coins, gift card balance, or loyalty benefits associated with your account immediately upon deletion.'),
+        const _BulletLine('You will not be able to access order history, profile, wishlist, saved addresses, previous orders and invoices immediately on deletion, and will have to create a new account to use our Platform again.'),
+        const _BulletLine('We may choose to refuse deletion of your account in case you have any pending dispute or grievance relating to your orders.'),
+        const _BulletLine('We may retain certain data for legitimate reasons (fraud prevention, regulatory compliance, or to comply with legal orders) even after deletion.'),
+        const _BulletLine('After your account is deleted, if you log in again using the same phone number, a fresh new account will be created and your old account data will not be accessible.'),
+        const _BulletLine('Please uninstall the app after your account is deleted to stop receiving any notifications, as notifications are an app-level setting.'),
+        const SizedBox(height: 16),
+        const Text('Deleting account is a permanent action',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+        const SizedBox(height: 6),
+        const Text(
+          'Please be advised that the deletion of your account is a permanent action. Once your account is deleted, you will lose all Sumathi\'s Style data including order history & it will no longer be accessible and cannot be restored under any circumstances.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
+        ),
+        const SizedBox(height: 16),
+        CheckboxListTile(
+          value: _deleteAgreeTerms,
+          onChanged: (v) => setState(() => _deleteAgreeTerms = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('I have read and agreed to the Terms and Conditions.', style: TextStyle(fontSize: 13)),
+        ),
+        CheckboxListTile(
+          value: _deleteAgreeBalance,
+          onChanged: (v) => setState(() => _deleteAgreeBalance = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text(
+            'I acknowledge that I do not have any Super Coin balance in my account, or I am willing to forfeit any such balance available in my account.',
+            style: TextStyle(fontSize: 13),
           ),
         ),
-        Container(
+        CheckboxListTile(
+          value: _deleteAgreeNoService,
+          onChanged: (v) => setState(() => _deleteAgreeNoService = v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text(
+            'I acknowledge that I will not be able to return/replace or seek any service regarding any past order & transactions.',
+            style: TextStyle(fontSize: 13),
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text('Please tell us why you\'re leaving us', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _deleteFeedbackCtrl,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: 'Your feedback will help us improve Sumathi\'s Style.',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
           width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF5E6),
-            border: Border.all(color: const Color(0xFFF3D9A4)),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Deleting account is a permanent action',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-              SizedBox(height: 6),
-              Text(
-                'Please be advised that the deletion of your account is a permanent action. Once your account is deleted, you will lose all Sumathi\'s Style data including order history & it will no longer be accessible and cannot be restored under any circumstances.',
-                style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
-              ),
-            ],
-          ),
-        ),
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CheckboxListTile(
-                value: _deleteAgreeTerms,
-                onChanged: (v) => setState(() => _deleteAgreeTerms = v ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('I have read and agreed to the Terms and Conditions.', style: TextStyle(fontSize: 13)),
-              ),
-              CheckboxListTile(
-                value: _deleteAgreeBalance,
-                onChanged: (v) => setState(() => _deleteAgreeBalance = v ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text(
-                  'I acknowledge that I do not have any Super Coin balance in my account, or I am willing to forfeit any such balance available in my account.',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ),
-              CheckboxListTile(
-                value: _deleteAgreeNoService,
-                onChanged: (v) => setState(() => _deleteAgreeNoService = v ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text(
-                  'I acknowledge that I will not be able to return/replace or seek any service regarding any past order & transactions.',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text('Please tell us why you\'re leaving us', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _deleteFeedbackCtrl,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Your feedback will help us improve Sumathi\'s Style.',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: allChecked ? _deleteAccountFinal : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.danger,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppColors.danger.withValues(alpha: 0.35),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  ),
-                  child: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
+          child: ElevatedButton(
+            onPressed: allChecked ? _deleteAccountFinal : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: AppColors.danger.withValues(alpha: 0.35),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            child: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -3134,101 +3225,82 @@ class _SettingsPageState extends State<SettingsPage> {
         _panelHeader('Terms, Policies & Licenses', Icons.description_outlined),
 
         // PART A — TERMS
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('PART A — TERMS OF USE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
-              SizedBox(height: 12),
-              _PolicySection(
-                title: 'Eligibility & Account Registration',
-                body:
-                    'Use of our Platform is available only to persons who are competent to enter into a legally binding contract, and generally at least 18 years of age. To place orders or save your measurements, you may be required to register using your phone number. You are responsible for keeping your login credentials confidential.',
-              ),
-              _PolicySection(
-                title: 'Orders, Pricing & Payment',
-                body:
-                    'Orders are confirmed once you receive an Order ID via app/SMS/email. Prices are in INR and inclusive of applicable taxes unless stated otherwise. We accept UPI, cash on delivery (where available), and other listed payment modes. Custom orders may require an advance payment.',
-              ),
-              _PolicySection(
-                title: 'Prohibited Conduct',
-                body:
-                    'You agree not to use the Platform for unlawful purposes, interfere with its working (hacking, scraping, malicious code), impersonate others, or post defamatory/obscene content — without prejudice to your right to leave honest feedback about your experience.',
-              ),
-              _PolicySection(
-                title: 'Liability, Governing Law & Changes',
-                body:
-                    "To the extent permitted by law, we are not liable for indirect or consequential damages beyond the order value. These Terms are governed by the laws of India, with disputes resolved amicably first, failing which subject to courts having jurisdiction over our place of business. We may revise these Terms from time to time.",
-              ),
-            ],
-          ),
+        const Text('PART A — TERMS OF USE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
+        const SizedBox(height: 12),
+        const _PolicySection(
+          title: 'Eligibility & Account Registration',
+          body:
+              'Use of our Platform is available only to persons who are competent to enter into a legally binding contract, and generally at least 18 years of age. To place orders or save your measurements, you may be required to register using your phone number. You are responsible for keeping your login credentials confidential.',
+        ),
+        const _PolicySection(
+          title: 'Orders, Pricing & Payment',
+          body:
+              'Orders are confirmed once you receive an Order ID via app/SMS/email. Prices are in INR and inclusive of applicable taxes unless stated otherwise. We accept UPI, cash on delivery (where available), and other listed payment modes. Custom orders may require an advance payment.',
+        ),
+        const _PolicySection(
+          title: 'Prohibited Conduct',
+          body:
+              'You agree not to use the Platform for unlawful purposes, interfere with its working (hacking, scraping, malicious code), impersonate others, or post defamatory/obscene content — without prejudice to your right to leave honest feedback about your experience.',
+        ),
+        const _PolicySection(
+          title: 'Liability, Governing Law & Changes',
+          body:
+              "To the extent permitted by law, we are not liable for indirect or consequential damages beyond the order value. These Terms are governed by the laws of India, with disputes resolved amicably first, failing which subject to courts having jurisdiction over our place of business. We may revise these Terms from time to time.",
         ),
 
+        const SizedBox(height: 16),
         // PART B — POLICIES
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('PART B — POLICIES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
-              SizedBox(height: 12),
-              _PolicySection(
-                title: 'Delivery Policy',
-                body:
-                    'We aim to deliver within the timeline shown at order confirmation. Custom tailoring timelines vary with order complexity and season. We are not liable for delays caused by circumstances beyond our reasonable control.',
-              ),
-              _PolicySection(
-                title: 'Cancellation Policy',
-                body:
-                    'Orders can be cancelled free of cost before stitching work begins, from the "My Orders" section. Once cutting/stitching has started, cancellation may involve a deduction for materials and labour already used.',
-              ),
-              _PolicySection(
-                title: 'Returns, Alteration & Refund Policy',
-                body:
-                    'As products are custom-made, standard "return for any reason" policies do not apply. We offer free alterations within a specified period if the garment does not fit as per confirmed measurements. Refunds apply only for manufacturing defects, wrong items, or pre-stitching cancellations, credited within a reasonable number of business days.',
-              ),
-              _PolicySection(
-                title: 'Measurement, Fitting & Quality Assurance',
-                body:
-                    'You are responsible for providing accurate measurements. We follow a quality check before dispatch covering stitching quality, measurement accuracy, and finishing. Report any genuine quality issue within the specified reporting window.',
-              ),
-              _PolicySection(
-                title: 'Grievance / Complaint Policy',
-                body:
-                    'Raise any dissatisfaction through the Contact/Help section or our Grievance Redressal page. We aim to acknowledge and resolve complaints within a reasonable timeframe.',
-              ),
-            ],
-          ),
+        const Text('PART B — POLICIES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
+        const SizedBox(height: 12),
+        const _PolicySection(
+          title: 'Delivery Policy',
+          body:
+              'We aim to deliver within the timeline shown at order confirmation. Custom tailoring timelines vary with order complexity and season. We are not liable for delays caused by circumstances beyond our reasonable control.',
+        ),
+        const _PolicySection(
+          title: 'Cancellation Policy',
+          body:
+              'Orders can be cancelled free of cost before stitching work begins, from the "My Orders" section. Once cutting/stitching has started, cancellation may involve a deduction for materials and labour already used.',
+        ),
+        const _PolicySection(
+          title: 'Returns, Alteration & Refund Policy',
+          body:
+              'As products are custom-made, standard "return for any reason" policies do not apply. We offer free alterations within a specified period if the garment does not fit as per confirmed measurements. Refunds apply only for manufacturing defects, wrong items, or pre-stitching cancellations, credited within a reasonable number of business days.',
+        ),
+        const _PolicySection(
+          title: 'Measurement, Fitting & Quality Assurance',
+          body:
+              'You are responsible for providing accurate measurements. We follow a quality check before dispatch covering stitching quality, measurement accuracy, and finishing. Report any genuine quality issue within the specified reporting window.',
+        ),
+        const _PolicySection(
+          title: 'Grievance / Complaint Policy',
+          body:
+              'Raise any dissatisfaction through the Contact/Help section or our Grievance Redressal page. We aim to acknowledge and resolve complaints within a reasonable timeframe.',
         ),
 
+        const SizedBox(height: 16),
         // PART C — LICENSES
-        _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('PART C — LICENSES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
-              SizedBox(height: 12),
-              _PolicySection(
-                title: 'License to Use the Platform',
-                body:
-                    'We grant you a limited, non-exclusive, non-transferable, revocable license to use the Platform for personal, non-commercial ordering purposes only.',
-              ),
-              _PolicySection(
-                title: 'Intellectual Property & Trademarks',
-                body:
-                    'All content on the Platform — our brand name, logo, designs, photographs, text and graphics — is the property of Sumathi\'s Style. "Sumathi\'s Style" and associated branding are our trademarks; no license is granted to use them without our prior written permission.',
-              ),
-              _PolicySection(
-                title: 'User-Generated Content License',
-                body:
-                    'If you upload reference images, design ideas, or reviews, you grant us a limited, non-exclusive license to use that content to process your order or — with separate consent — showcase customer feedback.',
-              ),
-              _PolicySection(
-                title: 'Third-Party / Open-Source & Restrictions',
-                body:
-                    'Our app may include third-party or open-source components, each governed by their own license terms. You may not reverse-engineer the app, scrape data from the Platform, or remove proprietary notices. This license terminates automatically if you violate these restrictions.',
-              ),
-            ],
-          ),
+        const Text('PART C — LICENSES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
+        const SizedBox(height: 12),
+        const _PolicySection(
+          title: 'License to Use the Platform',
+          body:
+              'We grant you a limited, non-exclusive, non-transferable, revocable license to use the Platform for personal, non-commercial ordering purposes only.',
+        ),
+        const _PolicySection(
+          title: 'Intellectual Property & Trademarks',
+          body:
+              'All content on the Platform — our brand name, logo, designs, photographs, text and graphics — is the property of Sumathi\'s Style. "Sumathi\'s Style" and associated branding are our trademarks; no license is granted to use them without our prior written permission.',
+        ),
+        const _PolicySection(
+          title: 'User-Generated Content License',
+          body:
+              'If you upload reference images, design ideas, or reviews, you grant us a limited, non-exclusive license to use that content to process your order or — with separate consent — showcase customer feedback.',
+        ),
+        const _PolicySection(
+          title: 'Third-Party / Open-Source & Restrictions',
+          body:
+              'Our app may include third-party or open-source components, each governed by their own license terms. You may not reverse-engineer the app, scrape data from the Platform, or remove proprietary notices. This license terminates automatically if you violate these restrictions.',
         ),
       ],
     );
@@ -3283,11 +3355,10 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 4),
         _menuCard(null, [
-          _menuRow(Icons.description_outlined, 'Terms, Policies & Licenses', () => _openPanel(_Panel.terms)),
-          _menuRow(Icons.person_off_outlined, 'De-activate my Account', () => _openPanel(_Panel.deactivate),
-              iconColor: AppColors.secondary),
           _menuRow(Icons.delete_outline, 'Delete my Account', () => _openPanel(_Panel.deleteAccount),
               iconColor: AppColors.danger, labelColor: AppColors.danger),
+          _menuRow(Icons.person_off_outlined, 'De-activate my Account', () => _openPanel(_Panel.deactivate),
+              iconColor: AppColors.secondary),
         ]),
       ],
     );
@@ -3316,36 +3387,19 @@ class _SettingsPageState extends State<SettingsPage> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _callUs,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                  minimumSize: const Size(double.infinity, 46),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                icon: const Icon(Icons.call, size: 16),
-                label: const Text('Call Us'),
-              ),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _mailUs,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.secondary,
+              foregroundColor: AppColors.dark,
+              minimumSize: const Size(double.infinity, 46),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _mailUs,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.secondary,
-                  foregroundColor: AppColors.dark,
-                  minimumSize: const Size(double.infinity, 46),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                icon: const Icon(Icons.email, size: 16),
-                label: const Text('Mail Us'),
-              ),
-            ),
-          ],
+            icon: const Icon(Icons.email, size: 16),
+            label: const Text('Mail Us'),
+          ),
         ),
         const SizedBox(height: 10),
         const Center(
@@ -3888,6 +3942,13 @@ class _BulletLine extends StatelessWidget {
   static const String _bizAddress =
       '1/705, 9th St, Chozhamandala Devi Nagar, Devi Nagar, Cholamandalam, Injambakkam, Chennai, Tamil Nadu 600115';
 
+  // Path to the business logo asset used on the invoice. Add the PNG
+  // to your project's assets/ folder and register it in pubspec.yaml:
+  //   flutter:
+  //     assets:
+  //       - assets/logo.png
+  static const String _logoAssetPath = 'assets/logo.png';
+
   const OrderDetailsPage({
     super.key,
     required this.order,
@@ -4022,9 +4083,9 @@ class _BulletLine extends StatelessWidget {
 
   // -------------------------------------------------------------------
   // CHAT WITH US — a lightweight automated assistant. Questions are
-  // shown one-by-one as a vertical list (like quiz-style multiple
-  // choice options) — tap a question to instantly reveal its answer
-  // in the chat, rather than a horizontal row of chips.
+  // shown one-by-one as a vertical list of separate cards (each with
+  // its own spacing) — tap a question to instantly reveal its answer
+  // in the chat below.
   // -------------------------------------------------------------------
   void _showChatSheet(BuildContext context) {
     final answers = <String, String>{
@@ -4087,59 +4148,56 @@ class _BulletLine extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
 
-                        // Quiz-style: questions listed one per line, each
-                        // tappable. Already-asked questions fade out and
-                        // move to the bottom so you can see what's left.
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFEDEDED)),
-                          ),
-                          child: Column(
-                            children: answers.keys.map((q) {
-                              final asked = askedQuestions.contains(q);
-                              return InkWell(
-                                onTap: () {
-                                  setSheet(() {
-                                    askedQuestions.add(q);
-                                    chat.add({'from': 'user', 'text': q});
-                                    chat.add({'from': 'bot', 'text': answers[q]!});
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                                  decoration: const BoxDecoration(
-                                    border: Border(bottom: BorderSide(color: Color(0xFFF2F2F2))),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        asked ? Icons.check_circle : Icons.radio_button_unchecked,
-                                        size: 17,
-                                        color: asked ? AppColors.success : AppColors.primary,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          q,
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: asked ? AppColors.textLight : AppColors.text,
-                                          ),
+                        // Quiz-style: questions listed one per line, each in
+                        // its own spaced card (not joined together) and
+                        // tappable. Already-asked questions fade out.
+                        ...answers.keys.map((q) {
+                          final asked = askedQuestions.contains(q);
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFEDEDED)),
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                setSheet(() {
+                                  askedQuestions.add(q);
+                                  chat.add({'from': 'user', 'text': q});
+                                  chat.add({'from': 'bot', 'text': answers[q]!});
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      asked ? Icons.check_circle : Icons.radio_button_unchecked,
+                                      size: 17,
+                                      color: asked ? AppColors.success : AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        q,
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: asked ? AppColors.textLight : AppColors.text,
                                         ),
                                       ),
-                                      const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
-                                    ],
-                                  ),
+                                    ),
+                                    const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+                                  ],
                                 ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
+                              ),
+                            ),
+                          );
+                        }),
 
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 8),
                         ...chat.map((m) => Align(
                               alignment: m['from'] == 'user' ? Alignment.centerRight : Alignment.centerLeft,
                               child: Container(
@@ -4213,10 +4271,10 @@ class _BulletLine extends StatelessWidget {
 
   // -------------------------------------------------------------------
   // DOWNLOAD INVOICE — builds a one-page Sumathi's Style bill PDF with
-  // a QR code (encodes the order id), our business details, the
-  // customer's own delivery address, date/time, order id, product
-  // details, delivery charge, product amount and total, then opens
-  // the native share/print sheet.
+  // the business logo + a small QR code (encodes the order id), our
+  // business details, the customer's own delivery address, date/time,
+  // order id, product details, delivery charge, product amount and
+  // total, then opens the native share/print sheet.
   //
   // NOTE: the product description printed here is exactly what's saved
   // in the order's `product` field at checkout — if you want it to say
@@ -4234,6 +4292,16 @@ class _BulletLine extends StatelessWidget {
       final ampm = now.hour >= 12 ? 'PM' : 'AM';
       final timeStr = '$hour12:${now.minute.toString().padLeft(2, '0')} $ampm';
 
+      // Load the business logo from assets. If it isn't bundled yet,
+      // fall back gracefully and just skip the logo image.
+      pw.ImageProvider? logoImage;
+      try {
+        final logoBytes = await rootBundle.load(_logoAssetPath);
+        logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+      } catch (_) {
+        logoImage = null;
+      }
+
       doc.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
@@ -4246,23 +4314,37 @@ class _BulletLine extends StatelessWidget {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.center,
                       children: [
-                        pw.Text("Sumathi's Style",
-                            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-                        pw.SizedBox(height: 2),
-                        pw.Text('$_bizName — $_bizCategory',
-                            style: const pw.TextStyle(fontSize: 10)),
-                        pw.SizedBox(height: 2),
-                        pw.Text('GSTIN: N/A', style: const pw.TextStyle(fontSize: 9)),
+                        if (logoImage != null) ...[
+                          pw.Container(
+                            width: 34,
+                            height: 34,
+                            child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                          ),
+                          pw.SizedBox(width: 8),
+                        ],
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text("Sumathi's Style",
+                                style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                            pw.SizedBox(height: 2),
+                            pw.Text('$_bizName — $_bizCategory',
+                                style: const pw.TextStyle(fontSize: 9)),
+                            pw.SizedBox(height: 2),
+                            pw.Text('GSTIN: N/A', style: const pw.TextStyle(fontSize: 8.5)),
+                          ],
+                        ),
                       ],
                     ),
+                    // Small GPay-scanner-style QR code — kept compact.
                     pw.BarcodeWidget(
                       barcode: pw.Barcode.qrCode(),
                       data: 'Order #${order.id}',
-                      width: 60,
-                      height: 60,
+                      width: 42,
+                      height: 42,
                     ),
                   ],
                 ),
@@ -4428,7 +4510,8 @@ class _BulletLine extends StatelessWidget {
                     Expanded(
                       child: Container(
                         width: 2,
-                        margin: const EdgeInsets.symmetric(vertical: 2),
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        constraints: const BoxConstraints(minHeight: 34),
                         color: index < reachedIndex ? AppColors.primary : const Color(0xFFE0E0E0),
                       ),
                     ),
@@ -4437,7 +4520,7 @@ class _BulletLine extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 34),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
