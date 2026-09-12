@@ -1089,7 +1089,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _quickGridItem(Icons.favorite_border, 'Wishlist', () => _openPanel(_Panel.wishlist)),
             _quickGridItem(Icons.monetization_on_outlined, 'Super Coins', () => _openPanel(_Panel.coins),
                 iconColor: AppColors.secondary),
-            _quickGridItem(Icons.support_agent, 'Help Center', () => _openPanel(_Panel.help)),
+            _quickGridItem(Icons.support_agent, 'Drop Your Idea', () => _openPanel(_Panel.help)),
           ],
         ),
         const SizedBox(height: 20),

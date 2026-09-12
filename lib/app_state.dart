@@ -397,7 +397,11 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------------- DELIVERY LOCATION ----------------
-  String _deliveryLocation = 'Chennai';
+  // NOTE: No hardcoded default here anymore. Home/Shop pages already
+  // handle the empty case by showing "Add a delivery address" until a
+  // real location is fetched or picked, so we should never show a fake
+  // "Chennai" before the real address is known.
+  String _deliveryLocation = '';
   double? _deliveryLat;
   double? _deliveryLng;
   String _deliveryPincode = '';
