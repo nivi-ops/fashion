@@ -253,7 +253,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _deleteFeedbackCtrl = TextEditingController();
 
   // Contact details used by Help Center's Call Us / Mail Us buttons.
-  static const String _supportPhone = '+918610703658';
+  
   static const String _supportEmail = 'divyadeveloper2025@gmail.com';
 
   final List<Map<String, String>> _faqData = const [
@@ -891,13 +891,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _callUs() async {
-    final uri = Uri(scheme: 'tel', path: _supportPhone);
-    final ok = await launchUrl(uri);
-    if (!ok && mounted) {
-      _showToast('Could not open the dialer', error: true);
-    }
-  }
+  
 
   Future<void> _mailUs() async {
     final uri = Uri(
