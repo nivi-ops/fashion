@@ -3821,7 +3821,7 @@ class _BulletLine extends StatelessWidget {
 
   // Business contact/details used on the generated invoice.
   static const String _bizPhone = '+91 86107 03658';
-  static const String _bizEmail = 'divyadeveloper2025@gmail.com';
+  static const String _bizEmail = 'sumathisstyles@gmail.com';
   static const String _bizName = "Sumathi Tailoring and Fashion Designing";
   static const String _bizCategory = 'Clothing Store';
   static const String _bizAddress =
@@ -4257,7 +4257,9 @@ class _BulletLine extends StatelessWidget {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('Mobile Number: $_bizPhone', style: const pw.TextStyle(fontSize: 10)),
+                                                    pw.Text('Mobile Number: $_bizPhone', style: const pw.TextStyle(fontSize: 10)),
+                          pw.SizedBox(height: 3),
+                          pw.Text('Email: $_bizEmail', style: const pw.TextStyle(fontSize: 10)),
                           pw.SizedBox(height: 3),
                           pw.Text('Address: $_bizAddress',
                               style: const pw.TextStyle(fontSize: 9.5)),
