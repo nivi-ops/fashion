@@ -258,27 +258,27 @@ class _SettingsPageState extends State<SettingsPage> {
 
   final List<Map<String, String>> _faqData = const [
     {
-      'q': 'How long does a custom order take?',
-      'a': 'Most custom stitching orders are ready within 10-15 days from order confirmation, depending on the design and current workload. Bridal outfits and heavy aari work may take a little longer.',
+      'q': 'What happens when I update my email address (or mobile number)?',
+      'a': "Your login email id (or mobile number) changes, likewise. You'll receive all your account related communication on your updated email address (or mobile number).",
+    },
+    {
+      'q': "When will my Sumathi's Style account be updated with the new email address (or mobile number)?",
+      'a': 'It happens as soon as you confirm the verification code sent to your email (or mobile) and save the changes.',
+    },
+    {
+      'q': "What happens to my existing Sumathi's Style account when I update my email address (or mobile number)?",
+      'a': "Updating your email address (or mobile number) doesn't invalidate your account. Your account remains fully functional. You'll continue seeing your Order history, saved information and personal details.",
     },
     {
       'q': 'Can I cancel my order?',
-      'a': "Yes, free of cost as long as stitching hasn't started. Once cutting or stitching begins, cancellation may not be possible.",
+      'a': "Yes, free of cost as long as your order status is still 'Ordered'. Once the status changes to 'Processing', stitching work has begun and the order can no longer be cancelled.",
     },
     {
       'q': 'How do I track my order?',
       'a': "Visit 'My Orders' — each order shows a live status tracker: Ordered, Processing, Shipping, Delivered.",
     },
-    {
-      'q': 'What payment methods are accepted?',
-      'a': 'UPI (GPay, PhonePe, Paytm), Card, and Cash on Delivery.',
-    },
-    {
-      'q': 'How do Super Coins work?',
-      'a': 'Earn 2 Super Coins with every completed order. Unlock exciting discounts at 12 coins.',
-    },
   ];
-  final Set<int> _openFaq = {};
+  
 
     @override
   void initState() {
@@ -2584,11 +2584,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // PRIVACY CENTER — all sections shown directly as plain wording
-  // (no button list, no white card boxes). De-activate / Delete are
-  // now just quick links to their own dedicated pages instead of
-  // being fully embedded here, so this screen stays short and the
-  // back button on those pages returns cleanly to this page.
+  // PRIVACY CENTER — full Privacy Policy wording only. Request Data
+  // Export, Grievance Redressal and Account Actions have been moved
+  // out of this screen (Account Actions now sits under Browse FAQs /
+  // Question & Answer instead).
   // ---------------------------------------------------------------
   Widget _buildPrivacyMenuPanel() {
     return Column(
@@ -2596,7 +2595,6 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         _panelHeader('Privacy Center', Icons.shield_outlined),
 
-        // Privacy Policy — plain wording, no box.
         _plainSectionTitle('Privacy Policy'),
         const _PolicySection(
           title: '1. Introduction',
@@ -2621,80 +2619,8 @@ class _SettingsPageState extends State<SettingsPage> {
         const _PolicySection(
           title: '5. Your Rights',
           body:
-              'You are always in control of your data. You may access, correct, or update your personal details through your profile at any time, request a full export of your data, request deletion of your account (see De-activate / Delete my Account below), and withdraw your consent for any specific use of your data whenever you wish.',
+              'You are always in control of your data. You may access, correct, or update your personal details through your profile at any time, request a full export of your data, request deletion of your account, and withdraw your consent for any specific use of your data whenever you wish.',
         ),
-
-        const SizedBox(height: 8),
-
-        // Request My Data — plain wording + a single button, no box.
-        _plainSectionTitle('Request My Data'),
-        const Text(
-          'You have the right to access a full copy of the personal data we hold about you — profile info, order history, saved addresses, wishlist, and Super Coins balance.',
-          style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
-        ),
-        const SizedBox(height: 12),
-        ElevatedButton.icon(
-          onPressed: _requestDataDownload,
-          style: _saveBtnStyle(),
-          icon: const Icon(Icons.download, size: 16),
-          label: const Text('Request Data Export'),
-        ),
-        const SizedBox(height: 22),
-
-        // Grievance Redressal — plain wording + form, no box.
-        _plainSectionTitle('Grievance Redressal'),
-        const Text(
-          'Grievance Officer\nName: Sumathi.M\nDesignation: Proprietor, Sumathi\'s Style\nEmail: sumathisstyles@gmail.com\nPhone: +91 86107 03658',
-          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.7),
-        ),
-        const SizedBox(height: 16),
-        const Text('Submit a Complaint', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        const SizedBox(height: 12),
-        _textField(_grievanceSubjectCtrl, 'Complaint Subject'),
-        const SizedBox(height: 10),
-        _textField(_grievanceOrderIdCtrl, 'Order ID (if applicable)'),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _grievanceDescCtrl,
-          maxLines: 4,
-          decoration: InputDecoration(
-            hintText: 'Please describe your issue in detail...',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-        const SizedBox(height: 14),
-        ElevatedButton.icon(
-          onPressed: _submitGrievance,
-          style: _saveBtnStyle(),
-          icon: const Icon(Icons.send, size: 16),
-          label: const Text('Submit Complaint'),
-        ),
-        const SizedBox(height: 22),
-
-        // De-activate / Delete Account — quick links only. Tapping
-        // either opens its own dedicated page (with a proper back
-        // button that returns here to Privacy Center).
-        _plainSectionTitle('Account Actions'),
-        const Text(
-          'Need a break, or want to leave us for good? Choose an option below — each one explains exactly what happens before you confirm anything.',
-          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
-        ),
-        const SizedBox(height: 12),
-        _menuCard(null, [
-          _menuRow(
-            Icons.person_off_outlined,
-            'De-activate my Account',
-            () => _openPanel(_Panel.deactivate),
-            iconColor: AppColors.secondary,
-          ),
-          _menuRow(
-            Icons.delete_outline,
-            'Delete my Account',
-            () => _openPanel(_Panel.deleteAccount),
-            iconColor: AppColors.danger,
-            labelColor: AppColors.danger,
-          ),
-        ]),
       ],
     );
   }
@@ -2870,7 +2796,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _panelHeader('De-activate my Account', Icons.person_off_outlined, back: _Panel.privacyMenu),
+        _panelHeader('De-activate my Account', Icons.person_off_outlined, back: _Panel.faq),
         const Text('When you de-activate your account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 12),
         const _BulletLine('You are logged out of your Sumathi\'s Style account'),
@@ -2921,7 +2847,7 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 10),
         Center(
           child: TextButton(
-            onPressed: () => _openPanel(_Panel.privacyMenu),
+            onPressed: () => _openPanel(_Panel.faq),
             child: const Text('No, let me stay!'),
           ),
         ),
@@ -2980,15 +2906,15 @@ class _SettingsPageState extends State<SettingsPage> {
   // Mirrors the "please ensure you have read and understood" bullet
   // list, permanent-action warning box, 3 required checkboxes, a
   // feedback box, and a red Delete Account button. This is now the
-  // ONLY place this flow lives — Privacy Center just links here, and
-  // the back arrow above returns cleanly to Privacy Center.
+  // ONLY place this flow lives — Browse FAQs / Question and Answer
+  // just links here, and the back arrow above returns cleanly there.
   // -----------------------------------------------------------------
   Widget _buildDeleteAccountPanel() {
     final allChecked = _deleteAgreeTerms && _deleteAgreeBalance && _deleteAgreeNoService;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _panelHeader('Delete my Account', Icons.delete_outline, back: _Panel.privacyMenu),
+        _panelHeader('Delete my Account', Icons.delete_outline, back: _Panel.faq),
         const Text(
           'If you wish to proceed with an account deletion request, please ensure that you have read and understood the following:',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, height: 1.5),
@@ -3199,7 +3125,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // FAQ PANEL
+  // FAQ / QUESTION & ANSWER PANEL — plain question-then-answer list
+  // (no accordion / dropdown). Below the list sits Account Actions:
+  // De-activate my Account and Delete my Account.
   // ---------------------------------------------------------------
   Widget _buildFaqPanel() {
     return Column(
@@ -3211,40 +3139,48 @@ class _SettingsPageState extends State<SettingsPage> {
             children: _faqData.asMap().entries.map((entry) {
               final i = entry.key;
               final f = entry.value;
-              final open = _openFaq.contains(i);
-              return Column(
-                children: [
-                  InkWell(
-                    onTap: () => setState(() => open ? _openFaq.remove(i) : _openFaq.add(i)),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(f['q']!,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          ),
-                          Icon(open ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                              color: AppColors.primary),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (open)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(f['a']!,
-                            style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6)),
-                      ),
-                    ),
-                  if (i != _faqData.length - 1) const Divider(height: 1),
-                ],
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(f['q']!,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.text)),
+                    const SizedBox(height: 8),
+                    Text(f['a']!,
+                        style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6)),
+                    if (i != _faqData.length - 1) ...[
+                      const SizedBox(height: 12),
+                      const Divider(height: 1),
+                    ],
+                  ],
+                ),
               );
             }).toList(),
           ),
         ),
+        const SizedBox(height: 6),
+        _plainSectionTitle('Account Actions'),
+        const Text(
+          'Need a break, or want to leave us for good? Choose an option below — each one explains exactly what happens before you confirm anything.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
+        ),
+        const SizedBox(height: 12),
+        _menuCard(null, [
+          _menuRow(
+            Icons.person_off_outlined,
+            'De-activate my Account',
+            () => _openPanel(_Panel.deactivate),
+            iconColor: AppColors.secondary,
+          ),
+          _menuRow(
+            Icons.delete_outline,
+            'Delete my Account',
+            () => _openPanel(_Panel.deleteAccount),
+            iconColor: AppColors.danger,
+            labelColor: AppColors.danger,
+          ),
+        ]),
       ],
     );
   }
@@ -4257,7 +4193,7 @@ class _BulletLine extends StatelessWidget {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                                                    pw.Text('Mobile Number: $_bizPhone', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text('Mobile Number: $_bizPhone', style: const pw.TextStyle(fontSize: 10)),
                           pw.SizedBox(height: 3),
                           pw.Text('Email: $_bizEmail', style: const pw.TextStyle(fontSize: 10)),
                           pw.SizedBox(height: 3),
