@@ -512,18 +512,22 @@ class _ShopPageState extends State<ShopPage> {
           // ======================================================
           // PRODUCT GRID
           // ======================================================
-                   return GridView.builder(
+                      return LayoutBuilder(
+            builder: (context, constraints) {
+              const gap = 12.0;
+              final cardWidth = (constraints.maxWidth - gap) / 2;
+              return GridView.builder(
             padding: const EdgeInsets.only(
               bottom: 20,
             ),
             physics:
                 const BouncingScrollPhysics(),
             gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
+                SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 12,
+              crossAxisSpacing: gap,
               mainAxisSpacing: 16,
-              childAspectRatio: 0.62,
+              childAspectRatio: cardWidth / 225,
             ),
             itemCount: services.length,
                 itemBuilder: (
@@ -588,7 +592,7 @@ class _ShopPageState extends State<ShopPage> {
                     },
 
                    // Buy Now
-                    onBuyNowTap: () {
+                                        onBuyNowTap: () {
                       _bookService(
                         service,
                         qty: 1,
@@ -597,6 +601,8 @@ class _ShopPageState extends State<ShopPage> {
                   );
                 },
               );
+            },
+          );
         },
       ),
     );

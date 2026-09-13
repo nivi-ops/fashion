@@ -4278,8 +4278,8 @@ class _BulletLine extends StatelessWidget {
 
   // Invoice is only downloadable once the order is paid, and never for
   // a cancelled order — nothing was actually paid/delivered in that case.
-  bool get _canDownloadInvoice =>
-      order.status != 'Cancelled' && order.paymentStatus == 'paid';
+   bool get _canDownloadInvoice =>
+      order.status == 'Delivered' && order.paymentStatus == 'paid';
 
   void _copyOrderId(BuildContext context) {
     Clipboard.setData(ClipboardData(text: order.id));
@@ -4790,6 +4790,78 @@ class _BulletLine extends StatelessWidget {
     );
   }
 
+     Widget _cancelledTimeline() {
+    return Column(
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  const Icon(Icons.circle, size: 14, color: AppColors.success),
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      constraints: const BoxConstraints(minHeight: 34),
+                      color: AppColors.danger,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 30),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Order Confirmed',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text)),
+                      const SizedBox(height: 4),
+                      const Text('Your Order has been placed.',
+                          style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+                      if (order.orderedAt.trim().isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(order.orderedAt, style: const TextStyle(fontSize: 11, color: AppColors.textLight)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.circle, size: 14, color: AppColors.danger),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Cancelled',
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                    const SizedBox(height: 4),
+                    const Text('Your order was cancelled as per your request.',
+                        style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+                    if (order.cancelledAt.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(order.cancelledAt, style: const TextStyle(fontSize: 11, color: AppColors.textLight)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _timeline() {
     final steps = [
       ('Order Confirmed', order.orderedAt),
@@ -4956,15 +5028,8 @@ class _BulletLine extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  if (order.status == 'Cancelled' && order.cancelledAt.trim().isNotEmpty)
-                    Row(
-                      children: [
-                        const Icon(Icons.cancel, size: 16, color: AppColors.danger),
-                        const SizedBox(width: 8),
-                        Text('Cancelled on ${order.cancelledAt}',
-                            style: const TextStyle(fontSize: 12.5, color: AppColors.danger, fontWeight: FontWeight.w600)),
-                      ],
-                    )
+                                    if (order.status == 'Cancelled')
+                    _cancelledTimeline()
                   else ...[
                     _timeline(),
                     const SizedBox(height: 16),

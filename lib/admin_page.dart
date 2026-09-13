@@ -976,6 +976,23 @@ class _AdminPageState extends State<AdminPage> {
     return map[id] ?? 'Dashboard';
   }
 
+    Color _statusSolidColor(String status) {
+    switch (status) {
+      case 'Ordered':
+        return const Color(0xFF1565C0);
+      case 'Processing':
+        return const Color(0xFF6A1B9A);
+      case 'Shipping':
+        return const Color(0xFF0277BD);
+      case 'Delivered':
+        return success;
+      case 'Cancelled':
+        return danger;
+      default:
+        return warning;
+    }
+  }
+
   // ---------------- IMAGE URL HELPER ----------------
 
   /// Converts a Google Drive "share" link into a direct-viewable image
@@ -3152,30 +3169,62 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
-                  DataCell(
-                    DropdownButton<String>(
-                      value: '${o['status']}',
-                      items:
-                          [
-                                'Ordered',
-                                'Processing',
-                                'Shipping',
-                                'Delivered',
-                                'Cancelled',
-                              ]
-                              .map(
-                                (s) => DropdownMenuItem(
-                                  value: s,
-                                  child: Text(
-                                    s,
-                                    style: const TextStyle(fontSize: 12),
+                                  DataCell(
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: '${o['status']}',
+                        icon: Icon(Icons.arrow_drop_down, size: 18, color: muted),
+                        items:
+                            [
+                                  'Ordered',
+                                  'Processing',
+                                  'Shipping',
+                                  'Delivered',
+                                  'Cancelled',
+                                ]
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                        selectedItemBuilder: (context) => [
+                              'Ordered',
+                              'Processing',
+                              'Shipping',
+                              'Delivered',
+                              'Cancelled',
+                            ]
+                            .map(
+                              (s) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: _statusSolidColor(s),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  s,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
                                   ),
                                 ),
-                              )
-                              .toList(),
-                      onChanged: (v) {
-                        if (v != null) updateStatus('${o['id']}', v);
-                      },
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) updateStatus('${o['id']}', v);
+                        },
+                      ),
                     ),
                   ),
                   DataCell(
@@ -3265,64 +3314,88 @@ class _AdminPageState extends State<AdminPage> {
               row('Cancelled On', '${o['cancelledAt']}'),
             row('Cancel Reason', '${o['cancelReason'] ?? ''}'),
           ],
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Text(
-                'Status',
-                style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: pageBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: border),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: '${o['status']}',
-                      isExpanded: true,
-                      icon: Icon(Icons.keyboard_arrow_down, color: tealDark),
-                      items:
-                          [
-                                'Ordered',
-                                'Processing',
-                                'Shipping',
-                                'Delivered',
-                                'Cancelled',
-                              ]
-                              .map(
-                                (s) => DropdownMenuItem(
-                                  value: s,
-                                  child: StatusBadge(status: s),
-                                ),
-                              )
-                              .toList(),
-                      selectedItemBuilder: (context) => [
-                            'Ordered',
-                            'Processing',
-                            'Shipping',
-                            'Delivered',
-                            'Cancelled',
-                          ]
-                          .map((s) => Align(
+                    if ('${o['source']}'.toLowerCase() != 'custom-order') ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(
+                  'Status',
+                  style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: pageBg,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: border),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: '${o['status']}',
+                        isExpanded: true,
+                        icon: Icon(Icons.keyboard_arrow_down, color: tealDark),
+                        items:
+                            [
+                                  'Ordered',
+                                  'Processing',
+                                  'Shipping',
+                                  'Delivered',
+                                  'Cancelled',
+                                ]
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                        selectedItemBuilder: (context) => [
+                              'Ordered',
+                              'Processing',
+                              'Shipping',
+                              'Delivered',
+                              'Cancelled',
+                            ]
+                            .map(
+                              (s) => Align(
                                 alignment: Alignment.centerLeft,
-                                child: StatusBadge(status: s),
-                              ))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) updateStatus('${o['id']}', v);
-                      },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _statusSolidColor(s),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    s,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) updateStatus('${o['id']}', v);
+                        },
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
           voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
           const SizedBox(height: 16),
           if ('${o['rating'] ?? ''}'.trim().isNotEmpty) ...[
