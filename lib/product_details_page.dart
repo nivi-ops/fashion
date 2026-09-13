@@ -537,15 +537,15 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           ),
           const SizedBox(height: 16),
 
-          // DELIVERY CARD
-          _buildDeliveryCard(),
-          const SizedBox(height: 22),
-          const Divider(height: 1),
-          const SizedBox(height: 18),
-
           // QUANTITY
-          _buildQuantity(),
-          const SizedBox(height: 18),
+_buildQuantity(),
+const SizedBox(height: 22),
+const Divider(height: 1),
+const SizedBox(height: 18),
+
+// DELIVERY CARD
+_buildDeliveryCard(),
+const SizedBox(height: 18),
 
           // ADD TO CART / BUY NOW — right below Quantity
           _buildActionButtons(),

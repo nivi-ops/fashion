@@ -4945,9 +4945,9 @@ if (result != null && result.isSuccess) {
                         const SizedBox(width: 12),
                         const Expanded(
                           child: Text(
-                            'Dashboard is connected to Firebase.\n'
-                            "Today's statistics update automatically.",
-                            style: TextStyle(fontSize: 13),
+                            '🟢 Live sync — orders & revenue\n'
+                            'update automatically in real time.',
+                           style: TextStyle(fontSize: 13),
                           ),
                         ),
                       ],

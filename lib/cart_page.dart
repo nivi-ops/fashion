@@ -1358,68 +1358,81 @@ class _CartProductDetailsPageState
                       ),
                     ),
 
-                    // ==================================================
-                    // DESCRIPTION
-                    // ==================================================
-
-                    if (description.isNotEmpty)
-                      _detailSection(
-                        title: 'Description',
-                        child: Text(
-                          description,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            height: 1.5,
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ),
-
-                    // ==================================================
-                    // HIGHLIGHTS
+                          // ==================================================
+                    // DESCRIPTION & HIGHLIGHTS
+                    // (hidden entirely when admin hasn't filled either —
+                    // same rule as product_details_page.dart)
                     // ==================================================
 
-                    if (highlights.isNotEmpty)
-                      _detailSection(
-                        title: 'Product Highlights',
+                    if (description.isNotEmpty || highlights.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(top: 10),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                        color: Colors.white,
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: highlights.map((h) {
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.only(
-                                bottom: 7,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (description.isNotEmpty) ...[
+                              const Text(
+                                'Description',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.text,
+                                ),
                               ),
-                              child: Row(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    '• ',
-                                    style: TextStyle(
-                                      fontWeight:
-                                          FontWeight.bold,
-                                      color:
-                                          AppColors.primary,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      '$h',
-                                      style:
-                                          const TextStyle(
-                                        fontSize: 13,
-                                        color:
-                                            AppColors.text,
-                                        height: 1.4,
+                              const SizedBox(height: 12),
+                              Text(
+                                description,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  height: 1.5,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                            ],
+                            if (description.isNotEmpty && highlights.isNotEmpty)
+                              const SizedBox(height: 18),
+                            if (highlights.isNotEmpty) ...[
+                              const Text(
+                                'Product Highlights',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ...highlights.map((h) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 7),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        '• ',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
                                       ),
-                                    ),
+                                      Expanded(
+                                        child: Text(
+                                          '$h',
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.text,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
+                                );
+                              }),
+                            ],
+                          ],
                         ),
                       ),
 

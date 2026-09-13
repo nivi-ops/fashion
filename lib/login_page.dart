@@ -148,13 +148,40 @@ class _LoginPageState extends State<LoginPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
 
-                        const Text(
+                                                const Text(
                           "Welcome Back",
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
+                            color: Colors.white70,
+                            fontSize: 13,
                             fontWeight: FontWeight.w500,
                           ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "SUMATHI",
+                              style: TextStyle(
+                                color: lightTeal,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              "STYLES",
+                              style: TextStyle(
+                                color: gold,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ],
                         ),
 
                         const SizedBox(height: 20),

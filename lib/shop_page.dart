@@ -545,33 +545,20 @@ class _ShopPageState extends State<ShopPage> {
           // ======================================================
           // PRODUCT GRID
           // ======================================================
-
-          return LayoutBuilder(
-            builder: (
-              context,
-              constraints,
-            ) {
-              const gap = 10.0;
-
-              final cardWidth =
-                  (constraints.maxWidth - gap) / 2;
-
-              return GridView.builder(
-                padding: const EdgeInsets.only(
-                  bottom: 20,
-                ),
-                physics:
-                    const BouncingScrollPhysics(),
-                gridDelegate:
-                    SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: gap,
-                  mainAxisSpacing: 12,
-
-                                  childAspectRatio:
-                      cardWidth / 205,
-                ),
-                itemCount: services.length,
+                   return GridView.builder(
+            padding: const EdgeInsets.only(
+              bottom: 20,
+            ),
+            physics:
+                const BouncingScrollPhysics(),
+            gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 14,
+              childAspectRatio: 0.78,
+            ),
+            itemCount: services.length,
                 itemBuilder: (
                   context,
                   index,
@@ -633,7 +620,7 @@ class _ShopPageState extends State<ShopPage> {
                       }
                     },
 
-                    // Buy Now
+                   // Buy Now
                     onBuyNowTap: () {
                       _bookService(
                         service,
@@ -643,8 +630,6 @@ class _ShopPageState extends State<ShopPage> {
                   );
                 },
               );
-            },
-          );
         },
       ),
     );

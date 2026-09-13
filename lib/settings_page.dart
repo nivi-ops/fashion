@@ -438,7 +438,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-      Future<void> _loadOrders() async {
+         Future<void> _loadOrders() async {
     if (!_user.isLoggedIn) return;
     setState(() => _loadingOrders = true);
     try {
@@ -446,7 +446,13 @@ class _SettingsPageState extends State<SettingsPage> {
           .collection('orders')
           .where('mobile', isEqualTo: _user.phone)
           .get();
-             final loaded = snap.docs.map((doc) {
+      final loaded = snap.docs
+          .where((doc) {
+            // Customized Order requests should NOT appear in My Orders.
+            final source = '${doc.data()['source'] ?? ''}'.toLowerCase();
+            return source != 'custom-order';
+          })
+          .map((doc) {
         final m = doc.data();
         // Use the human-readable order_id saved at checkout (e.g.
         // "SS2026001965") instead of the Firestore auto document id,
@@ -462,7 +468,7 @@ class _SettingsPageState extends State<SettingsPage> {
           return '';
         }
 
-                 return MyOrder(
+        return MyOrder(
           id: displayId,
           docId: doc.id,
           product: '${m['product'] ?? ''}',
@@ -2103,17 +2109,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
               })
             else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 14,
-                                  childAspectRatio: 0.78,
-                ),
-                itemBuilder: (_, index) => _wishlistCard(items[index]),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = 12.0;
+                  final cardWidth = (constraints.maxWidth - gap) / 2;
+
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: items.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: gap,
+                      mainAxisSpacing: 14,
+                      childAspectRatio: cardWidth / 205,
+                    ),
+                    itemBuilder: (_, index) => _wishlistCard(items[index]),
+                  );
+                },
               ),
           ],
         );
@@ -2121,68 +2134,170 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-     Widget _wishlistCard(Product p) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _showWishlistProduct(p),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3))],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: 1,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 40, color: AppColors.primary))),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Material(
-                        color: Colors.white,
-                        shape: const CircleBorder(),
-                        elevation: 2,
-                        child: IconButton(
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.favorite, color: AppColors.danger, size: 18),
-                          onPressed: () => AppState.instance.toggleWishlist(p),
+  bool _isProductInCart(Product p) {
+    return AppState.instance.cartItems.any((item) => item.id == p.id);
+  }
+
+  Widget _wishlistCard(Product p) {
+    final isInCart = _isProductInCart(p);
+
+    return GestureDetector(
+      onTap: () => _showWishlistProduct(p),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE8E8E8), width: 0.7),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.055),
+              blurRadius: 7,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ==================================================
+            // PRODUCT IMAGE
+            // ==================================================
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                    child: Image.network(
+                      p.image,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topCenter,
+                      errorBuilder: (_, __, ___) {
+                        return Container(
+                          color: AppColors.gray,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.image_not_supported, color: AppColors.textLight),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // ------------------------------------------------
+                  // WISHLIST HEART
+                  // ------------------------------------------------
+                  Positioned(
+                    top: 7,
+                    right: 7,
+                    child: Material(
+                      color: Colors.white,
+                      shape: const CircleBorder(),
+                      elevation: 1.5,
+                      child: InkWell(
+                        onTap: () => AppState.instance.toggleWishlist(p),
+                        customBorder: const CircleBorder(),
+                        child: const SizedBox(
+                          width: 29,
+                          height: 29,
+                          child: Icon(Icons.favorite, size: 16, color: AppColors.danger),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  // ------------------------------------------------
+                  // RATING
+                  // ------------------------------------------------
+                  Positioned(
+                    left: 7,
+                    bottom: 7,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF388E3C),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            p.rating.toStringAsFixed(1),
+                            style: const TextStyle(fontSize: 9.5, color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(Icons.star, size: 9, color: Colors.white),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                      Container(
-                        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                        child: IconButton(
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.shopping_cart_outlined, size: 16, color: AppColors.primary),
-                          onPressed: () => _showWishlistProduct(p),
+            ),
+
+            // ==================================================
+            // PRODUCT INFO
+            // ==================================================
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 7, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          p.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: AppColors.text),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${p.price.toStringAsFixed(0)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF212121)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // ------------------------------------------------
+                  // CART BUTTON
+                  // ------------------------------------------------
+                  Material(
+                    color: isInCart ? AppColors.primaryDark : AppColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(7),
+                    child: InkWell(
+                      onTap: () {
+                        if (isInCart) {
+                          _showWishlistProduct(p);
+                        } else {
+                          AppState.instance.addToCart(p);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('${p.name} added to cart! 🛒')),
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(7),
+                      child: SizedBox(
+                        width: 31,
+                        height: 31,
+                        child: Icon(
+                          isInCart ? Icons.shopping_cart_checkout : Icons.add_shopping_cart,
+                          size: 16,
+                          color: isInCart ? Colors.white : AppColors.primary,
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ]),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
