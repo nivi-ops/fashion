@@ -3,7 +3,7 @@
 // Sumathi's Styles - Shop Collection
 // ------------------------------------------------------------
 // Features:
-// • Category sidebar
+// • Category bar (horizontal, Home-page style)
 // • Product grid
 // • Home-page style product cards
 // • Wishlist button
@@ -339,11 +339,9 @@ class _ShopPageState extends State<ShopPage> {
           // BODY
           // ======================================================
 
-          body: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+          body: Column(
             children: [
-              _buildCategorySidebar(),
+              _buildCategoryBar(),
 
               Expanded(
                 child: _buildProductArea(),
@@ -356,121 +354,90 @@ class _ShopPageState extends State<ShopPage> {
   }
 
   // ============================================================
-  // CATEGORY SIDEBAR
+  // CATEGORY BAR (horizontal chips, Home-page style)
   // ============================================================
 
-  Widget _buildCategorySidebar() {
+  Widget _buildCategoryBar() {
     return Container(
-      width: 78,
       color: Colors.white,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(
-          vertical: 8,
-        ),
-        itemCount: _categories.length,
-        itemBuilder: (
-          context,
-          index,
-        ) {
-          final cat = _categories[index];
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: SizedBox(
+        height: 78,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          itemCount: _categories.length,
+          itemBuilder: (context, index) {
+            final cat = _categories[index];
+            final isActive = cat.label == _selectedCategory;
 
-          final isActive =
-              cat.label == _selectedCategory;
-
-          return InkWell(
-            onTap: () {
-              _onCategorySelected(
-                cat.label,
-              );
-            },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 10,
-                horizontal: 4,
-              ),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.light
-                    : Colors.transparent,
-                border: Border(
-                  left: BorderSide(
+            return InkWell(
+              onTap: () => _onCategorySelected(cat.label),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: 62,
+                margin: const EdgeInsets.symmetric(horizontal: 5),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.light : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
                     color: isActive
                         ? AppColors.secondary
                         : Colors.transparent,
-                    width: 3,
+                    width: 1.5,
                   ),
                 ),
-              ),
-              child: Column(
-                children: [
-                  // ==================================================
-                  // CATEGORY IMAGE
-                  // ==================================================
-
-                  Container(
-                    width: 40,
-                    height: 40,
-                    clipBehavior:
-                        Clip.antiAlias,
-                    decoration:
-                        BoxDecoration(
-                      color: AppColors.light,
-                      borderRadius:
-                          BorderRadius.circular(
-                        8,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: AppColors.light,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: cat.imagePath != null
+                          ? Image.asset(
+                              cat.imagePath!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) {
+                                return Icon(
+                                  cat.icon,
+                                  size: 18,
+                                  color: AppColors.primary,
+                                );
+                              },
+                            )
+                          : Icon(
+                              cat.icon,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      cat.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight:
+                            isActive ? FontWeight.w700 : FontWeight.w500,
+                        color: isActive
+                            ? AppColors.secondary
+                            : AppColors.text,
                       ),
                     ),
-                    child:
-                        cat.imagePath != null
-                            ? Image.asset(
-                                cat.imagePath!,
-                                fit: BoxFit.cover,
-                                errorBuilder:
-                                    (
-                                  _,
-                                  __,
-                                  ___,
-                                ) {
-                                  return Icon(
-                                    cat.icon,
-                                    size: 18,
-                                    color: AppColors
-                                        .primary,
-                                  );
-                                },
-                              )
-                            : Icon(
-                                cat.icon,
-                                size: 18,
-                                color: AppColors
-                                    .primary,
-                              ),
-                  ),
-
-                  const SizedBox(
-                    height: 4,
-                  ),
-
-                  Text(
-                    cat.label,
-                    textAlign:
-                        TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: isActive
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: isActive
-                          ? AppColors.secondary
-                          : AppColors.text,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -554,9 +521,9 @@ class _ShopPageState extends State<ShopPage> {
             gridDelegate:
                 const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 14,
-              childAspectRatio: 0.78,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.62,
             ),
             itemCount: services.length,
                 itemBuilder: (

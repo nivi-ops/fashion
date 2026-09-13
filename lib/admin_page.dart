@@ -4696,11 +4696,14 @@ class _AdminPageState extends State<AdminPage> {
           ],
         ),
       ),
-      floatingActionButton: toastMessage.isNotEmpty
+     floatingActionButton: toastMessage.isNotEmpty
           ? FloatingActionButton.extended(
               backgroundColor: tealDark,
               onPressed: () {},
-              label: Text(toastMessage, style: const TextStyle(fontSize: 12)),
+              label: Text(
+                toastMessage,
+                style: const TextStyle(fontSize: 12, color: Colors.white),
+              ),
             )
           : null,
     );
@@ -5128,6 +5131,20 @@ class _AdminPageState extends State<AdminPage> {
                           contactTab: 'catering',
                         ),
                       ),
+                      _managementTile(
+                        Icons.notifications_active,
+                        const Color(0xFFFF5722),
+                        const Color(0xFFFFCCBC),
+                        'Notifications',
+                        () => _openMobilePage('notifications'),
+                      ),
+                      _managementTile(
+                        Icons.star_rate,
+                        const Color(0xFFFBC02D),
+                        const Color(0xFFFFF9C4),
+                        'Reviews',
+                        () => _openMobilePage('reviews'),
+                      ),
                     ],
                   ),
 
@@ -5240,7 +5257,7 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget sidebarWidget() {
-    final groups = [
+   final groups = [
       ('Overview', [('dashboard', '📊', 'Dashboard')]),
       (
         'Catalogue',
@@ -5255,19 +5272,21 @@ class _AdminPageState extends State<AdminPage> {
           ('ordersmgmt', '🧾', 'Orders'),
           ('customers', '👤', 'Customers'),
           ('contactformhub', '📨', 'Contact Form'),
+          ('datarequests', '❌', 'Cancellation Msg'),
         ],
       ),
       (
         'Engagement',
         [
-          ('notifications', '🔔', 'Send Notification'),
           ('reviews', '⭐', 'Reviews'),
-          ('datarequests', '❌', 'Cancellation Msg'),
         ],
       ),
       (
         'Finance',
-        [('analysis', '📊', 'Analysis')],
+        [
+          ('analysis', '📊', 'Analysis'),
+          ('notifications', '🔔', 'Send Notification'),
+        ],
       ),
     ];
 

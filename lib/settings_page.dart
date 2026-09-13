@@ -106,6 +106,10 @@ class SavedAddress {
   final String productImage;
   final double amount;
   String status; // Ordered, Processing, Shipping, Delivered, Cancelled
+  // 'paid' or 'pending' — set from the `payment_status` field saved on the
+  // order document at checkout. Invoice download is only allowed when
+  // this is 'paid' (see OrderDetailsPage._showHelpSheet).
+  final String paymentStatus;
   final String orderedAt;
   final String processingAt;
   final String shippingAt;
@@ -118,6 +122,7 @@ class SavedAddress {
     this.productImage = '',
     required this.amount,
     this.status = 'Ordered',
+    this.paymentStatus = 'pending',
     this.orderedAt = '',
     this.processingAt = '',
     this.shippingAt = '',
@@ -475,6 +480,9 @@ class _SettingsPageState extends State<SettingsPage> {
           productImage: '${m['product_image'] ?? ''}',
           amount: (num.tryParse('${m['amount'] ?? 0}') ?? 0).toDouble(),
           status: '${m['status'] ?? 'Ordered'}',
+          // 'paid' unlocks invoice download; anything else (including a
+          // missing field on older orders) defaults to 'pending'.
+          paymentStatus: '${m['payment_status'] ?? 'pending'}',
           orderedAt: statusDate('ordered_at'),
           processingAt: statusDate('processing_at'),
           shippingAt: statusDate('shipping_at'),
@@ -2082,9 +2090,13 @@ class _SettingsPageState extends State<SettingsPage> {
       await FirebaseFirestore.instance.collection('orders').doc(o.docId).update({
         'status': 'Cancelled',
         'cancel_reason': reason,
+        'cancelled_at': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
-      setState(() => o.status = 'Cancelled');
+      // MyOrder.cancelledAt is final, so a plain setState() on the local
+      // object can't pick up the new timestamp — reload from Firestore
+      // instead so the freshly-set cancelled_at comes through.
+      await _loadOrders();
       _showToast('Order cancelled successfully');
     } catch (e) {
       if (mounted) _showToast('Could not cancel order: $e', error: true);
@@ -4215,7 +4227,8 @@ class _BulletLine extends StatelessWidget {
 /// status timeline used in the orders list, doorstep tips and our
 /// delivery promise. Help sheet has 3 actions: Chat with us (an
 /// automated FAQ-style assistant), Cancel Order (only while eligible),
-/// and Download Invoice (generates a Sumathi's Style bill PDF).
+/// and Download Invoice (generates a Sumathi's Style bill PDF, only
+/// shown when the order is paid and not cancelled).
 /// ---------------------------------------------------------------------
  class OrderDetailsPage extends StatelessWidget {
   final MyOrder order;
@@ -4263,6 +4276,11 @@ class _BulletLine extends StatelessWidget {
     }
   }
 
+  // Invoice is only downloadable once the order is paid, and never for
+  // a cancelled order — nothing was actually paid/delivered in that case.
+  bool get _canDownloadInvoice =>
+      order.status != 'Cancelled' && order.paymentStatus == 'paid';
+
   void _copyOrderId(BuildContext context) {
     Clipboard.setData(ClipboardData(text: order.id));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -4272,7 +4290,7 @@ class _BulletLine extends StatelessWidget {
 
   // -------------------------------------------------------------------
   // HELP SHEET — 3 actions: Chat with us, Cancel Order (only when
-  // eligible), Download Invoice.
+  // eligible), Download Invoice (only when paid and not cancelled).
   // -------------------------------------------------------------------
   void _showHelpSheet(BuildContext context) {
     showModalBottomSheet(
@@ -4312,16 +4330,18 @@ class _BulletLine extends StatelessWidget {
                       onCancelOrder?.call();
                     },
                   ),
-                _helpOption(
-                  sheetCtx,
-                  icon: Icons.receipt_long_outlined,
-                  title: 'Download Invoice',
-                  subtitle: 'Get a PDF bill for this order',
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    _downloadInvoice(context);
-                  },
-                ),
+                // Invoice download: only when paid and not cancelled.
+                if (_canDownloadInvoice)
+                  _helpOption(
+                    sheetCtx,
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Download Invoice',
+                    subtitle: 'Get a PDF bill for this order',
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _downloadInvoice(context);
+                    },
+                  ),
                 const SizedBox(height: 8),
               ],
             ),
