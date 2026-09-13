@@ -142,6 +142,7 @@ enum _Panel {
   deleteAccount,
   terms,
   faq,
+  qna,
   help,
   reviews,
   devices,
@@ -203,6 +204,9 @@ class _SettingsPageState extends State<SettingsPage> {
   // Tracks which FAQ questions are currently expanded (by index).
   final Set<int> _openFaq = {};
 
+  // Tracks which Question & Answer items are currently expanded (by index).
+  final Set<int> _openQna = {};
+
   // Super Coins — real balance from Firestore `user_coins/{phone}`.
   // Coins start being awarded only from the 6th order onward (2 coins
   // per order), and can only be redeemed once the balance reaches 12.
@@ -256,52 +260,70 @@ class _SettingsPageState extends State<SettingsPage> {
   final _deleteFeedbackCtrl = TextEditingController();
 
   // Contact details used by Help Center's Call Us / Mail Us buttons.
-  
+
   static const String _supportEmail = 'divyadeveloper2025@gmail.com';
 
-   final List<Map<String, String>> _faqData = const [
-  {
-    'q': 'How can I place an order?',
-    'a': 'Select your favourite product, choose the required options, add it to your cart, and tap Buy Now or proceed through Checkout to place your order.',
-  },
-  {
-    'q': 'Can I cancel my order?',
-    'a': "Yes, you can cancel your order free of cost while the status is still 'Ordered'. Once the status changes to 'Processing', stitching work has begun and the order can no longer be cancelled.",
-  },
-  {
-    'q': 'How can I track my order?',
-    'a': "Go to 'My Orders' to view your order status. You can track your order through Ordered, Processing, Shipping, and Delivered stages.",
-  },
-  {
-    'q': 'How long will it take to receive my order?',
-    'a': 'Custom-stitched orders are usually delivered within 10–15 days, depending on the stitching and order requirements.',
-  },
-  {
-    'q': 'Can I change my delivery address after placing an order?',
-    'a': 'Please update your delivery address as soon as possible. If the order has already entered Processing, the delivery address may not be changeable.',
-  },
-  {
-    'q': 'Can I change my order after placing it?',
-    'a': 'For changes to size, design, measurements, or other custom requirements, contact us as soon as possible before the order enters Processing.',
-  },
-  {
-    'q': 'What happens if my order is delayed?',
-    'a': 'If your order is taking longer than the expected delivery time, please contact us with your order details. Our team will check the status and assist you.',
-  },
-  {
-    'q': 'What should I do if I receive the wrong or damaged product?',
-    'a': 'Contact us as soon as possible with your order details and photos of the product. Our team will review the issue and guide you on the next steps.',
-  },
-  {
-    'q': 'Can I order a custom-designed dress?',
-    'a': 'Yes. Use Custom Order to share your preferred design, fabric, measurements, and other requirements. Our team will review your request.',
-  },
-  {
-    'q': 'Where can I see my previous orders?',
-    'a': "Open 'My Orders' from your account to view your current and previous orders along with their status.",
-  },
-];
-  
+  // Browse FAQs — a short, focused set of account-update questions.
+  final List<Map<String, String>> _faqData = const [
+    {
+      'q': 'What happens when I update my email address (or mobile number)?',
+      'a': "Your login email id (or mobile number) changes accordingly. You'll receive all your account-related communication on your updated email address (or mobile number).",
+    },
+    {
+      'q': 'When will my account be updated with the new email address (or mobile number)?',
+      'a': 'It happens as soon as you confirm the verification code sent to your email (or mobile) and save the changes.',
+    },
+    {
+      'q': 'What happens to my existing account when I update my email address (or mobile number)?',
+      'a': "Updating your email address (or mobile number) doesn't invalidate your account. Your account remains fully functional. You'll continue seeing your Order history, saved addresses and personal details.",
+    },
+  ];
+
+  // Question and Answer — the original order-related question set.
+  final List<Map<String, String>> _qnaData = const [
+    {
+      'q': 'How can I place an order?',
+      'a': 'Select your favourite product, choose the required options, add it to your cart, and tap Buy Now or proceed through Checkout to place your order.',
+    },
+    {
+      'q': 'Can I cancel my order?',
+      'a': "Yes, you can cancel your order free of cost while the status is still 'Ordered'. Once the status changes to 'Processing', stitching work has begun and the order can no longer be cancelled.",
+    },
+    {
+      'q': 'How can I track my order?',
+      'a': "Go to 'My Orders' to view your order status. You can track your order through Ordered, Processing, Shipping, and Delivered stages.",
+    },
+    {
+      'q': 'How long will it take to receive my order?',
+      'a': 'Custom-stitched orders are usually delivered within 10–15 days, depending on the stitching and order requirements.',
+    },
+    {
+      'q': 'Can I change my delivery address after placing an order?',
+      'a': 'Please update your delivery address as soon as possible. If the order has already entered Processing, the delivery address may not be changeable.',
+    },
+    {
+      'q': 'Can I change my order after placing it?',
+      'a': 'For changes to size, design, measurements, or other custom requirements, contact us as soon as possible before the order enters Processing.',
+    },
+    {
+      'q': 'What happens if my order is delayed?',
+      'a': 'If your order is taking longer than the expected delivery time, please contact us with your order details. Our team will check the status and assist you.',
+    },
+    {
+      'q': 'What should I do if I receive the wrong or damaged product?',
+      'a': 'Contact us as soon as possible with your order details and photos of the product. Our team will review the issue and guide you on the next steps.',
+    },
+    {
+      'q': 'Can I order a custom-designed dress?',
+      'a': 'Yes. Use Custom Order to share your preferred design, fabric, measurements, and other requirements. Our team will review your request.',
+    },
+    {
+      'q': 'Where can I see my previous orders?',
+      'a': "Open 'My Orders' from your account to view your current and previous orders along with their status.",
+    },
+  ];
+
+
 
     @override
   void initState() {
@@ -914,7 +936,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  
+
 
   Future<void> _mailUs() async {
     final uri = Uri(
@@ -973,6 +995,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return _buildTermsPanel();
       case _Panel.faq:
         return _buildFaqPanel();
+      case _Panel.qna:
+        return _buildQnaPanel();
       case _Panel.help:
         return _buildHelpPanel();
       case _Panel.reviews:
@@ -1147,13 +1171,14 @@ class _SettingsPageState extends State<SettingsPage> {
               iconColor: AppColors.secondary),
           _menuRow(Icons.shield_outlined, 'Privacy Center', () => _openPanel(_Panel.privacyMenu),
               iconColor: AppColors.success),
+          _menuRow(Icons.description_outlined, 'Terms, Policies & Licenses', () => _openPanel(_Panel.terms)),
         ]),
 
         // My Activity
         _menuCard('MY ACTIVITY', [
           _menuRow(Icons.star_outline, 'Reviews', () => _openPanel(_Panel.reviews),
               iconColor: AppColors.secondary),
-          _menuRow(Icons.question_answer_outlined, 'Question and Answer', () => _openPanel(_Panel.faq)),
+          _menuRow(Icons.question_answer_outlined, 'Question and Answer', () => _openPanel(_Panel.qna)),
         ]),
 
         // Feedback & Information
@@ -2610,7 +2635,8 @@ class _SettingsPageState extends State<SettingsPage> {
   // PRIVACY CENTER — full Privacy Policy wording only. Request Data
   // Export, Grievance Redressal and Account Actions have been moved
   // out of this screen (Account Actions now sits under Browse FAQs /
-  // Question & Answer instead).
+  // Question & Answer instead). A link to the Terms, Policies &
+  // Licenses page is offered at the bottom.
   // ---------------------------------------------------------------
   Widget _buildPrivacyMenuPanel() {
     return Column(
@@ -2643,6 +2669,34 @@ class _SettingsPageState extends State<SettingsPage> {
           title: '5. Your Rights',
           body:
               'You are always in control of your data. You may access, correct, or update your personal details through your profile at any time, request a full export of your data, request deletion of your account, and withdraw your consent for any specific use of your data whenever you wish.',
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => _openPanel(_Panel.terms),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              child: const Row(
+                children: [
+                  Icon(Icons.description_outlined, size: 18, color: AppColors.primary),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'Terms, Policies & Licenses',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.text),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -3063,7 +3117,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _panelHeader('Terms, Policies & Licenses', Icons.description_outlined),
+        _panelHeader('Terms, Policies & Licenses', Icons.description_outlined, back: _Panel.privacyMenu),
 
         // PART A — TERMS
         const Text('TERMS OF USE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),
@@ -3148,15 +3202,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ---------------------------------------------------------------
-  // FAQ / QUESTION & ANSWER PANEL — plain question-then-answer list
-  // (no accordion / dropdown). Below the list sits Account Actions:
-  // De-activate my Account and Delete my Account.
+  // BROWSE FAQs PANEL — short set of email/mobile update questions.
   // ---------------------------------------------------------------
 Widget _buildFaqPanel() {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _panelHeader('Order Related Questions', Icons.help_outline),
+      _panelHeader('Browse FAQs', Icons.help_outline),
 
       const SizedBox(height: 4),
 
@@ -3337,17 +3389,178 @@ Widget _buildFaqPanel() {
 }
 
   // ---------------------------------------------------------------
-  // HELP CENTER PANEL
+  // QUESTION & ANSWER PANEL — the original 10 order-related questions.
+  // No Account Actions here — those live only under Browse FAQs.
+  // ---------------------------------------------------------------
+Widget _buildQnaPanel() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _panelHeader('Question and Answer', Icons.question_answer_outlined),
+
+      const SizedBox(height: 4),
+
+      const Text(
+        'Tap a question to view the answer.',
+        style: TextStyle(
+          fontSize: 12.5,
+          color: AppColors.textLight,
+        ),
+      ),
+
+      const SizedBox(height: 14),
+
+      ..._qnaData.asMap().entries.map((entry) {
+        final index = entry.key;
+        final faq = entry.value;
+        final isOpen = _openQna.contains(index);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isOpen
+                  ? AppColors.primary.withValues(alpha: 0.45)
+                  : const Color(0xFFE8E8E8),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                setState(() {
+                  if (isOpen) {
+                    _openQna.remove(index);
+                  } else {
+                    _openQna.add(index);
+                  }
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 15,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Icon(
+                            Icons.help_outline,
+                            size: 17,
+                            color: AppColors.primary,
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: Text(
+                            faq['q']!,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.text,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        Icon(
+                          isOpen
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          color: isOpen
+                              ? AppColors.primary
+                              : AppColors.textLight,
+                          size: 24,
+                        ),
+                      ],
+                    ),
+
+                    AnimatedCrossFade(
+                      firstChild: const SizedBox.shrink(),
+                      secondChild: Padding(
+                        padding: const EdgeInsets.only(
+                          left: 42,
+                          right: 8,
+                          top: 13,
+                        ),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.055),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                            ),
+                          ),
+                          child: Text(
+                            faq['a']!,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.textLight,
+                              height: 1.6,
+                            ),
+                          ),
+                        ),
+                      ),
+                      crossFadeState: isOpen
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      duration: const Duration(milliseconds: 220),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    ],
+  );
+}
+
+  // ---------------------------------------------------------------
+  // HELP CENTER PANEL (Drop Your Idea / Customer Support)
   // ---------------------------------------------------------------
   Widget _buildHelpPanel() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _panelHeader('Customer Support', Icons.support_agent),
-        const Icon(Icons.support_agent, size: 44, color: AppColors.primary),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        const Center(
+          child: Icon(Icons.support_agent, size: 44, color: AppColors.primary),
+        ),
+        const SizedBox(height: 16),
         const Text(
           "We're Happy to Help!",
+          textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
         const SizedBox(height: 10),
@@ -3355,6 +3568,12 @@ Widget _buildFaqPanel() {
           "Have an idea to improve our app or a feature you'd like to see? "
           'Share your ideas, feedback, or suggestions with us. ' 
           'Your valuable input may help shape our future updates.',
+          style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          "Whether it's about the app or our website, feel free to reach out to us here — we're happy to help either way.",
           style: TextStyle(fontSize: 13, color: AppColors.textLight, height: 1.6),
           textAlign: TextAlign.center,
         ),
