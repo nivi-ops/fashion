@@ -196,9 +196,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
     // Orders — starts empty. Real orders should be loaded from your
   // backend in _loadOrders() (see TODO there); no sample/dummy data.
-  bool _loadingOrders = false;
+      bool _loadingOrders = false;
   String _orderFilter = 'all';
   final List<MyOrder> _orders = [];
+
+  // Tracks which FAQ questions are currently expanded (by index).
+  final Set<int> _openFaq = {};
 
   // Super Coins — real balance from Firestore `user_coins/{phone}`.
   // Coins start being awarded only from the 6th order onward (2 coins
@@ -256,28 +259,48 @@ class _SettingsPageState extends State<SettingsPage> {
   
   static const String _supportEmail = 'divyadeveloper2025@gmail.com';
 
-  final List<Map<String, String>> _faqData = const [
-    {
-      'q': 'What happens when I update my email address (or mobile number)?',
-      'a': "Your login email id (or mobile number) changes, likewise. You'll receive all your account related communication on your updated email address (or mobile number).",
-    },
-    {
-      'q': "When will my Sumathi's Style account be updated with the new email address (or mobile number)?",
-      'a': 'It happens as soon as you confirm the verification code sent to your email (or mobile) and save the changes.',
-    },
-    {
-      'q': "What happens to my existing Sumathi's Style account when I update my email address (or mobile number)?",
-      'a': "Updating your email address (or mobile number) doesn't invalidate your account. Your account remains fully functional. You'll continue seeing your Order history, saved information and personal details.",
-    },
-    {
-      'q': 'Can I cancel my order?',
-      'a': "Yes, free of cost as long as your order status is still 'Ordered'. Once the status changes to 'Processing', stitching work has begun and the order can no longer be cancelled.",
-    },
-    {
-      'q': 'How do I track my order?',
-      'a': "Visit 'My Orders' — each order shows a live status tracker: Ordered, Processing, Shipping, Delivered.",
-    },
-  ];
+   final List<Map<String, String>> _faqData = const [
+  {
+    'q': 'How can I place an order?',
+    'a': 'Select your favourite product, choose the required options, add it to your cart, and tap Buy Now or proceed through Checkout to place your order.',
+  },
+  {
+    'q': 'Can I cancel my order?',
+    'a': "Yes, you can cancel your order free of cost while the status is still 'Ordered'. Once the status changes to 'Processing', stitching work has begun and the order can no longer be cancelled.",
+  },
+  {
+    'q': 'How can I track my order?',
+    'a': "Go to 'My Orders' to view your order status. You can track your order through Ordered, Processing, Shipping, and Delivered stages.",
+  },
+  {
+    'q': 'How long will it take to receive my order?',
+    'a': 'Custom-stitched orders are usually delivered within 10–15 days, depending on the stitching and order requirements.',
+  },
+  {
+    'q': 'Can I change my delivery address after placing an order?',
+    'a': 'Please update your delivery address as soon as possible. If the order has already entered Processing, the delivery address may not be changeable.',
+  },
+  {
+    'q': 'Can I change my order after placing it?',
+    'a': 'For changes to size, design, measurements, or other custom requirements, contact us as soon as possible before the order enters Processing.',
+  },
+  {
+    'q': 'What happens if my order is delayed?',
+    'a': 'If your order is taking longer than the expected delivery time, please contact us with your order details. Our team will check the status and assist you.',
+  },
+  {
+    'q': 'What should I do if I receive the wrong or damaged product?',
+    'a': 'Contact us as soon as possible with your order details and photos of the product. Our team will review the issue and guide you on the next steps.',
+  },
+  {
+    'q': 'Can I order a custom-designed dress?',
+    'a': 'Yes. Use Custom Order to share your preferred design, fabric, measurements, and other requirements. Our team will review your request.',
+  },
+  {
+    'q': 'Where can I see my previous orders?',
+    'a': "Open 'My Orders' from your account to view your current and previous orders along with their status.",
+  },
+];
   
 
     @override
@@ -3129,61 +3152,189 @@ class _SettingsPageState extends State<SettingsPage> {
   // (no accordion / dropdown). Below the list sits Account Actions:
   // De-activate my Account and Delete my Account.
   // ---------------------------------------------------------------
-  Widget _buildFaqPanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _panelHeader('Browse FAQs', Icons.help_outline),
-        _card(
-          child: Column(
-            children: _faqData.asMap().entries.map((entry) {
-              final i = entry.key;
-              final f = entry.value;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+Widget _buildFaqPanel() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _panelHeader('Order Related Questions', Icons.help_outline),
+
+      const SizedBox(height: 4),
+
+      const Text(
+        'Tap a question to view the answer.',
+        style: TextStyle(
+          fontSize: 12.5,
+          color: AppColors.textLight,
+        ),
+      ),
+
+      const SizedBox(height: 14),
+
+      ..._faqData.asMap().entries.map((entry) {
+        final index = entry.key;
+        final faq = entry.value;
+        final isOpen = _openFaq.contains(index);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isOpen
+                  ? AppColors.primary.withValues(alpha: 0.45)
+                  : const Color(0xFFE8E8E8),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                setState(() {
+                  if (isOpen) {
+                    _openFaq.remove(index);
+                  } else {
+                    _openFaq.add(index);
+                  }
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 15,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(f['q']!,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.text)),
-                    const SizedBox(height: 8),
-                    Text(f['a']!,
-                        style: const TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6)),
-                    if (i != _faqData.length - 1) ...[
-                      const SizedBox(height: 12),
-                      const Divider(height: 1),
-                    ],
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Icon(
+                            Icons.help_outline,
+                            size: 17,
+                            color: AppColors.primary,
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: Text(
+                            faq['q']!,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.text,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        Icon(
+                          isOpen
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          color: isOpen
+                              ? AppColors.primary
+                              : AppColors.textLight,
+                          size: 24,
+                        ),
+                      ],
+                    ),
+
+                    AnimatedCrossFade(
+                      firstChild: const SizedBox.shrink(),
+                      secondChild: Padding(
+                        padding: const EdgeInsets.only(
+                          left: 42,
+                          right: 8,
+                          top: 13,
+                        ),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.055),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                            ),
+                          ),
+                          child: Text(
+                            faq['a']!,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.textLight,
+                              height: 1.6,
+                            ),
+                          ),
+                        ),
+                      ),
+                      crossFadeState: isOpen
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      duration: const Duration(milliseconds: 220),
+                    ),
                   ],
                 ),
-              );
-            }).toList(),
+              ),
+            ),
           ),
+        );
+      }),
+
+      const SizedBox(height: 6),
+
+      _plainSectionTitle('Account Actions'),
+
+      const Text(
+        'Need a break, or want to leave us for good? Choose an option below — each one explains exactly what happens before you confirm anything.',
+        style: TextStyle(
+          fontSize: 12.5,
+          color: AppColors.textLight,
+          height: 1.6,
         ),
-        const SizedBox(height: 6),
-        _plainSectionTitle('Account Actions'),
-        const Text(
-          'Need a break, or want to leave us for good? Choose an option below — each one explains exactly what happens before you confirm anything.',
-          style: TextStyle(fontSize: 12.5, color: AppColors.textLight, height: 1.6),
+      ),
+
+      const SizedBox(height: 12),
+
+      _menuCard(null, [
+        _menuRow(
+          Icons.person_off_outlined,
+          'De-activate my Account',
+          () => _openPanel(_Panel.deactivate),
+          iconColor: AppColors.secondary,
         ),
-        const SizedBox(height: 12),
-        _menuCard(null, [
-          _menuRow(
-            Icons.person_off_outlined,
-            'De-activate my Account',
-            () => _openPanel(_Panel.deactivate),
-            iconColor: AppColors.secondary,
-          ),
-          _menuRow(
-            Icons.delete_outline,
-            'Delete my Account',
-            () => _openPanel(_Panel.deleteAccount),
-            iconColor: AppColors.danger,
-            labelColor: AppColors.danger,
-          ),
-        ]),
-      ],
-    );
-  }
+        _menuRow(
+          Icons.delete_outline,
+          'Delete my Account',
+          () => _openPanel(_Panel.deleteAccount),
+          iconColor: AppColors.danger,
+          labelColor: AppColors.danger,
+        ),
+      ]),
+    ],
+  );
+}
 
   // ---------------------------------------------------------------
   // HELP CENTER PANEL
