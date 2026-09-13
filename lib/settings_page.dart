@@ -2109,20 +2109,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopPage()));
               })
             else
-              LayoutBuilder(
+                        LayoutBuilder(
                 builder: (context, constraints) {
-                  const gap = 12.0;
-                  final cardWidth = (constraints.maxWidth - gap) / 2;
+                  const gap = 10.0;
+                  final cardWidth = (constraints.maxWidth - gap * 2) / 3;
 
                   return GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: items.length,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+                      crossAxisCount: 3,
                       crossAxisSpacing: gap,
-                      mainAxisSpacing: 14,
-                      childAspectRatio: cardWidth / 205,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: cardWidth / 175,
                     ),
                     itemBuilder: (_, index) => _wishlistCard(items[index]),
                   );

@@ -29,6 +29,7 @@ import 'package:public_file_saver/public_file_saver.dart';
 ///                          'custom-order')
 ///   contacts            — boutique + catering contact form submissions
 ///   notifications       — admin broadcast notifications
+///   reviews             — customer reviews (name, mobile, rating, comment)
 ///   customer_requests   — data-export / grievance / deactivated /
 ///                          deleted-account requests, distinguished by
 ///                          a `type` field
@@ -108,6 +109,7 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> orders = [];
   List<Map<String, dynamic>> contacts = [];
   List<Map<String, dynamic>> notifications = [];
+  List<Map<String, dynamic>> reviews = [];
   List<Map<String, dynamic>> dataRequests = [];
   List<Map<String, dynamic>> grievances = [];
   List<Map<String, dynamic>> deactivated = [];
@@ -122,6 +124,7 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController dataSearch = TextEditingController();
   final TextEditingController grievanceSearch = TextEditingController();
   final TextEditingController cancellationSearch = TextEditingController();
+  final TextEditingController reviewSearch = TextEditingController();
 
   String productCategory = '';
   String productStock = '';
@@ -172,6 +175,7 @@ class _AdminPageState extends State<AdminPage> {
       dataSearch,
       grievanceSearch,
       cancellationSearch,
+      reviewSearch,
       pName,
       pPrice,
       pDesc,
@@ -228,6 +232,7 @@ class _AdminPageState extends State<AdminPage> {
     await refreshDashboard();
     await loadContacts();
     await loadNotifications();
+    await loadReviews();
     await loadCustomerRequests();
   }
 
@@ -251,7 +256,7 @@ class _AdminPageState extends State<AdminPage> {
         final createdAt = m['created_at'];
         DateTime? created;
         if (createdAt is Timestamp) created = createdAt.toDate();
-                 String statusDate(String key) {
+        String statusDate(String key) {
           final ts = m[key];
           if (ts is Timestamp) return formatDateTime(ts.toDate().toIso8601String());
           return '';
@@ -368,6 +373,31 @@ class _AdminPageState extends State<AdminPage> {
       notifications = list;
     } catch (_) {
       notifications = [];
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Loads customer reviews (submitted from the customer app's "Write a
+  /// review" flow — Firestore collection `reviews`, fields: name, mobile,
+  /// rating, comment, createdAt). Sorted newest-first.
+  Future<void> loadReviews() async {
+    try {
+      final snap = await _db.collection('reviews').get();
+      final list = snap.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data());
+        m['id'] = d.id;
+        final createdAt = m['createdAt'] ?? m['created_at'];
+        if (createdAt is Timestamp) {
+          m['createdAt'] = createdAt.toDate().toIso8601String();
+        } else if (createdAt != null) {
+          m['createdAt'] = '$createdAt';
+        }
+        return m;
+      }).toList();
+      list.sort((a, b) => '${b['createdAt'] ?? ''}'.compareTo('${a['createdAt'] ?? ''}'));
+      reviews = list;
+    } catch (_) {
+      reviews = [];
     }
     if (mounted) setState(() {});
   }
@@ -496,6 +526,7 @@ class _AdminPageState extends State<AdminPage> {
       loadOrdersAndSet();
     }
     if (id == 'notifications') loadNotifications();
+    if (id == 'reviews') loadReviews();
     if (id == 'datarequests') loadCustomerRequests();
     if (id == 'grievances') loadCustomerRequests();
     if (id == 'revenue' || id == 'analysis') loadOrdersAndSet();
@@ -541,7 +572,7 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> get cateringContacts =>
       contacts.where(isCatering).toList();
 
-    List<Map<String, dynamic>> get pendingOrders => orders
+  List<Map<String, dynamic>> get pendingOrders => orders
       .where(
         (o) =>
             o['status'] == 'Ordered' ||
@@ -553,7 +584,7 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> get deliveredOrders =>
       orders.where((o) => o['status'] == 'Delivered').toList();
 
-   num get revenue =>
+  num get revenue =>
       deliveredOrders.fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
 
   /// Orders created TODAY only — resets automatically next day since it
@@ -887,25 +918,25 @@ class _AdminPageState extends State<AdminPage> {
         ),
       );
 
-    final bytes = await doc.save();
+      final bytes = await doc.save();
 
-final fileName =
-    'revenue_${revenuePeriod}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final fileName =
+          'revenue_${revenuePeriod}_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
-final fileSaver = PublicFileSaver();
+      final fileSaver = PublicFileSaver();
 
-final result = await fileSaver.saveBytes(
-  bytes: bytes,
-  fileName: fileName,
-  mimeType: 'application/pdf',
-  subDir: 'Sumathis Styles',
-);
+      final result = await fileSaver.saveBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'application/pdf',
+        subDir: 'Sumathis Styles',
+      );
 
-if (result != null && result.isSuccess) {
-  showToast('✅ PDF downloaded successfully');
-} else {
-  showToast('❌ PDF download failed');
-}
+      if (result != null && result.isSuccess) {
+        showToast('✅ PDF downloaded successfully');
+      } else {
+        showToast('❌ PDF download failed');
+      }
     } catch (e) {
       showToast('❌ Could not generate PDF: $e');
     } finally {
@@ -936,6 +967,7 @@ if (result != null && result.isSuccess) {
       'customers': 'Customers',
       'contactformhub': 'Contact Form',
       'notifications': 'Send Notification',
+      'reviews': 'Customer Reviews',
       'datarequests': 'Cancellation Msg',
       'grievances': 'Complaints',
       'revenue': 'Revenue',
@@ -968,7 +1000,8 @@ if (result != null && result.isSuccess) {
     }
     return url;
   }
-    String _productImageFor(String productName) {
+
+  String _productImageFor(String productName) {
     final match = products.firstWhere(
       (p) => '${p['name']}' == productName,
       orElse: () => {},
@@ -1615,7 +1648,7 @@ if (result != null && result.isSuccess) {
 
   // ---------------- ORDER ACTIONS ----------------
 
-    Future<void> updateStatus(String id, String status) async {
+  Future<void> updateStatus(String id, String status) async {
     try {
       showToast('⏳ Updating status...');
       // Records a separate timestamp field per status (ordered_at,
@@ -1670,6 +1703,20 @@ if (result != null && result.isSuccess) {
       await _db.collection('notifications').doc('$id').delete();
       await loadNotifications();
       showToast('🗑️ Notification deleted');
+    } catch (_) {
+      showToast('❌ Server error');
+    }
+  }
+
+  // ---------------- REVIEWS ----------------
+
+  Future<void> deleteReview(dynamic id) async {
+    final ok = await confirmDialog('Delete this review?');
+    if (!ok) return;
+    try {
+      await _db.collection('reviews').doc('$id').delete();
+      await loadReviews();
+      showToast('🗑️ Review deleted');
     } catch (_) {
       showToast('❌ Server error');
     }
@@ -1742,6 +1789,9 @@ if (result != null && result.isSuccess) {
         case 'notifications_all':
           await _deleteAllInQuery(_db.collection('notifications'));
           break;
+        case 'reviews_all':
+          await _deleteAllInQuery(_db.collection('reviews'));
+          break;
         case 'data_requests_all':
           await _deleteAllInQuery(
             _db
@@ -1774,6 +1824,7 @@ if (result != null && result.isSuccess) {
       await refreshDashboard();
       await loadContacts();
       await loadNotifications();
+      await loadReviews();
       await loadCustomerRequests();
       showToast('🗑️ Cleared successfully');
     } catch (e) {
@@ -1803,7 +1854,7 @@ if (result != null && result.isSuccess) {
     return result == true;
   }
 
-   List<Map<String, dynamic>> filteredProducts() {
+  List<Map<String, dynamic>> filteredProducts() {
     final s = productSearch.text.trim().toLowerCase();
     return products.where((p) {
       final okSearch =
@@ -1860,6 +1911,16 @@ if (result != null && result.isSuccess) {
           '${c['name'] ?? ''}'.toLowerCase().contains(s) ||
           '${c['phone'] ?? ''}'.contains(s) ||
           '${c['email'] ?? ''}'.toLowerCase().contains(s);
+    }).toList();
+  }
+
+  /// Filters the reviews list by customer name or mobile number.
+  List<Map<String, dynamic>> filteredReviews() {
+    final s = reviewSearch.text.trim().toLowerCase();
+    if (s.isEmpty) return reviews;
+    return reviews.where((r) {
+      return '${r['name'] ?? ''}'.toLowerCase().contains(s) ||
+          '${r['mobile'] ?? ''}'.contains(s);
     }).toList();
   }
 
@@ -2014,7 +2075,7 @@ if (result != null && result.isSuccess) {
     );
   }
 
-    Widget actionButton(
+  Widget actionButton(
     String text,
     VoidCallback onPressed, {
     Color? color,
@@ -2116,7 +2177,7 @@ if (result != null && result.isSuccess) {
           ),
         ),
         const SizedBox(height: 5),
-                DropdownButtonFormField<String>(
+        DropdownButtonFormField<String>(
           value: values.contains(value) ? value : null,
           isExpanded: true,
           icon: Icon(Icons.arrow_drop_down, color: muted),
@@ -2127,6 +2188,65 @@ if (result != null && result.isSuccess) {
                 (v) => DropdownMenuItem(
                   value: v,
                   child: Text(v, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: border, width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Notification "Type" dropdown with friendly display labels
+  /// (General / Promotions / Class Reminder) while still saving the
+  /// same lowercase values ('general' / 'promotion' / 'class') to
+  /// Firestore — matching what the customer app's notification
+  /// preference toggles expect.
+  Widget notificationTypeField(
+    String value,
+    ValueChanged<String?> onChanged,
+  ) {
+    const options = {
+      'general': 'General',
+      'promotion': 'Promotions',
+      'class': 'Class Reminder',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Type',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: muted,
+          ),
+        ),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<String>(
+          value: options.containsKey(value) ? value : 'general',
+          isExpanded: true,
+          icon: Icon(Icons.arrow_drop_down, color: muted),
+          dropdownColor: Colors.white,
+          style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
+          items: options.entries
+              .map(
+                (e) => DropdownMenuItem(
+                  value: e.key,
+                  child: Text(e.value, overflow: TextOverflow.ellipsis),
                 ),
               )
               .toList(),
@@ -2176,7 +2296,7 @@ if (result != null && result.isSuccess) {
             crossAxisSpacing: 14,
             childAspectRatio: 1.0,
             children: [
-                           mobileStatCard(
+              mobileStatCard(
                 '$todaysOrdersCount',
                 "Today's Orders",
                 '🛒',
@@ -2218,7 +2338,7 @@ if (result != null && result.isSuccess) {
                 mainAxisSpacing: 14,
                 childAspectRatio: 2.8,
                 children: [
-                                   statCard(
+                  statCard(
                     '$todaysOrdersCount',
                     "Today's Orders",
                     Icons.shopping_cart,
@@ -2770,7 +2890,7 @@ if (result != null && result.isSuccess) {
                     : p['stock'] == 'Limited'
                     ? warning
                     : danger;
-                                return InkWell(
+                return InkWell(
                   onTap: () => showProductDetail(p),
                   child: Container(
                   decoration: BoxDecoration(
@@ -2785,7 +2905,7 @@ if (result != null && result.isSuccess) {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                                            Expanded(
+                      Expanded(
                         child: image.isNotEmpty
                             ? Image.network(
                                 image,
@@ -2872,7 +2992,7 @@ if (result != null && result.isSuccess) {
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                            Expanded(
+                                Expanded(
                                   child: OutlinedButton(
                                     onPressed: () => editProduct(p),
                                     style: OutlinedButton.styleFrom(
@@ -2888,7 +3008,7 @@ if (result != null && result.isSuccess) {
                                     ),
                                   ),
                                 ),
-                                                               const SizedBox(width: 5),
+                                const SizedBox(width: 5),
                                 Expanded(
                                   child: Center(
                                     child: InkWell(
@@ -2936,7 +3056,7 @@ if (result != null && result.isSuccess) {
                           ],
                         ),
                       ),
-                                    ],
+                    ],
                   ),
                 ),
                 );
@@ -3032,7 +3152,7 @@ if (result != null && result.isSuccess) {
                   ),
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
-                                     DataCell(
+                  DataCell(
                     DropdownButton<String>(
                       value: '${o['status']}',
                       items:
@@ -3130,9 +3250,9 @@ if (result != null && result.isSuccess) {
           row('Product', '${o['product']}'),
           row('Amount', '₹${o['amount']}'),
           row('Payment', '${o['paymentMethod']} • ${o['paymentStatus']}'),
-                    row('Address', '${o['address'] ?? ''}'),
+          row('Address', '${o['address'] ?? ''}'),
           row('Measurement', '${o['measurement'] ?? ''}'),
-                    row('Notes', '${o['notes'] ?? ''}'),
+          row('Notes', '${o['notes'] ?? ''}'),
           row('Date', '${o['date']}'),
           if ('${o['orderedAt'] ?? ''}'.trim().isNotEmpty)
             row('Ordered On', '${o['orderedAt']}'),
@@ -3166,7 +3286,7 @@ if (result != null && result.isSuccess) {
                       value: '${o['status']}',
                       isExpanded: true,
                       icon: Icon(Icons.keyboard_arrow_down, color: tealDark),
-                                            items:
+                      items:
                           [
                                 'Ordered',
                                 'Processing',
@@ -3291,7 +3411,7 @@ if (result != null && result.isSuccess) {
                 ),
               ),
               const SizedBox(width: 10),
-                             SizedBox(
+              SizedBox(
                 width: 170,
                 child: dropdownField('Status', orderStatus, [
                   '',
@@ -3395,7 +3515,7 @@ if (result != null && result.isSuccess) {
     return digits.length > 10 ? digits.substring(digits.length - 10) : digits;
   }
 
-     List<Map<String, String>> get uniqueCustomers {
+  List<Map<String, String>> get uniqueCustomers {
     final seen = <String, Map<String, String>>{};
     for (final o in orders) {
       final phone = normalizePhone('${o['mobile'] ?? ''}');
@@ -3683,7 +3803,7 @@ if (result != null && result.isSuccess) {
                         ],
                       ),
                     ),
-                                       if ('${o['source']}'.toLowerCase() != 'custom-order')
+                    if ('${o['source']}'.toLowerCase() != 'custom-order')
                       StatusBadge(status: '${o['status']}'),
                     const SizedBox(width: 6),
                     Icon(Icons.chevron_right, color: muted),
@@ -3785,10 +3905,8 @@ if (result != null && result.isSuccess) {
                 maxLines: 3,
               ),
               const SizedBox(height: 14),
-              dropdownField(
-                'Type',
+              notificationTypeField(
                 notificationType,
-                ['general', 'order', 'promotion', 'class'],
                 (v) => setState(() => notificationType = v ?? 'general'),
               ),
               const SizedBox(height: 18),
@@ -3858,7 +3976,122 @@ if (result != null && result.isSuccess) {
       ],
     );
   }
-    Widget cancellationTable(List<Map<String, dynamic>> list) {
+
+  /// "Reviews" page — shows every customer review one by one (card
+  /// style): avatar with initial, Name, Mobile number, star rating and
+  /// the written comment. Search box filters by name or mobile. Each
+  /// card has a delete button so admin can remove a review if needed.
+  Widget reviewsPage() {
+    final list = filteredReviews();
+    return sectionCard(
+      '⭐ Customer Reviews',
+      Column(
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: actionButton(
+              '🗑️ Clear All Reviews',
+              () => clearData(
+                'reviews_all',
+                '⚠️ This will delete ALL customer reviews. Do you want to continue?',
+              ),
+              color: danger,
+            ),
+          ),
+          const SizedBox(height: 16),
+          field('', reviewSearch, hint: '🔍 Search by name / mobile...'),
+          const SizedBox(height: 16),
+          if (list.isEmpty)
+            const EmptyState(icon: '⭐', text: 'No reviews yet')
+          else
+            ...list.map((r) {
+              final rating = (num.tryParse('${r['rating'] ?? 0}') ?? 0).toInt();
+              final name = '${r['name'] ?? 'Guest'}';
+              final mobile = '${r['mobile'] ?? r['phone'] ?? '—'}';
+              final comment = '${r['comment'] ?? r['review'] ?? ''}';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: pageBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: tealLight,
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              color: tealDark,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '📞 $mobile',
+                                style: TextStyle(fontSize: 12, color: muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '★' * rating + '☆' * (5 - rating),
+                          style: const TextStyle(
+                            color: Color(0xFFFB8C00),
+                            fontSize: 14,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete review',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => deleteReview(r['id']),
+                          icon: Icon(Icons.delete_outline, color: danger, size: 20),
+                        ),
+                      ],
+                    ),
+                    if (comment.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        comment,
+                        style: const TextStyle(fontSize: 13, height: 1.5),
+                      ),
+                    ],
+                    if ('${r['createdAt'] ?? ''}'.trim().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        formatDateTime(r['createdAt']),
+                        style: TextStyle(fontSize: 11, color: muted),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget cancellationTable(List<Map<String, dynamic>> list) {
     if (list.isEmpty) return const EmptyState(icon: '❌', text: 'No cancellations yet');
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -3924,7 +4157,7 @@ if (result != null && result.isSuccess) {
                       icon: '❌',
                       text: 'No cancellations yet',
                     );
-                                 return cancellationTable(cancelled.reversed.toList());
+                  return cancellationTable(cancelled.reversed.toList());
                 },
               ),
             ],
@@ -4147,7 +4380,7 @@ if (result != null && result.isSuccess) {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-                         Expanded(
+            Expanded(
               child: sectionCard(
                 '📊 ${periodLabel(revenuePeriod)} Revenue Chart',
                 SizedBox(
@@ -4201,7 +4434,7 @@ if (result != null && result.isSuccess) {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-                    Wrap(
+          Wrap(
             spacing: 8,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -4229,7 +4462,7 @@ if (result != null && result.isSuccess) {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 18),
           InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -4414,6 +4647,8 @@ if (result != null && result.isSuccess) {
         return contactFormHubPage();
       case 'notifications':
         return notificationsPage();
+      case 'reviews':
+        return reviewsPage();
       case 'datarequests':
         return dataRequestsPage();
       case 'grievances':
@@ -4575,7 +4810,7 @@ if (result != null && result.isSuccess) {
                           keyboard: TextInputType.emailAddress,
                         ),
                         const SizedBox(height: 16),
-                                                loginField(
+                        loginField(
                           icon: Icons.lock_outline,
                           controller: passwordController,
                           hint: 'Password',
@@ -4624,7 +4859,7 @@ if (result != null && result.isSuccess) {
     );
   }
 
-     Widget loginField({
+  Widget loginField({
     required IconData icon,
     required TextEditingController controller,
     required String hint,
@@ -5026,10 +5261,11 @@ if (result != null && result.isSuccess) {
         'Engagement',
         [
           ('notifications', '🔔', 'Send Notification'),
+          ('reviews', '⭐', 'Reviews'),
           ('datarequests', '❌', 'Cancellation Msg'),
         ],
       ),
-            (
+      (
         'Finance',
         [('analysis', '📊', 'Analysis')],
       ),
@@ -5171,7 +5407,7 @@ if (result != null && result.isSuccess) {
       ),
       child: Row(
         children: [
-                    if (mobile)
+          if (mobile)
             InkWell(
               onTap: () => setState(() => mobilePageMode = false),
               borderRadius: BorderRadius.circular(24),
@@ -5338,7 +5574,7 @@ class StatusBadge extends StatelessWidget {
         bg = const Color(0xFFE3F2FD);
         fg = const Color(0xFF1565C0);
         break;
-              case 'Processing':
+      case 'Processing':
         bg = const Color(0xFFEDE7F6);
         fg = const Color(0xFF4527A0);
         break;
@@ -5515,7 +5751,7 @@ class StatusChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-      final counts = <String, int>{
+    final counts = <String, int>{
       'Ordered': 0,
       'Processing': 0,
       'Shipping': 0,
