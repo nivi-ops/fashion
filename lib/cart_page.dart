@@ -1090,6 +1090,130 @@ class _CartProductDetailsPageState
                           ),
 
                           const SizedBox(height: 18),
+                          const Divider(height: 1),
+                          const SizedBox(height: 18),
+
+                          // ==================================================
+                          // DELIVERY DETAILS
+                          // (moved here — now sits between Qty and the
+                          // Add to Cart / Buy Now buttons)
+                          // ==================================================
+
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: AppColors.gray,
+                              ),
+                              borderRadius:
+                                  BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                InkWell(
+                                  borderRadius:
+                                      BorderRadius.circular(12),
+                                  onTap: () async {
+                                    await LocationPickerSheet.show(
+                                      context,
+                                    );
+
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
+                                  },
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets
+                                            .symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.home_outlined,
+                                          size: 20,
+                                          color:
+                                              AppColors.primary,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            AppState.instance
+                                                    .deliveryLocation
+                                                    .trim()
+                                                    .isNotEmpty
+                                                ? AppState
+                                                    .instance
+                                                    .deliveryLocation
+                                                : 'Add a delivery address',
+                                            maxLines: 2,
+                                            overflow:
+                                                TextOverflow
+                                                    .ellipsis,
+                                            style:
+                                                const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight:
+                                                  FontWeight.w600,
+                                              color:
+                                                  AppColors.text,
+                                            ),
+                                          ),
+                                        ),
+                                        const Icon(
+                                          Icons.chevron_right,
+                                          size: 20,
+                                          color:
+                                              AppColors.textLight,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                                const Divider(
+                                  height: 1,
+                                  indent: 12,
+                                  endIndent: 12,
+                                ),
+
+                                const Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons
+                                            .local_shipping_outlined,
+                                        size: 20,
+                                        color:
+                                            AppColors.primary,
+                                      ),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Custom stitched — delivered within 10–15 days',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight:
+                                                FontWeight.w700,
+                                            color:
+                                                AppColors.text,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 18),
 
                           // ==================================================
                           // ADD TO CART + BUY NOW
@@ -1238,127 +1362,6 @@ class _CartProductDetailsPageState
                     ),
 
                     // ==================================================
-                    // DELIVERY DETAILS
-                    // ==================================================
-
-                    _detailSection(
-                      title: 'Delivery details',
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: AppColors.gray,
-                          ),
-                          borderRadius:
-                              BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          children: [
-                            InkWell(
-                              borderRadius:
-                                  BorderRadius.circular(12),
-                              onTap: () async {
-                                await LocationPickerSheet.show(
-                                  context,
-                                );
-
-                                if (mounted) {
-                                  setState(() {});
-                                }
-                              },
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets
-                                        .symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.home_outlined,
-                                      size: 20,
-                                      color:
-                                          AppColors.primary,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        AppState.instance
-                                                .deliveryLocation
-                                                .trim()
-                                                .isNotEmpty
-                                            ? AppState
-                                                .instance
-                                                .deliveryLocation
-                                            : 'Add a delivery address',
-                                        maxLines: 2,
-                                        overflow:
-                                            TextOverflow
-                                                .ellipsis,
-                                        style:
-                                            const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight:
-                                              FontWeight.w600,
-                                          color:
-                                              AppColors.text,
-                                        ),
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      size: 20,
-                                      color:
-                                          AppColors.textLight,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            const Divider(
-                              height: 1,
-                              indent: 12,
-                              endIndent: 12,
-                            ),
-
-                            const Padding(
-                              padding:
-                                  EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons
-                                        .local_shipping_outlined,
-                                    size: 20,
-                                    color:
-                                        AppColors.primary,
-                                  ),
-                                  SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'Custom stitched — delivered within 10–15 days',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight:
-                                            FontWeight.w700,
-                                        color:
-                                            AppColors.text,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                          // ==================================================
                     // DESCRIPTION & HIGHLIGHTS
                     // (hidden entirely when admin hasn't filled either —
                     // same rule as product_details_page.dart)

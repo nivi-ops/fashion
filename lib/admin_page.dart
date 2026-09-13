@@ -90,6 +90,7 @@ class _AdminPageState extends State<AdminPage> {
 
   bool loggedIn = false;
   bool loading = false;
+  bool _obscurePassword = true;
   bool mobilePageMode = false;
   String currentPage = 'dashboard';
   String loginError = '';
@@ -2013,7 +2014,7 @@ if (result != null && result.isSuccess) {
     );
   }
 
-  Widget actionButton(
+    Widget actionButton(
     String text,
     VoidCallback onPressed, {
     Color? color,
@@ -2033,7 +2034,13 @@ if (result != null && result.isSuccess) {
                 ),
               ),
               onPressed: onPressed,
-              child: Text(text),
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: textColor ?? Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
     );
   }
@@ -3676,7 +3683,8 @@ if (result != null && result.isSuccess) {
                         ],
                       ),
                     ),
-                    StatusBadge(status: '${o['status']}'),
+                                       if ('${o['source']}'.toLowerCase() != 'custom-order')
+                      StatusBadge(status: '${o['status']}'),
                     const SizedBox(width: 6),
                     Icon(Icons.chevron_right, color: muted),
                   ],
@@ -4567,11 +4575,11 @@ if (result != null && result.isSuccess) {
                           keyboard: TextInputType.emailAddress,
                         ),
                         const SizedBox(height: 16),
-                        loginField(
+                                                loginField(
                           icon: Icons.lock_outline,
                           controller: passwordController,
                           hint: 'Password',
-                          obscure: true,
+                          isPassword: true,
                         ),
                         const SizedBox(height: 8),
                         SizedBox(
@@ -4616,12 +4624,13 @@ if (result != null && result.isSuccess) {
     );
   }
 
-  Widget loginField({
+     Widget loginField({
     required IconData icon,
     required TextEditingController controller,
     required String hint,
     TextInputType? keyboard,
     bool obscure = false,
+    bool isPassword = false,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -4637,7 +4646,7 @@ if (result != null && result.isSuccess) {
             child: TextField(
               controller: controller,
               keyboardType: keyboard,
-              obscureText: obscure,
+              obscureText: isPassword ? _obscurePassword : obscure,
               style: const TextStyle(fontSize: 15, color: Color(0xFF333333)),
               decoration: InputDecoration(
                 hintText: hint,
@@ -4648,6 +4657,18 @@ if (result != null && result.isSuccess) {
               ),
             ),
           ),
+          if (isPassword)
+            IconButton(
+              splashRadius: 18,
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                size: 19,
+                color: Colors.black.withOpacity(.5),
+              ),
+              onPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+            ),
         ],
       ),
     );
