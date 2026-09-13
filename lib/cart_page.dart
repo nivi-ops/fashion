@@ -612,7 +612,39 @@ class _CartProductDetailsPageState
     extends State<CartProductDetailsPage> {
   int _qty = 1;
 
+  bool _loadingReviews = true;
+  List<Map<String, dynamic>> _productReviews = [];
+
   static const String _brandName = "SUMATHI'S STYLE";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProductReviews();
+  }
+
+  Future<void> _loadProductReviews() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('reviews')
+          .where('product', isEqualTo: widget.product.name)
+          .get();
+      final loaded = snap.docs.map((doc) {
+        final m = doc.data();
+        return {
+          'name': '${m['name'] ?? ''}',
+          'rating': (num.tryParse('${m['rating'] ?? 5}') ?? 5).toInt(),
+          'comment': '${m['comment'] ?? ''}',
+        };
+      }).toList();
+      if (!mounted) return;
+      setState(() => _productReviews = loaded);
+    } catch (_) {
+      // reviews are supplementary — fail silently
+    } finally {
+      if (mounted) setState(() => _loadingReviews = false);
+    }
+  }
 
   Product get product => widget.product;
 
@@ -1474,7 +1506,7 @@ class _CartProductDetailsPageState
   // REVIEW SECTION
   // ================================================================
 
-  Widget _reviewSection() {
+    Widget _reviewSection() {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 10),
@@ -1513,45 +1545,132 @@ class _CartProductDetailsPageState
 
           const SizedBox(height: 14),
 
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.light,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius:
-                        BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    size: 20,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'No customer reviews yet.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textLight,
-                      height: 1.4,
+          if (_loadingReviews)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+            )
+          else if (_productReviews.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.light,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius:
+                          BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.person,
+                      size: 20,
+                      color: Colors.white,
                     ),
                   ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'No customer reviews yet.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textLight,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ..._productReviews.map((r) {
+              final rating = (r['rating'] as num?)?.toInt() ?? 5;
+              final name = (r['name']?.toString().trim().isNotEmpty ?? false)
+                  ? r['name'].toString()
+                  : 'Customer';
+              final comment = r['comment']?.toString() ?? '';
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.light,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ],
-            ),
-          ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Center(
+                        child: Text(
+                          name[0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.text,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '★' * rating + '☆' * (5 - rating),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.secondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (comment.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              comment,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.textLight,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -1603,14 +1722,15 @@ class _CartProductDetailsPageState
         path.startsWith('http://') ||
         path.startsWith('https://');
 
-    if (isNetwork) {
+        if (isNetwork) {
       return Container(
         width: double.infinity,
         color: Colors.white,
         child: Image.network(
           path,
           width: double.infinity,
-          fit: BoxFit.contain,
+          height: double.infinity,
+          fit: BoxFit.cover,
           loadingBuilder:
               (context, child, loadingProgress) {
             if (loadingProgress == null) {
@@ -1636,13 +1756,14 @@ class _CartProductDetailsPageState
       );
     }
 
-    return Container(
+       return Container(
       width: double.infinity,
       color: Colors.white,
       child: Image.asset(
         path,
         width: double.infinity,
-        fit: BoxFit.contain,
+        height: double.infinity,
+        fit: BoxFit.cover,
         errorBuilder: (_, __, ___) {
           return const Center(
             child: Icon(

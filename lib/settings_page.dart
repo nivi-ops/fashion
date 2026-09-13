@@ -2111,7 +2111,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   crossAxisCount: 2,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 14,
-                  childAspectRatio: 0.66,
+                                  childAspectRatio: 0.78,
                 ),
                 itemBuilder: (_, index) => _wishlistCard(items[index]),
               ),
@@ -2121,7 +2121,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _wishlistCard(Product p) {
+     Widget _wishlistCard(Product p) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2137,11 +2137,12 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
+              AspectRatio(
+                aspectRatio: 1,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 48, color: AppColors.primary))),
+                    Image.network(p.image, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.gray, child: const Icon(Icons.checkroom, size: 40, color: AppColors.primary))),
                     Positioned(
                       top: 8,
                       right: 8,
@@ -2151,7 +2152,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         elevation: 2,
                         child: IconButton(
                           visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.favorite, color: AppColors.danger, size: 20),
+                          icon: const Icon(Icons.favorite, color: AppColors.danger, size: 18),
                           onPressed: () => AppState.instance.toggleWishlist(p),
                         ),
                       ),
@@ -2160,13 +2161,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 5),
-                  Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                  const SizedBox(height: 9),
-                  SizedBox(width: double.infinity, height: 40, child: ElevatedButton(onPressed: () => _showWishlistProduct(p), style: _saveBtnStyle(), child: const Text('View Product'))),
+                  Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('₹${p.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      Container(
+                        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.shopping_cart_outlined, size: 16, color: AppColors.primary),
+                          onPressed: () => _showWishlistProduct(p),
+                        ),
+                      ),
+                    ],
+                  ),
                 ]),
               ),
             ],
@@ -3089,7 +3101,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-         _panelHeader('Privacy Policy', Icons.description_outlined, back: _Panel.privacyMenu),
+                 _panelHeader('Privacy Policy', Icons.description_outlined, back: _Panel.home),
 
         // PART A — TERMS
         const Text('TERMS OF USE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),

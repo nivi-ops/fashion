@@ -568,10 +568,8 @@ class _ShopPageState extends State<ShopPage> {
                   crossAxisSpacing: gap,
                   mainAxisSpacing: 12,
 
-                  // Slightly taller because the card
-                  // now contains Buy Now + Cart buttons.
-                  childAspectRatio:
-                      cardWidth / 235,
+                                  childAspectRatio:
+                      cardWidth / 205,
                 ),
                 itemCount: services.length,
                 itemBuilder: (
@@ -999,62 +997,7 @@ class _ProductCard extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(
-                    height: 7,
-                  ),
-
-                  // ------------------------------------------------
-                  // BUY NOW BUTTON
-                  // ------------------------------------------------
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 32,
-                    child: Material(
-                      color:
-                          AppColors.secondary,
-                      borderRadius:
-                          BorderRadius
-                              .circular(7),
-                      child: InkWell(
-                        onTap:
-                            onBuyNowTap,
-                        borderRadius:
-                            BorderRadius
-                                .circular(7),
-                        child: Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment
-                                  .center,
-                          children: [
-                            const Icon(
-                              Icons
-                                  .flash_on_rounded,
-                              size: 15,
-                              color:
-                                  Colors.white,
-                            ),
-                            const SizedBox(
-                              width: 4,
-                            ),
-                            const Text(
-                              'Buy Now',
-                              style:
-                                  TextStyle(
-                                fontSize: 11,
-                                fontWeight:
-                                    FontWeight
-                                        .w700,
-                                color:
-                                    Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                             ],
               ),
             ),
           ],
