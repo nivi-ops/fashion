@@ -9,9 +9,8 @@
 // • Wishlist button
 // • Rating badge
 // • Add to Cart / View Cart button
-// • Product detail bottom sheet
-// • Quantity selector
-// • Buy Now
+// • Buy Now button
+// • Product details page (shared with Home)
 // • Delivery location
 // • Product description
 // • Product highlights
@@ -25,7 +24,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'checkout.dart';
 import 'cart_page.dart';
-import 'location_picker_page.dart';
+import 'product_details_page.dart';
 
 class ShopPage extends StatefulWidget {
   final String? initialFilter;
@@ -229,786 +228,24 @@ class _ShopPageState extends State<ShopPage> {
   // OPEN PRODUCT DETAIL
   // ============================================================
 
-  Future<void> _openProductDetail(
+  void _openProductDetail(
     StitchingService service,
-  ) async {
-    int qty = 1;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (
-            context,
-            setSheetState,
-          ) {
-            final isWishlisted = AppState
-                .instance
-                .wishlistIds
-                .contains(
-                  _productIdFor(service),
-                );
-
-            final inCart = _isInCart(service);
-
-            return DraggableScrollableSheet(
-              initialChildSize: 0.93,
-              minChildSize: 0.50,
-              maxChildSize: 1.0,
-              expand: false,
-              builder: (
-                context,
-                scrollController,
-              ) {
-                return ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                  child: Container(
-                    color: Colors.white,
-                    child: SafeArea(
-                      top: true,
-                      bottom: false,
-                      child: Column(
-                        children: [
-                          // ------------------------------------------------
-                          // SHEET HANDLE
-                          // ------------------------------------------------
-
-                          const SizedBox(height: 10),
-
-                          Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius:
-                                  BorderRadius.circular(2),
-                            ),
-                          ),
-
-                          // ------------------------------------------------
-                          // CONTENT
-                          // ------------------------------------------------
-
-                          Expanded(
-                            child: ListView(
-                              controller:
-                                  scrollController,
-                              padding: EdgeInsets.zero,
-                              children: [
-                                // ==================================================
-                                // PRODUCT IMAGE
-                                // ==================================================
-
-                                Stack(
-                                  children: [
-                                    AspectRatio(
-                                      aspectRatio: 4 / 3,
-                                      child: Image.network(
-                                        service.imageUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (
-                                          _,
-                                          __,
-                                          ___,
-                                        ) {
-                                          return Container(
-                                            color:
-                                                AppColors.light,
-                                            alignment:
-                                                Alignment.center,
-                                            child:
-                                                const Icon(
-                                              Icons.checkroom,
-                                              size: 50,
-                                              color: AppColors
-                                                  .primary,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-
-                                    // Wishlist
-                                    Positioned(
-                                      top: 12,
-                                      right: 12,
-                                      child: InkWell(
-                                        onTap: () {
-                                          AppState.instance
-                                              .toggleWishlist(
-                                            _productFrom(
-                                              service,
-                                              1,
-                                            ),
-                                          );
-
-                                          setSheetState(
-                                            () {},
-                                          );
-
-                                          if (mounted) {
-                                            setState(
-                                              () {},
-                                            );
-                                          }
-                                        },
-                                        child: Container(
-                                          width: 40,
-                                          height: 40,
-                                          decoration:
-                                              const BoxDecoration(
-                                            color: Colors.white,
-                                            shape:
-                                                BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color:
-                                                    Colors.black26,
-                                                blurRadius: 6,
-                                              ),
-                                            ],
-                                          ),
-                                          child: Icon(
-                                            isWishlisted
-                                                ? Icons.favorite
-                                                : Icons
-                                                    .favorite_border,
-                                            color: isWishlisted
-                                                ? const Color(
-                                                    0xFFE53935,
-                                                  )
-                                                : Colors.grey,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                // ==================================================
-                                // PRODUCT INFORMATION
-                                // ==================================================
-
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(
-                                    20,
-                                    18,
-                                    20,
-                                    24,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        "SUMATHI'S STYLE",
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight:
-                                              FontWeight.w700,
-                                          letterSpacing: 1,
-                                          color:
-                                              AppColors.primary,
-                                        ),
-                                      ),
-
-                                      const SizedBox(height: 6),
-
-                                      Text(
-                                        service.name,
-                                        style: const TextStyle(
-                                          fontSize: 19,
-                                          fontWeight:
-                                              FontWeight.w600,
-                                          color:
-                                              AppColors.text,
-                                        ),
-                                      ),
-
-                                      const SizedBox(height: 10),
-
-                                      // Rating
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding:
-                                                const EdgeInsets
-                                                    .symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration:
-                                                BoxDecoration(
-                                              color:
-                                                  const Color(
-                                                0xFF388E3C,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius
-                                                      .circular(
-                                                4,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize:
-                                                  MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  _ratingFor(
-                                                    service.id,
-                                                  ).toStringAsFixed(
-                                                    1,
-                                                  ),
-                                                  style:
-                                                      const TextStyle(
-                                                    color: Colors
-                                                        .white,
-                                                    fontWeight:
-                                                        FontWeight
-                                                            .bold,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                                const SizedBox(
-                                                  width: 3,
-                                                ),
-                                                const Icon(
-                                                  Icons.star,
-                                                  color: Colors.white,
-                                                  size: 11,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                      const Divider(
-                                        height: 26,
-                                      ),
-
-                                      // Price
-                                      Text(
-                                        '₹${service.price.toStringAsFixed(0)}',
-                                        style:
-                                            const TextStyle(
-                                          fontSize: 26,
-                                          fontWeight:
-                                              FontWeight.bold,
-                                          color:
-                                              AppColors.text,
-                                        ),
-                                      ),
-
-                                      const SizedBox(height: 16),
-
-                                      // ==================================================
-                                      // QUANTITY
-                                      // ==================================================
-
-                                      Row(
-                                        children: [
-                                          const Text(
-                                            'Qty:',
-                                            style:
-                                                TextStyle(
-                                              fontWeight:
-                                                  FontWeight.w600,
-                                            ),
-                                          ),
-
-                                          const SizedBox(
-                                            width: 12,
-                                          ),
-
-                                          Container(
-                                            decoration:
-                                                BoxDecoration(
-                                              border: Border.all(
-                                                color:
-                                                    const Color(
-                                                  0xFFE0E0E0,
-                                                ),
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius
-                                                      .circular(
-                                                6,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                IconButton(
-                                                  onPressed: () {
-                                                    if (qty > 1) {
-                                                      setSheetState(
-                                                        () {
-                                                          qty--;
-                                                        },
-                                                      );
-                                                    }
-                                                  },
-                                                  icon:
-                                                      const Icon(
-                                                    Icons.remove,
-                                                    size: 16,
-                                                  ),
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 34,
-                                                    minHeight: 34,
-                                                  ),
-                                                  padding:
-                                                      EdgeInsets.zero,
-                                                ),
-
-                                                SizedBox(
-                                                  width: 28,
-                                                  child: Text(
-                                                    '$qty',
-                                                    textAlign:
-                                                        TextAlign
-                                                            .center,
-                                                    style:
-                                                        const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight
-                                                              .w600,
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                IconButton(
-                                                  onPressed: () {
-                                                    if (qty < 10) {
-                                                      setSheetState(
-                                                        () {
-                                                          qty++;
-                                                        },
-                                                      );
-                                                    }
-                                                  },
-                                                  icon:
-                                                      const Icon(
-                                                    Icons.add,
-                                                    size: 16,
-                                                  ),
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 34,
-                                                    minHeight: 34,
-                                                  ),
-                                                  padding:
-                                                      EdgeInsets.zero,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                      const SizedBox(height: 18),
-
-                                      // ==================================================
-                                      // CART + BUY NOW
-                                      // ==================================================
-
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: SizedBox(
-                                              height: 46,
-                                              child:
-                                                  ElevatedButton
-                                                      .icon(
-                                                style:
-                                                    ElevatedButton
-                                                        .styleFrom(
-                                                  backgroundColor:
-                                                      AppColors
-                                                          .primary,
-                                                  foregroundColor:
-                                                      Colors.white,
-                                                  shape:
-                                                      RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius
-                                                            .circular(
-                                                      8,
-                                                    ),
-                                                  ),
-                                                ),
-                                                onPressed: () {
-                                                  if (inCart) {
-                                                    Navigator.pop(
-                                                      context,
-                                                    );
-                                                    _goToCart();
-                                                  } else {
-                                                    _addToCart(
-                                                      service,
-                                                      qty,
-                                                    );
-
-                                                    setSheetState(
-                                                      () {},
-                                                    );
-
-                                                    if (mounted) {
-                                                      setState(
-                                                        () {},
-                                                      );
-                                                    }
-                                                  }
-                                                },
-                                                icon: Icon(
-                                                  inCart
-                                                      ? Icons
-                                                          .shopping_cart_checkout
-                                                      : Icons
-                                                          .shopping_cart,
-                                                  size: 16,
-                                                ),
-                                                label: Text(
-                                                  inCart
-                                                      ? 'View Cart'
-                                                      : 'Add to Cart',
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-
-                                          const SizedBox(
-                                            width: 10,
-                                          ),
-
-                                          Expanded(
-                                            child: SizedBox(
-                                              height: 46,
-                                              child:
-                                                  ElevatedButton
-                                                      .icon(
-                                                style:
-                                                    ElevatedButton
-                                                        .styleFrom(
-                                                  backgroundColor:
-                                                      AppColors
-                                                          .secondary,
-                                                  foregroundColor:
-                                                      Colors.white,
-                                                  shape:
-                                                      RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius
-                                                            .circular(
-                                                      8,
-                                                    ),
-                                                  ),
-                                                ),
-                                                onPressed: () {
-                                                  Navigator.pop(
-                                                    context,
-                                                  );
-
-                                                  _bookService(
-                                                    service,
-                                                    qty: qty,
-                                                  );
-                                                },
-                                                icon:
-                                                    const Icon(
-                                                  Icons.bolt,
-                                                  size: 16,
-                                                ),
-                                                label:
-                                                    const Text(
-                                                  'Buy Now',
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                      const SizedBox(
-                                        height: 20,
-                                      ),
-
-                                      // ==================================================
-                                      // DELIVERY DETAILS
-                                      // ==================================================
-
-                                      Container(
-                                        padding:
-                                            const EdgeInsets.all(
-                                          14,
-                                        ),
-                                        decoration:
-                                            BoxDecoration(
-                                          border: Border.all(
-                                            color: const Color(
-                                              0xFFE0E0E0,
-                                            ),
-                                          ),
-                                          borderRadius:
-                                              BorderRadius
-                                                  .circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment
-                                                  .start,
-                                          children: [
-                                            const Text(
-                                              'Delivery details',
-                                              style:
-                                                  TextStyle(
-                                                fontWeight:
-                                                    FontWeight
-                                                        .bold,
-                                                fontSize: 15,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                              height: 10,
-                                            ),
-
-                                            InkWell(
-                                              borderRadius:
-                                                  BorderRadius
-                                                      .circular(
-                                                8,
-                                              ),
-                                              onTap: () async {
-                                                final picked =
-                                                    await LocationPickerSheet
-                                                        .show(
-                                                  context,
-                                                );
-
-                                                if (picked !=
-                                                    null) {
-                                                  final display =
-                                                      picked
-                                                              .addressLine
-                                                              .trim()
-                                                              .isNotEmpty
-                                                          ? picked
-                                                              .addressLine
-                                                          : (picked
-                                                                  .label
-                                                                  .isNotEmpty
-                                                              ? picked
-                                                                  .label
-                                                              : 'Selected location');
-
-                                                  await AppState
-                                                      .instance
-                                                      .setDeliveryLocation(
-                                                    display,
-                                                    lat: picked
-                                                        .latitude,
-                                                    lng: picked
-                                                        .longitude,
-                                                    pincode: picked
-                                                        .pincode,
-                                                  );
-
-                                                  setSheetState(
-                                                    () {},
-                                                  );
-                                                }
-                                              },
-                                              child: Row(
-                                                children: [
-                                                  const Icon(
-                                                    Icons
-                                                        .home_outlined,
-                                                    size: 18,
-                                                    color: AppColors
-                                                        .primary,
-                                                  ),
-
-                                                  const SizedBox(
-                                                    width: 10,
-                                                  ),
-
-                                                  Expanded(
-                                                    child: Text(
-                                                      AppState
-                                                              .instance
-                                                              .deliveryLocation
-                                                              .trim()
-                                                              .isNotEmpty
-                                                          ? AppState
-                                                              .instance
-                                                              .deliveryLocation
-                                                          : 'Add a delivery address',
-                                                      maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow
-                                                              .ellipsis,
-                                                      style:
-                                                          const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight
-                                                                .w600,
-                                                        fontSize: 13,
-                                                      ),
-                                                    ),
-                                                  ),
-
-                                                  const Icon(
-                                                    Icons
-                                                        .chevron_right,
-                                                    size: 18,
-                                                    color: AppColors
-                                                        .textLight,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-
-                                            const Divider(
-                                              height: 20,
-                                            ),
-
-                                            const Row(
-                                              children: [
-                                                Icon(
-                                                  Icons
-                                                      .local_shipping_outlined,
-                                                  size: 18,
-                                                ),
-
-                                                SizedBox(
-                                                  width: 10,
-                                                ),
-
-                                                Expanded(
-                                                  child: Text(
-                                                    'Custom stitched — delivered within 10–15 days',
-                                                    style:
-                                                        TextStyle(
-                                                      fontWeight:
-                                                          FontWeight
-                                                              .w600,
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                        height: 20,
-                                      ),
-
-                                      // ==================================================
-                                      // DESCRIPTION
-                                      // Only shows if admin has description
-                                      // ==================================================
-
-                                      if (service.description
-                                          .trim()
-                                          .isNotEmpty) ...[
-                                        const Text(
-                                          'Description',
-                                          style:
-                                              TextStyle(
-                                            fontWeight:
-                                                FontWeight.bold,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-
-                                        const SizedBox(
-                                          height: 8,
-                                        ),
-
-                                        Text(
-                                          service.description,
-                                          style:
-                                              const TextStyle(
-                                            fontSize: 13,
-                                            color: AppColors
-                                                .textLight,
-                                            height: 1.5,
-                                          ),
-                                        ),
-
-                                        const SizedBox(
-                                          height: 20,
-                                        ),
-                                      ],
-
-                                      // ==================================================
-                                      // HIGHLIGHTS
-                                      // Only shows if admin has highlights
-                                      // ==================================================
-
-                                      if (service.highlights
-                                          .isNotEmpty) ...[
-                                        const Text(
-                                          'Product Highlights',
-                                          style:
-                                              TextStyle(
-                                            fontWeight:
-                                                FontWeight.bold,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-
-                                        const SizedBox(
-                                          height: 8,
-                                        ),
-
-                                        Text(
-                                          service.highlights
-                                              .map(
-                                                (h) => '• $h',
-                                              )
-                                              .join('\n'),
-                                          style:
-                                              const TextStyle(
-                                            fontSize: 13,
-                                            color: AppColors
-                                                .textLight,
-                                            height: 1.6,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductDetailsPage(
+          product: _productFrom(
+            service,
+            1,
+          ),
+        ),
+      ),
+    ).then((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   // ============================================================
@@ -1310,7 +547,10 @@ class _ShopPageState extends State<ShopPage> {
           // ======================================================
 
           return LayoutBuilder(
-            builder: (context, constraints) {
+            builder: (
+              context,
+              constraints,
+            ) {
               const gap = 10.0;
 
               final cardWidth =
@@ -1328,8 +568,10 @@ class _ShopPageState extends State<ShopPage> {
                   crossAxisSpacing: gap,
                   mainAxisSpacing: 12,
 
-                  // Same proportions as the Home page cards.
-                  childAspectRatio: cardWidth / 205,
+                  // Slightly taller because the card
+                  // now contains Buy Now + Cart buttons.
+                  childAspectRatio:
+                      cardWidth / 235,
                 ),
                 itemCount: services.length,
                 itemBuilder: (
@@ -1348,7 +590,9 @@ class _ShopPageState extends State<ShopPage> {
                     service: service,
 
                     rating:
-                        _ratingFor(service.id),
+                        _ratingFor(
+                      service.id,
+                    ),
 
                     isWishlisted: AppState
                         .instance
@@ -1390,6 +634,14 @@ class _ShopPageState extends State<ShopPage> {
                         setState(() {});
                       }
                     },
+
+                    // Buy Now
+                    onBuyNowTap: () {
+                      _bookService(
+                        service,
+                        qty: 1,
+                      );
+                    },
                   );
                 },
               );
@@ -1404,12 +656,6 @@ class _ShopPageState extends State<ShopPage> {
 // ================================================================
 // PRODUCT CARD
 // ================================================================
-//
-// This mirrors the Home page card exactly (same sizes, spacing,
-// and layout) so Shop and Home look identical and never overflow:
-// the image sits in an Expanded area and the info row below just
-// sizes itself to its own content instead of a forced flex height.
-// ================================================================
 
 class _ProductCard extends StatelessWidget {
   final StitchingService service;
@@ -1419,6 +665,7 @@ class _ProductCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onWishlistTap;
   final VoidCallback onCartTap;
+  final VoidCallback onBuyNowTap;
 
   const _ProductCard({
     required this.service,
@@ -1427,6 +674,7 @@ class _ProductCard extends StatelessWidget {
     required this.onTap,
     required this.onWishlistTap,
     required this.onCartTap,
+    required this.onBuyNowTap,
   });
 
   // ============================================================
@@ -1450,31 +698,38 @@ class _ProductCard extends StatelessWidget {
   Widget build(
     BuildContext context,
   ) {
-    final isInCart = _isAlreadyInCart();
+    final isInCart =
+        _isAlreadyInCart();
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius:
+              BorderRadius.circular(10),
           border: Border.all(
-            color: const Color(0xFFE8E8E8),
+            color:
+                const Color(0xFFE8E8E8),
             width: 0.7,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(
+              color: Colors.black
+                  .withValues(
                 alpha: 0.055,
               ),
               blurRadius: 7,
-              offset: const Offset(0, 2),
+              offset:
+                  const Offset(0, 2),
             ),
           ],
         ),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior:
+            Clip.antiAlias,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
             // ==================================================
             // PRODUCT IMAGE
@@ -1485,20 +740,34 @@ class _ProductCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(10),
+                    borderRadius:
+                        const BorderRadius.vertical(
+                      top:
+                          Radius.circular(10),
                     ),
                     child: Image.network(
                       service.imageUrl,
                       fit: BoxFit.cover,
-                      alignment: Alignment.topCenter,
-                      errorBuilder: (_, __, ___) {
+                      alignment:
+                          Alignment.topCenter,
+                      errorBuilder:
+                          (
+                        _,
+                        __,
+                        ___,
+                      ) {
                         return Container(
-                          color: AppColors.gray,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            color: AppColors.textLight,
+                          color:
+                              AppColors.gray,
+                          alignment:
+                              Alignment.center,
+                          child:
+                              const Icon(
+                            Icons
+                                .image_not_supported,
+                            color:
+                                AppColors
+                                    .textLight,
                           ),
                         );
                       },
@@ -1514,22 +783,30 @@ class _ProductCard extends StatelessWidget {
                     right: 7,
                     child: Material(
                       color: Colors.white,
-                      shape: const CircleBorder(),
+                      shape:
+                          const CircleBorder(),
                       elevation: 1.5,
                       child: InkWell(
-                        onTap: onWishlistTap,
-                        customBorder: const CircleBorder(),
+                        onTap:
+                            onWishlistTap,
+                        customBorder:
+                            const CircleBorder(),
                         child: SizedBox(
                           width: 29,
                           height: 29,
                           child: Icon(
                             isWishlisted
-                                ? Icons.favorite
-                                : Icons.favorite_border,
+                                ? Icons
+                                    .favorite
+                                : Icons
+                                    .favorite_border,
                             size: 16,
                             color: isWishlisted
-                                ? AppColors.danger
-                                : Colors.grey.shade700,
+                                ? AppColors
+                                    .danger
+                                : Colors
+                                    .grey
+                                    .shade700,
                           ),
                         ),
                       ),
@@ -1544,30 +821,49 @@ class _ProductCard extends StatelessWidget {
                     left: 7,
                     bottom: 7,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
                         horizontal: 6,
                         vertical: 3,
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF388E3C),
-                        borderRadius: BorderRadius.circular(4),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            const Color(
+                          0xFF388E3C,
+                        ),
+                        borderRadius:
+                            BorderRadius
+                                .circular(4),
                       ),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisSize:
+                            MainAxisSize.min,
                         children: [
                           Text(
-                            rating.toStringAsFixed(1),
-                            style: const TextStyle(
+                            rating
+                                .toStringAsFixed(
+                              1,
+                            ),
+                            style:
+                                const TextStyle(
                               fontSize: 9.5,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                              color:
+                                  Colors.white,
+                              fontWeight:
+                                  FontWeight
+                                      .bold,
                             ),
                           ),
-                          const SizedBox(width: 2),
+                          const SizedBox(
+                            width: 2,
+                          ),
                           const Icon(
                             Icons.star,
                             size: 9,
-                            color: Colors.white,
+                            color:
+                                Colors.white,
                           ),
                         ],
                       ),
@@ -1578,71 +874,182 @@ class _ProductCard extends StatelessWidget {
             ),
 
             // ==================================================
-            // PRODUCT INFO (auto-sized — never overflows)
+            // PRODUCT INFO
             // ==================================================
 
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 7, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              padding:
+                  const EdgeInsets.fromLTRB(
+                8,
+                8,
+                7,
+                8,
+              ),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment
+                        .start,
+                mainAxisSize:
+                    MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          service.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.text,
+                  // ------------------------------------------------
+                  // PRODUCT NAME + PRICE
+                  // ------------------------------------------------
+
+                  Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
+                          mainAxisSize:
+                              MainAxisSize.min,
+                          children: [
+                            Text(
+                              service.name,
+                              maxLines: 1,
+                              overflow:
+                                  TextOverflow
+                                      .ellipsis,
+                              style:
+                                  const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight:
+                                    FontWeight
+                                        .w500,
+                                color:
+                                    AppColors
+                                        .text,
+                              ),
+                            ),
+                            const SizedBox(
+                              height: 4,
+                            ),
+                            Text(
+                              '₹${service.price.toStringAsFixed(0)}',
+                              maxLines: 1,
+                              overflow:
+                                  TextOverflow
+                                      .ellipsis,
+                              style:
+                                  const TextStyle(
+                                fontSize: 14,
+                                fontWeight:
+                                    FontWeight
+                                        .w800,
+                                color:
+                                    Color(
+                                  0xFF212121,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(
+                        width: 6,
+                      ),
+
+                      // ------------------------------------------------
+                      // CART BUTTON
+                      // ------------------------------------------------
+
+                      Material(
+                        color: isInCart
+                            ? AppColors
+                                .primaryDark
+                            : AppColors
+                                .primary
+                                .withValues(
+                                alpha: 0.10,
+                              ),
+                        borderRadius:
+                            BorderRadius
+                                .circular(7),
+                        child: InkWell(
+                          onTap:
+                              onCartTap,
+                          borderRadius:
+                              BorderRadius
+                                  .circular(7),
+                          child: SizedBox(
+                            width: 31,
+                            height: 31,
+                            child: Icon(
+                              isInCart
+                                  ? Icons
+                                      .shopping_cart_checkout
+                                  : Icons
+                                      .add_shopping_cart,
+                              size: 16,
+                              color: isInCart
+                                  ? Colors
+                                      .white
+                                  : AppColors
+                                      .primary,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₹${service.price.toStringAsFixed(0)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF212121),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
 
-                  const SizedBox(width: 5),
+                  const SizedBox(
+                    height: 7,
+                  ),
 
-                  // ==================================================
-                  // CART BUTTON
-                  // ==================================================
+                  // ------------------------------------------------
+                  // BUY NOW BUTTON
+                  // ------------------------------------------------
 
-                  Material(
-                    color: isInCart
-                        ? AppColors.primaryDark
-                        : AppColors.primary.withValues(
-                            alpha: 0.10,
-                          ),
-                    borderRadius: BorderRadius.circular(7),
-                    child: InkWell(
-                      onTap: onCartTap,
-                      borderRadius: BorderRadius.circular(7),
-                      child: SizedBox(
-                        width: 31,
-                        height: 31,
-                        child: Icon(
-                          isInCart
-                              ? Icons.shopping_cart_checkout
-                              : Icons.add_shopping_cart,
-                          size: 16,
-                          color: isInCart
-                              ? Colors.white
-                              : AppColors.primary,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 32,
+                    child: Material(
+                      color:
+                          AppColors.secondary,
+                      borderRadius:
+                          BorderRadius
+                              .circular(7),
+                      child: InkWell(
+                        onTap:
+                            onBuyNowTap,
+                        borderRadius:
+                            BorderRadius
+                                .circular(7),
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .center,
+                          children: [
+                            const Icon(
+                              Icons
+                                  .flash_on_rounded,
+                              size: 15,
+                              color:
+                                  Colors.white,
+                            ),
+                            const SizedBox(
+                              width: 4,
+                            ),
+                            const Text(
+                              'Buy Now',
+                              style:
+                                  TextStyle(
+                                fontSize: 11,
+                                fontWeight:
+                                    FontWeight
+                                        .w700,
+                                color:
+                                    Colors.white,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

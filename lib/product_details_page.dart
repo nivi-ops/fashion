@@ -70,12 +70,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       return;
     }
 
-    try {
+        try {
       QuerySnapshot<Map<String, dynamic>> snap =
           await FirebaseFirestore.instance
               .collection('saved_addresses')
               .doc(phone)
               .collection('addresses')
+              .orderBy('updatedAt', descending: true)
+              .limit(1)
               .get();
 
       // Backward-compatible fallback for addresses saved by the ApiService
@@ -85,6 +87,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             .collection('users')
             .doc(phone)
             .collection('addresses')
+            .orderBy('updatedAt', descending: true)
+            .limit(1)
             .get();
       }
 

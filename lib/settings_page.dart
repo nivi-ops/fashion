@@ -2670,35 +2670,7 @@ class _SettingsPageState extends State<SettingsPage> {
           body:
               'You are always in control of your data. You may access, correct, or update your personal details through your profile at any time, request a full export of your data, request deletion of your account, and withdraw your consent for any specific use of your data whenever you wish.',
         ),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () => _openPanel(_Panel.terms),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              child: const Row(
-                children: [
-                  Icon(Icons.description_outlined, size: 18, color: AppColors.primary),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Terms, Policies & Licenses',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.text),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, size: 16, color: Colors.grey),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+          ],
     );
   }
 
@@ -3117,7 +3089,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _panelHeader('Terms, Policies & Licenses', Icons.description_outlined, back: _Panel.privacyMenu),
+         _panelHeader('Privacy Policy', Icons.description_outlined, back: _Panel.privacyMenu),
 
         // PART A — TERMS
         const Text('TERMS OF USE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary)),

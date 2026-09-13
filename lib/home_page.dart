@@ -220,10 +220,16 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
+      // Fetch the MOST RECENTLY UPDATED saved address (not just any
+      // doc) so this always matches the latest full address the
+      // customer saved — avoids showing a stale/incomplete entry
+      // (e.g. one missing door/street/area) that just happens to be
+      // first in the collection.
       final snapshot = await FirebaseFirestore.instance
           .collection('saved_addresses')
           .doc(userId)
           .collection('addresses')
+          .orderBy('updatedAt', descending: true)
           .limit(1)
           .get();
 
