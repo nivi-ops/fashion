@@ -111,6 +111,10 @@ class SavedAddress {
   // this is 'paid' (see OrderDetailsPage._showHelpSheet).
   final String paymentStatus;
   final String orderedAt;
+  // Raw timestamp behind `orderedAt` (which is only a formatted display
+  // string). Used by OrderDetailsPage to work out the cancel-window
+  // (see OrderDetailsPage._canCancelOrder).
+  final DateTime? orderedAtRaw;
   final String processingAt;
   final String shippingAt;
   final String deliveredAt;
@@ -124,6 +128,7 @@ class SavedAddress {
     this.status = 'Ordered',
     this.paymentStatus = 'pending',
     this.orderedAt = '',
+    this.orderedAtRaw,
     this.processingAt = '',
     this.shippingAt = '',
     this.deliveredAt = '',
@@ -473,6 +478,10 @@ class _SettingsPageState extends State<SettingsPage> {
           return '';
         }
 
+        // Raw ordered_at timestamp (not just the formatted display
+        // string) so OrderDetailsPage can compute the cancel-window.
+        final orderedTs = m['ordered_at'];
+
         return MyOrder(
           id: displayId,
           docId: doc.id,
@@ -484,6 +493,7 @@ class _SettingsPageState extends State<SettingsPage> {
           // missing field on older orders) defaults to 'pending'.
           paymentStatus: '${m['payment_status'] ?? 'pending'}',
           orderedAt: statusDate('ordered_at'),
+          orderedAtRaw: orderedTs is Timestamp ? orderedTs.toDate() : null,
           processingAt: statusDate('processing_at'),
           shippingAt: statusDate('shipping_at'),
           deliveredAt: statusDate('delivered_at'),
@@ -1970,7 +1980,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
        void _openOrderDetails(MyOrder o) {
-    final canCancel = o.status != 'Cancelled' && o.status != 'Delivered';
+    // Cancel Order is now always passed through — whether it's
+    // tappable or greyed-out in the Help sheet is decided inside
+    // OrderDetailsPage (see _canCancelOrder there).
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1979,7 +1991,7 @@ class _SettingsPageState extends State<SettingsPage> {
           savedAddress: _addresses.isNotEmpty ? _addresses.first : null,
           customerName: _user.name,
           customerPhone: _user.phone,
-          onCancelOrder: canCancel ? () => _confirmCancelOrder(o) : null,
+          onCancelOrder: () => _confirmCancelOrder(o),
         ),
       ),
     );
@@ -4225,10 +4237,11 @@ class _BulletLine extends StatelessWidget {
 /// ORDER DETAILS PAGE — full order detail screen, opened when a My
 /// Orders card is tapped. Shows product, order id (copyable), the same
 /// status timeline used in the orders list, doorstep tips and our
-/// delivery promise. Help sheet has 3 actions: Chat with us (an
-/// automated FAQ-style assistant), Cancel Order (only while eligible),
-/// and Download Invoice (generates a Sumathi's Style bill PDF, only
-/// shown when the order is paid and not cancelled).
+/// delivery promise. Help sheet always shows 3 actions: Chat with us,
+/// Cancel Order, and Download Invoice — Cancel Order and Download
+/// Invoice are greyed-out / non-clickable when not currently eligible
+/// (see _canCancelOrder and _canDownloadInvoice below), rather than
+/// being hidden entirely.
 /// ---------------------------------------------------------------------
  class OrderDetailsPage extends StatelessWidget {
   final MyOrder order;
@@ -4276,10 +4289,56 @@ class _BulletLine extends StatelessWidget {
     }
   }
 
-  // Invoice is only downloadable once the order is paid, and never for
-  // a cancelled order — nothing was actually paid/delivered in that case.
-   bool get _canDownloadInvoice =>
-      order.status == 'Delivered' && order.paymentStatus == 'paid';
+  // Cancel Order stays tappable only while the order is still in  // 'Ordered' status (admin hasn't moved it to Processing yet) AND
+  // within this many days of being placed. Once either condition
+  // fails, the button still shows in Help but is greyed out.
+  static const int _cancelWindowDays = 5;
+
+  bool get _canCancelOrder {
+    if (order.status != 'Ordered') return false;
+    final placedAt = order.orderedAtRaw;
+    if (placedAt == null) return true; // older order with no saved timestamp
+    return DateTime.now().difference(placedAt).inDays <= _cancelWindowDays;
+  }
+
+  // Invoice is only downloadable once admin has marked the order's
+  // payment as successful (`payment_status` = 'paid'), and never for a
+  // cancelled order.
+  bool get _canDownloadInvoice =>
+      order.paymentStatus == 'paid' && order.status != 'Cancelled';
+
+  // Payment status pill shown on this page — 'paid' (from admin's
+  // payment_status field) shows green "Paid", anything else (including
+  // the default 'pending') shows amber/yellow "Payment Pending". Same
+  // colour pair the admin dashboard uses for its own Pending/Paid badge,
+  // so both sides read consistently.
+  Widget _paymentStatusBadge() {
+    final bool paid = order.paymentStatus.toLowerCase() == 'paid';
+    final Color bg = paid ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0);
+    final Color fg = paid ? const Color(0xFF2E7D32) : const Color(0xFFE65100);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            paid ? Icons.check_circle : Icons.hourglass_top_rounded,
+            size: 13,
+            color: fg,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            paid ? 'Paid' : 'Payment Pending',
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: fg),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _copyOrderId(BuildContext context) {
     Clipboard.setData(ClipboardData(text: order.id));
@@ -4289,8 +4348,10 @@ class _BulletLine extends StatelessWidget {
   }
 
   // -------------------------------------------------------------------
-  // HELP SHEET — 3 actions: Chat with us, Cancel Order (only when
-  // eligible), Download Invoice (only when paid and not cancelled).
+  // HELP SHEET — always shows 3 actions: Chat with us, Cancel Order,
+  // Download Invoice. Cancel Order / Download Invoice are greyed-out
+  // and non-clickable when not currently eligible instead of being
+  // hidden.
   // -------------------------------------------------------------------
   void _showHelpSheet(BuildContext context) {
     showModalBottomSheet(
@@ -4313,35 +4374,41 @@ class _BulletLine extends StatelessWidget {
                   icon: Icons.chat_bubble_outline,
                   title: 'Chat with us',
                   subtitle: 'Get instant automated answers, or type your own question',
+                  enabled: true,
                   onTap: () {
                     Navigator.pop(sheetCtx);
-                    _showChatSheet(sheetCtx.mounted ? context : context);
+                    _showChatSheet(context);
                   },
                 ),
-                if (onCancelOrder != null)
-                  _helpOption(
-                    sheetCtx,
-                    icon: Icons.cancel_outlined,
-                    title: 'Cancel Order',
-                    subtitle: 'Cancel this order if stitching has not started',
-                    danger: true,
-                    onTap: () {
-                      Navigator.pop(sheetCtx);
-                      onCancelOrder?.call();
-                    },
-                  ),
-                // Invoice download: only when paid and not cancelled.
-                if (_canDownloadInvoice)
-                  _helpOption(
-                    sheetCtx,
-                    icon: Icons.receipt_long_outlined,
-                    title: 'Download Invoice',
-                    subtitle: 'Get a PDF bill for this order',
-                    onTap: () {
-                      Navigator.pop(sheetCtx);
-                      _downloadInvoice(context);
-                    },
-                  ),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.cancel_outlined,
+                  title: 'Cancel Order',
+                  subtitle: _canCancelOrder
+                      ? 'Cancel this order if stitching has not started'
+                      : (order.status != 'Ordered'
+                          ? 'Cancellation window closed — stitching has already started'
+                          : 'Cancellation window has closed'),
+                  danger: true,
+                  enabled: _canCancelOrder,
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    onCancelOrder?.call();
+                  },
+                ),
+                _helpOption(
+                  sheetCtx,
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Download Invoice',
+                  subtitle: _canDownloadInvoice
+                      ? 'Get a PDF bill for this order'
+                      : 'Available once payment is confirmed',
+                  enabled: _canDownloadInvoice,
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _downloadInvoice(context);
+                  },
+                ),
                 const SizedBox(height: 8),
               ],
             ),
@@ -4358,34 +4425,48 @@ class _BulletLine extends StatelessWidget {
     required String subtitle,
     required VoidCallback onTap,
     bool danger = false,
+    bool enabled = true,
   }) {
-    final color = danger ? AppColors.danger : AppColors.primary;
+    final color = !enabled ? AppColors.textLight : (danger ? AppColors.danger : AppColors.primary);
     return InkWell(
-      onTap: onTap,
+      onTap: enabled
+          ? onTap
+          : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$title is not available right now'), duration: const Duration(seconds: 2)),
+              );
+            },
       borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: danger ? AppColors.danger : AppColors.text)),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 11.5, color: AppColors.textLight)),
-                ],
+      child: Opacity(
+        opacity: enabled ? 1 : 0.45,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: color, size: 20),
               ),
-            ),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: !enabled ? AppColors.textLight : (danger ? AppColors.danger : AppColors.text))),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: const TextStyle(fontSize: 11.5, color: AppColors.textLight)),
+                  ],
+                ),
+              ),
+              Icon(enabled ? Icons.chevron_right : Icons.lock_outline, size: 18, color: Colors.grey),
+            ],
+          ),
         ),
       ),
     );
@@ -4405,7 +4486,7 @@ class _BulletLine extends StatelessWidget {
           'Your order is currently "${order.status}". You can also see the live status tracker on this page.',
       'How long does delivery take?':
           'Custom stitched orders are usually delivered within 10-15 days from order confirmation.',
-      'Can I cancel my order?': onCancelOrder != null
+      'Can I cancel my order?': _canCancelOrder
           ? "Yes, this order is still eligible for cancellation. Use the 'Cancel Order' option in Help."
           : "This order can no longer be cancelled from the app. Please call or mail us if it's urgent.",
       'I have a fitting issue':
@@ -4998,16 +5079,23 @@ class _BulletLine extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Order id with copy
-            InkWell(
-              onTap: () => _copyOrderId(context),
-              child: Row(
-                children: [
-                  Text('Order #${order.id}', style: const TextStyle(fontSize: 12.5, color: AppColors.textLight)),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.copy, size: 14, color: AppColors.textLight),
-                ],
-              ),
+            // Order id with copy, plus the payment status badge alongside it.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                InkWell(
+                  onTap: () => _copyOrderId(context),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Order #${order.id}', style: const TextStyle(fontSize: 12.5, color: AppColors.textLight)),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.copy, size: 14, color: AppColors.textLight),
+                    ],
+                  ),
+                ),
+                _paymentStatusBadge(),
+              ],
             ),
             const SizedBox(height: 14),
 

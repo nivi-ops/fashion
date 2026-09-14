@@ -57,10 +57,19 @@ import 'package:public_file_saver/public_file_saver.dart';
 ///    of an oversized inline dropdown. Colours are unchanged.
 /// 2) When a customer cancels an order, the cancellation reason
 ///    (`cancel_reason` field from Firestore) is now surfaced to the admin
-///    in two places:
-///      - Orders table: a small red line under the status badge.
-///      - Order detail page: a highlighted red "❌ Cancellation Reason"
-///        box (same visual treatment as the ⭐ feedback box).
+///    UNDER the "Message" column (in red, under the customer's notes),
+///    and in the order detail page as a highlighted red "❌ Cancellation
+///    Reason" box (same visual treatment as the ⭐ feedback box).
+/// 3) Orders search box (Order ID / Name / Mobile / Product) now filters
+///    live as you type — it was missing its onChanged wiring before, so
+///    typing didn't trigger a rebuild until something else did.
+/// 4) Status filter dropdown's empty option now shows a clearly visible
+///    black "All" label (was blank/washed out) — selecting it shows every
+///    order regardless of status, same as before, just visible now.
+/// 5) Payment status ("Not Required" text) is now a proper Pending/Paid
+///    dropdown pill (`_paymentStatusControl`), so admin can mark COD
+///    orders as paid — shown in the Orders table and order detail page,
+///    and saved to Firestore `payment_status`.
 /// ---------------------------------------------------------------------
 
 class AdminPage extends StatefulWidget {
@@ -303,7 +312,7 @@ class _AdminPageState extends State<AdminPage> {
           'notes': m['notes'] ?? '',
           'cancelReason': m['cancel_reason'] ?? '',
           'paymentMethod': m['payment_method'] ?? 'N/A',
-          'paymentStatus': m['payment_status'] ?? 'Not Required',
+          'paymentStatus': m['payment_status'] ?? 'Pending',
           'address': m['address'] ?? '',
           'distanceKm': m['distance_km'] ?? '',
           'deliveryCharge': m['delivery_charge'] ?? '',
@@ -1800,6 +1809,89 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  /// Updates the order's Firestore `payment_status` field — used by the
+  /// Pending/Paid dropdown pill on the Orders table and order detail page.
+  Future<void> updatePaymentStatus(String id, String status) async {
+    try {
+      showToast('⏳ Updating payment status...');
+      await _db.collection('orders').doc(id).set({
+        'payment_status': status,
+      }, SetOptions(merge: true));
+      orders = await loadOrdersFromServer();
+      setState(() {});
+      showToast('✅ Payment → $status');
+    } catch (_) {
+      showToast('❌ Server error while updating payment status');
+    }
+  }
+
+  /// Small pastel pill for the payment-status dropdown — same visual
+  /// pattern as `_statusPillLikeBadge`, just Pending (orange) / Paid
+  /// (green).
+  Widget _paymentStatusPillLikeBadge(String status) {
+    final bool paid = status == 'Paid';
+    final Color bg = paid ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0);
+    final Color fg = paid ? const Color(0xFF2E7D32) : const Color(0xFFE65100);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            status,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.arrow_drop_down, size: 14, color: fg),
+        ],
+      ),
+    );
+  }
+
+  /// Payment-status control — tapping it opens a compact menu to mark the
+  /// order Pending or Paid. Any legacy value (e.g. old "Not Required"
+  /// records) is treated as Pending so the pill always shows one of the
+  /// two valid states.
+  Widget _paymentStatusControl(String orderId, String currentStatus) {
+    final normalized = currentStatus == 'Paid' ? 'Paid' : 'Pending';
+    return PopupMenuButton<String>(
+      tooltip: 'Change payment status',
+      padding: EdgeInsets.zero,
+      onSelected: (v) => updatePaymentStatus(orderId, v),
+      itemBuilder: (context) => ['Pending', 'Paid']
+          .map(
+            (s) => PopupMenuItem(
+              value: s,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: s == 'Paid' ? success : warning,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Text(s, style: const TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+      child: _paymentStatusPillLikeBadge(normalized),
+    );
+  }
+
   // ---------------- NOTIFICATIONS ----------------
 
   Future<void> sendNotification() async {
@@ -2237,12 +2329,15 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  // ---- FIX 3: `field()` now accepts an optional `onChanged` so search
+  // boxes can trigger a rebuild on every keystroke (live filtering). ----
   Widget field(
     String label,
     TextEditingController controller, {
     String? hint,
     TextInputType? keyboard,
     int maxLines = 1,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2263,6 +2358,7 @@ class _AdminPageState extends State<AdminPage> {
           controller: controller,
           keyboardType: keyboard,
           maxLines: maxLines,
+          onChanged: onChanged,
           decoration: InputDecoration(
             hintText: hint,
             filled: true,
@@ -2289,12 +2385,21 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  // ---- FIX 1: `dropdownField()` now accepts an optional `emptyLabel` so
+  // the empty ('') option shows a clearly visible label (e.g. "All")
+  // instead of appearing blank/washed out. `selectedItemBuilder` makes
+  // sure that label (in solid black) is what shows in the closed box too,
+  // not just in the open menu. ----
   Widget dropdownField(
     String label,
     String value,
     List<String> values,
-    ValueChanged<String?> onChanged,
-  ) {
+    ValueChanged<String?> onChanged, {
+    String emptyLabel = '',
+  }) {
+    String labelFor(String v) =>
+        v.isEmpty && emptyLabel.isNotEmpty ? emptyLabel : v;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -2314,11 +2419,35 @@ class _AdminPageState extends State<AdminPage> {
           icon: Icon(Icons.arrow_drop_down, color: muted),
           dropdownColor: Colors.white,
           style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
+          // Controls what's shown in the CLOSED box for the selected
+          // value — without this, an empty-string value renders blank
+          // here even though the open menu shows "All" correctly.
+          selectedItemBuilder: (context) => values.map((v) {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                labelFor(v),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF1A1A1A),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            );
+          }).toList(),
           items: values
               .map(
                 (v) => DropdownMenuItem(
                   value: v,
-                  child: Text(v, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    labelFor(v),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
                 ),
               )
               .toList(),
@@ -2936,6 +3065,7 @@ class _AdminPageState extends State<AdminPage> {
                 '',
                 productSearch,
                 hint: '🔍 Search products...',
+                onChanged: (v) => setState(() {}),
               );
               final categoryField = dropdownField(
                 'Category',
@@ -2955,13 +3085,15 @@ class _AdminPageState extends State<AdminPage> {
                   'Kurthi',
                 ],
                 (v) => setState(() => productCategory = v ?? ''),
+                emptyLabel: 'All',
               );
-              final stockField = dropdownField('Stock', productStock, [
-                '',
-                'Available',
-                'Limited',
-                'Out of Stock',
-              ], (v) => setState(() => productStock = v ?? ''));
+              final stockField = dropdownField(
+                'Stock',
+                productStock,
+                ['', 'Available', 'Limited', 'Out of Stock'],
+                (v) => setState(() => productStock = v ?? ''),
+                emptyLabel: 'All',
+              );
 
               if (narrow) {
                 return Column(
@@ -3271,35 +3403,52 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(Text('${o['mobile']}')),
                   DataCell(Text('${o['product']}')),
                   DataCell(Text('₹${o['amount']}')),
-                  DataCell(
-                    Text('${o['paymentMethod']}\n${o['paymentStatus']}'),
-                  ),
-                  DataCell(Text('${o['measurement'] ?? '—'}')),
-                  DataCell(Text('${o['notes'] ?? '—'}')),
-                  // Voice note is stored as Base64 audio, not a URL — play
-                  // it in-place from memory instead of trying to launch it.
-                  DataCell(
-                    voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
-                  ),
-                  // ---- FIX 2: Status cell now also shows the cancel
-                  // reason (small red line) whenever the order was
-                  // Cancelled, so the admin sees WHY without opening the
-                  // order detail page. ----
+                  // Payment cell — method text on top, and the Pending/Paid
+                  // dropdown pill underneath so admin can mark COD orders
+                  // as paid straight from the table.
                   DataCell(
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        StatusBadge(status: '${o['status']}'),
+                        Text(
+                          '${o['paymentMethod']}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 4),
+                        _paymentStatusControl(
+                          '${o['id']}',
+                          '${o['paymentStatus']}',
+                        ),
+                      ],
+                    ),
+                  ),
+                  DataCell(Text('${o['measurement'] ?? '—'}')),
+                  // ---- FIX 2: Message cell now also shows the
+                  // cancellation reason (in red) under the customer's
+                  // notes, whenever the order was Cancelled. ----
+                  DataCell(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 160),
+                          child: Text(
+                            '${o['notes'] ?? '—'}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                         if ('${o['status']}' == 'Cancelled' &&
                             '${o['cancelReason'] ?? ''}'.trim().isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: ConstrainedBox(
                               constraints:
-                                  const BoxConstraints(maxWidth: 140),
+                                  const BoxConstraints(maxWidth: 160),
                               child: Text(
-                                '${o['cancelReason']}',
+                                '❌ ${o['cancelReason']}',
                                 style:
                                     TextStyle(fontSize: 10, color: danger),
                                 maxLines: 2,
@@ -3310,6 +3459,14 @@ class _AdminPageState extends State<AdminPage> {
                       ],
                     ),
                   ),
+                  // Voice note is stored as Base64 audio, not a URL — play
+                  // it in-place from memory instead of trying to launch it.
+                  DataCell(
+                    voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
+                  ),
+                  // Status cell back to a plain badge — cancellation
+                  // reason now lives under Message, not here.
+                  DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
                   // ---- FIX 1: status-change control is now a small
                   // fixed-size pill (PopupMenuButton) instead of a
@@ -3388,7 +3545,45 @@ class _AdminPageState extends State<AdminPage> {
           row('Phone', '${o['mobile']}'),
           row('Product', '${o['product']}'),
           row('Amount', '₹${o['amount']}'),
-          row('Payment', '${o['paymentMethod']} • ${o['paymentStatus']}'),
+          // Payment row — method on the left, and a tappable Pending/Paid
+          // pill instead of the old static "• Not Required" text so admin
+          // can mark COD orders as paid right from the detail page.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: Text(
+                    'Payment',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: muted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      Text(
+                        '${o['paymentMethod']}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      _paymentStatusControl(
+                        '${o['id']}',
+                        '${o['paymentStatus']}',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           row('Address', '${o['address'] ?? ''}'),
           row('Measurement', '${o['measurement'] ?? ''}'),
           row('Notes', '${o['notes'] ?? ''}'),
@@ -3538,24 +3733,35 @@ class _AdminPageState extends State<AdminPage> {
           const SizedBox(height: 16),
           Row(
             children: [
+              // ---- FIX 3: onChanged wired so typing filters live. ----
               Expanded(
                 child: field(
                   '',
                   orderSearch,
                   hint: '🔍 Search by Order ID / name / mobile / product...',
+                  onChanged: (v) => setState(() {}),
                 ),
               ),
               const SizedBox(width: 10),
+              // ---- FIX 1: emptyLabel: 'All' — shows a clear black
+              // "All" instead of a blank box, and selecting it shows
+              // every order (no status filter applied). ----
               SizedBox(
                 width: 170,
-                child: dropdownField('Status', orderStatus, [
-                  '',
-                  'Ordered',
-                  'Processing',
-                  'Shipping',
-                  'Delivered',
-                  'Cancelled',
-                ], (v) => setState(() => orderStatus = v ?? '')),
+                child: dropdownField(
+                  'Status',
+                  orderStatus,
+                  [
+                    '',
+                    'Ordered',
+                    'Processing',
+                    'Shipping',
+                    'Delivered',
+                    'Cancelled',
+                  ],
+                  (v) => setState(() => orderStatus = v ?? ''),
+                  emptyLabel: 'All',
+                ),
               ),
             ],
           ),
@@ -3584,7 +3790,12 @@ class _AdminPageState extends State<AdminPage> {
             ),
           ),
           const SizedBox(height: 16),
-          field('', customSearch, hint: '🔍 Search by name / mobile...'),
+          field(
+            '',
+            customSearch,
+            hint: '🔍 Search by name / mobile...',
+            onChanged: (v) => setState(() {}),
+          ),
           const SizedBox(height: 16),
           if (list.isEmpty)
             const EmptyState(icon: '✂️', text: 'No customized orders yet')
@@ -3778,7 +3989,12 @@ class _AdminPageState extends State<AdminPage> {
       '👤 Customers',
       Column(
         children: [
-          field('', customerListSearch, hint: '🔍 Search customer...'),
+          field(
+            '',
+            customerListSearch,
+            hint: '🔍 Search customer...',
+            onChanged: (v) => setState(() {}),
+          ),
           const SizedBox(height: 14),
           if (list.isEmpty)
             const EmptyState(icon: '👤', text: 'No customers found')
@@ -3976,7 +4192,12 @@ class _AdminPageState extends State<AdminPage> {
             ),
           ),
           const SizedBox(height: 16),
-          field('', controller, hint: '🔍 Search by name / phone / email...'),
+          field(
+            '',
+            controller,
+            hint: '🔍 Search by name / phone / email...',
+            onChanged: (v) => setState(() {}),
+          ),
           const SizedBox(height: 16),
           if (list.isEmpty)
             EmptyState(
@@ -4134,7 +4355,12 @@ class _AdminPageState extends State<AdminPage> {
             ),
           ),
           const SizedBox(height: 16),
-          field('', reviewSearch, hint: '🔍 Search by name / mobile...'),
+          field(
+            '',
+            reviewSearch,
+            hint: '🔍 Search by name / mobile...',
+            onChanged: (v) => setState(() {}),
+          ),
           const SizedBox(height: 16),
           if (list.isEmpty)
             const EmptyState(icon: '⭐', text: 'No reviews yet')
@@ -4274,6 +4500,7 @@ class _AdminPageState extends State<AdminPage> {
                 '',
                 cancellationSearch,
                 hint: '🔍 Search by Order ID / name / mobile / product...',
+                onChanged: (v) => setState(() {}),
               ),
               const SizedBox(height: 14),
               Builder(
@@ -4330,6 +4557,7 @@ class _AdminPageState extends State<AdminPage> {
                   '',
                   grievanceSearch,
                   hint: '🔍 Search by name / phone / subject...',
+                  onChanged: (v) => setState(() {}),
                 ),
               ),
               const SizedBox(width: 10),
@@ -4340,6 +4568,7 @@ class _AdminPageState extends State<AdminPage> {
                   grievanceStatus,
                   ['', 'Open', 'Resolved'],
                   (v) => setState(() => grievanceStatus = v ?? ''),
+                  emptyLabel: 'All',
                 ),
               ),
             ],
