@@ -26,10 +26,13 @@ class ProductDetailsPage extends StatefulWidget {
 class _ProductDetailsPageState extends State<ProductDetailsPage> {
   int _qty = 1;
 
-  bool _loadingAddress = true;
+    bool _loadingAddress = true;
   String _address = '';
   String _recipient = '';
   String _addressPhone = '';
+  List<Map<String, dynamic>> _savedAddressList = [];
+  String? _selectedAddressId;
+  final TextEditingController _addressSearchCtrl = TextEditingController();
 
   bool _loadingReviews = true;
   List<Map<String, dynamic>> _productReviews = [];
@@ -52,9 +55,10 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     _checkReviewEligibility();
   }
 
-  @override
+   @override
   void dispose() {
     _reviewCommentCtrl.dispose();
+    _addressSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -62,7 +66,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   // LOAD SAVED ADDRESS
   // -------------------------------------------------------------------
 
-  Future<void> _loadSavedAddress() async {
+    Future<void> _loadSavedAddress() async {
     final phone = (AppState.instance.userId ?? '').trim();
 
     if (phone.isEmpty) {
@@ -70,14 +74,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       return;
     }
 
-        try {
+    try {
       QuerySnapshot<Map<String, dynamic>> snap =
           await FirebaseFirestore.instance
               .collection('saved_addresses')
               .doc(phone)
               .collection('addresses')
               .orderBy('updatedAt', descending: true)
-              .limit(1)
               .get();
 
       // Backward-compatible fallback for addresses saved by the ApiService
@@ -88,7 +91,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             .doc(phone)
             .collection('addresses')
             .orderBy('updatedAt', descending: true)
-            .limit(1)
             .get();
       }
 
@@ -99,32 +101,43 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           _address = '';
           _recipient = '';
           _addressPhone = '';
+          _savedAddressList = [];
+          _selectedAddressId = null;
           _loadingAddress = false;
         });
         return;
       }
 
-      final data = snap.docs.first.data();
-
-      final parts = <String>[
-        '${data['door'] ?? ''}'.trim(),
-        '${data['street'] ?? ''}'.trim(),
-        '${data['area'] ?? ''}'.trim(),
-        '${data['city'] ?? ''}'.trim(),
-        '${data['state'] ?? ''}'.trim(),
-        '${data['pin'] ?? ''}'.trim(),
-      ].where((e) => e.isNotEmpty).toList();
+      final list = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
 
       setState(() {
-        _recipient = '${data['recipient'] ?? ''}'.trim();
-        _addressPhone = '${data['phone'] ?? ''}'.trim();
-        _address = parts.join(', ');
+        _savedAddressList = list;
         _loadingAddress = false;
       });
+      _selectAddress(list.first);
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingAddress = false);
     }
+  }
+
+  void _selectAddress(Map<String, dynamic> data) {
+    final parts = <String>[
+      '${data['door'] ?? ''}'.trim(),
+      '${data['street'] ?? ''}'.trim(),
+      '${data['area'] ?? ''}'.trim(),
+      '${data['city'] ?? ''}'.trim(),
+      '${data['state'] ?? ''}'.trim(),
+      '${data['pin'] ?? ''}'.trim(),
+    ].where((e) => e.isNotEmpty).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _selectedAddressId = data['id']?.toString();
+      _recipient = '${data['recipient'] ?? ''}'.trim();
+      _addressPhone = '${data['phone'] ?? ''}'.trim();
+      _address = parts.join(', ');
+    });
   }
 
   // -------------------------------------------------------------------
@@ -582,18 +595,22 @@ const SizedBox(height: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.home_outlined, size: 18, color: teal),
-              const SizedBox(width: 10),
-              Expanded(child: _buildAddressContent()),
-              if (!_loadingAddress && _address.isNotEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-                ),
-            ],
+                    InkWell(
+            onTap: _loadingAddress ? null : _openAddressSheet,
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.home_outlined, size: 18, color: teal),
+                const SizedBox(width: 10),
+                Expanded(child: _buildAddressContent()),
+                if (!_loadingAddress)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                  ),
+              ],
+            ),
           ),
           const Divider(height: 20),
           Row(
@@ -663,6 +680,263 @@ const SizedBox(height: 18),
           Text('Phone: +91 $_addressPhone', style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
         ],
       ],
+    );
+  }
+
+   // -------------------------------------------------------------------
+  // SELECT DELIVERY ADDRESS SHEET
+  // -------------------------------------------------------------------
+
+  void _openAddressSheet() {
+    _addressSearchCtrl.clear();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final query = _addressSearchCtrl.text.trim().toLowerCase();
+            final filtered = query.isEmpty
+                ? _savedAddressList
+                : _savedAddressList.where((a) {
+                    final blob = [
+                      a['recipient'], a['door'], a['street'], a['area'],
+                      a['city'], a['state'], a['pin'],
+                    ].map((e) => '${e ?? ''}'.toLowerCase()).join(' ');
+                    return blob.contains(query);
+                  }).toList();
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (_, scrollController) => Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Select delivery address',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF20252B)),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(sheetCtx),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: TextField(
+                        controller: _addressSearchCtrl,
+                        onChanged: (_) => setSheet(() {}),
+                        decoration: InputDecoration(
+                          hintText: 'Search by name, area, street, pincode',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          filled: true,
+                          fillColor: tealLight,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                        children: [
+                          _addressSheetActionTile(
+                            icon: Icons.my_location_rounded,
+                            title: 'Use my current location',
+                            subtitle: 'Use GPS to find your delivery location',
+                            onTap: () {
+                              Navigator.pop(sheetCtx);
+                              _useCurrentLocation();
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                          _addressSheetActionTile(
+                            icon: Icons.add_location_alt_outlined,
+                            title: 'Add New',
+                            subtitle: 'Select a delivery location on the map',
+                            onTap: () {
+                              Navigator.pop(sheetCtx);
+                              _addNewAddress();
+                            },
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Saved addresses',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: Colors.grey),
+                              ),
+                              Text(
+                                '${_savedAddressList.length}',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          if (filtered.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Text(
+                                _savedAddressList.isEmpty
+                                    ? 'No saved addresses yet.'
+                                    : 'No addresses match your search.',
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                              ),
+                            )
+                          else
+                            ...filtered.map((a) => _addressSheetCard(a, sheetCtx)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _addressSheetActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: tealLight, borderRadius: BorderRadius.circular(10)),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 18, color: teal),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF20252B))),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _addressSheetCard(Map<String, dynamic> data, BuildContext sheetCtx) {
+    final parts = <String>[
+      '${data['door'] ?? ''}'.trim(),
+      '${data['street'] ?? ''}'.trim(),
+      '${data['area'] ?? ''}'.trim(),
+      '${data['city'] ?? ''}'.trim(),
+      '${data['state'] ?? ''}'.trim(),
+      '${data['pin'] ?? ''}'.trim(),
+    ].where((e) => e.isNotEmpty).toList();
+    final recipient = '${data['recipient'] ?? ''}'.trim();
+    final phone = '${data['phone'] ?? ''}'.trim();
+    final isSelected = _selectedAddressId == data['id']?.toString();
+    final type = '${data['type'] ?? ''}'.trim().toLowerCase();
+
+    return InkWell(
+      onTap: () {
+        _selectAddress(data);
+        Navigator.pop(sheetCtx);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? tealLight : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? teal : const Color(0xFFE5EEE9), width: isSelected ? 1.4 : 1),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(type == 'work' ? Icons.work_outline : Icons.home_outlined, size: 18, color: teal),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(recipient.isNotEmpty ? recipient : 'Address',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 3),
+                  Text(parts.join(', '), style: const TextStyle(fontSize: 12.5, height: 1.35, color: Color(0xFF30363B))),
+                  if (phone.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('Phone: $phone', style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+                  ],
+                ],
+              ),
+            ),
+            if (isSelected) const Icon(Icons.check_circle, size: 18, color: teal),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _useCurrentLocation() {
+    // TODO: point this to your location_map_picker_page.dart flow, e.g.
+    // Navigator.push(context, MaterialPageRoute(builder: (_) => LocationMapPickerPage(useCurrentLocation: true)))
+    //   .then((_) => _loadSavedAddress());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Fetching current location...')),
+    );
+  }
+
+  void _addNewAddress() {
+    // TODO: point this to your location_map_picker_page.dart flow, e.g.
+    // Navigator.push(context, MaterialPageRoute(builder: (_) => const LocationMapPickerPage()))
+    //   .then((_) => _loadSavedAddress());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Opening map to add a new address...')),
     );
   }
 

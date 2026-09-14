@@ -117,8 +117,12 @@ class SavedAddress {
   final DateTime? orderedAtRaw;
   final String processingAt;
   final String shippingAt;
-  final String deliveredAt;
+    final String deliveredAt;
   final String cancelledAt;
+  // Full delivery address exactly as entered at checkout for THIS order
+  // (saved to the `delivery_address` field). Used on the invoice so it
+  // never depends on which saved address happens to be first.
+  final String deliveryAddress;
   MyOrder({
     required this.id,
     required this.docId,
@@ -133,6 +137,7 @@ class SavedAddress {
     this.shippingAt = '',
     this.deliveredAt = '',
     this.cancelledAt = '',
+    this.deliveryAddress = '',
   });
 }
 
@@ -496,10 +501,20 @@ class _SettingsPageState extends State<SettingsPage> {
           orderedAtRaw: orderedTs is Timestamp ? orderedTs.toDate() : null,
           processingAt: statusDate('processing_at'),
           shippingAt: statusDate('shipping_at'),
-          deliveredAt: statusDate('delivered_at'),
+                    deliveredAt: statusDate('delivered_at'),
           cancelledAt: statusDate('cancelled_at'),
+          deliveryAddress: '${m['delivery_address'] ?? ''}',
         );
-      }).toList();
+          }).toList();
+      // Latest order on top, oldest order at the bottom.
+      loaded.sort((a, b) {
+        final aTime = a.orderedAtRaw;
+        final bTime = b.orderedAtRaw;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return bTime.compareTo(aTime);
+      });
       if (!mounted) return;
       setState(() {
         _orders
@@ -1979,16 +1994,38 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-       void _openOrderDetails(MyOrder o) {
+           void _openOrderDetails(MyOrder o) {
     // Cancel Order is now always passed through — whether it's
     // tappable or greyed-out in the Help sheet is decided inside
     // OrderDetailsPage (see _canCancelOrder there).
+    //
+    // The invoice must use the address entered for THIS order, not
+    // just whichever saved address is first — so build a one-off
+    // SavedAddress from the order's own `delivery_address` field when
+    // available, falling back to the saved address only for older
+    // orders that don't have it.
+    SavedAddress? orderAddress;
+    if (o.deliveryAddress.trim().isNotEmpty) {
+      orderAddress = SavedAddress(
+        name: 'Delivery Address',
+        recipient: _user.name,
+        phone: _user.phone,
+        door: o.deliveryAddress.trim(),
+        street: '',
+        city: '',
+        state: '',
+        pin: '',
+      );
+    } else if (_addresses.isNotEmpty) {
+      orderAddress = _addresses.first;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => OrderDetailsPage(
           order: o,
-          savedAddress: _addresses.isNotEmpty ? _addresses.first : null,
+          savedAddress: orderAddress,
           customerName: _user.name,
           customerPhone: _user.phone,
           onCancelOrder: () => _confirmCancelOrder(o),
@@ -4304,8 +4341,8 @@ class _BulletLine extends StatelessWidget {
   // Invoice is only downloadable once admin has marked the order's
   // payment as successful (`payment_status` = 'paid'), and never for a
   // cancelled order.
-  bool get _canDownloadInvoice =>
-      order.paymentStatus == 'paid' && order.status != 'Cancelled';
+     bool get _canDownloadInvoice =>
+      order.paymentStatus.toLowerCase() == 'paid' && order.status != 'Cancelled';
 
   // Payment status pill shown on this page — 'paid' (from admin's
   // payment_status field) shows green "Paid", anything else (including

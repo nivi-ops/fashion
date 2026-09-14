@@ -600,12 +600,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final productNames = widget.items.map((p) => p.name).join(', ');
 
-    await db.collection('orders').add({
+        await db.collection('orders').add({
       'order_id': orderId,
       'name': _nameCtrl.text.trim(),
       'mobile': phone,
       'address': _addressCtrl.text.trim(),
       'pincode': _pincodeCtrl.text.trim(),
+      'delivery_address':
+          '${_addressCtrl.text.trim()}, ${_pincodeCtrl.text.trim()}',
       'product': productNames,
       'product_image': widget.items.isNotEmpty ? widget.items.first.image : '',
       'amount': orderTotal,
@@ -613,7 +615,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       'source': 'website',
       'payment_method':
           _payment == PaymentMethod.card ? 'Card' : 'UPI',
-      'payment_status': 'Paid',
+      'payment_status': 'paid',
       'razorpay_payment_id': _razorpayPaymentId,
       'razorpay_order_id': _razorpayOrderId,
       'created_at': FieldValue.serverTimestamp(),
@@ -651,12 +653,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final productNames = widget.items.map((p) => p.name).join(', ');
 
-      await db.collection('orders').add({
+            await db.collection('orders').add({
         'order_id': orderId,
         'name': _nameCtrl.text.trim(),
         'mobile': phone,
         'address': _addressCtrl.text.trim(),
         'pincode': _pincodeCtrl.text.trim(),
+        'delivery_address':
+            '${_addressCtrl.text.trim()}, ${_pincodeCtrl.text.trim()}',
         'product': productNames,
         'product_image': widget.items.isNotEmpty ? widget.items.first.image : '',
         'amount': orderTotal,

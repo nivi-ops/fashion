@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -104,7 +106,17 @@ class _AdminPageState extends State<AdminPage> {
   final TextEditingController passwordController = TextEditingController();
   final ImagePicker picker = ImagePicker();
 
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ---------------- Admin push-alert (new order / contact) ----------------
+  FlutterLocalNotificationsPlugin? _localNotifications;
+  bool _notifSetupDone = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ordersWatchSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _contactsWatchSub;
+  Set<String> _seenOrderIds = {};
+  Set<String> _seenContactIds = {};
+  int _newOrdersBadge = 0;
+  int _newContactsBadge = 0;
 
   // ---------------- Voice-note playback (admin side) ----------------
   // Orders coming from the customer app store the recorded voice note as a
@@ -212,17 +224,20 @@ class _AdminPageState extends State<AdminPage> {
     ]) {
       c.dispose();
     }
-    for (final c in highlightControllers) c.dispose();
+        for (final c in highlightControllers) c.dispose();
     for (final c in priceTagControllers) c.dispose();
+    _ordersWatchSub?.cancel();
+    _contactsWatchSub?.cancel();
     _voicePlayer.dispose();
     super.dispose();
   }
 
-  Future<void> _restoreLogin() async {
+    Future<void> _restoreLogin() async {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('ss_admin_logged') == true) {
       setState(() => loggedIn = true);
       await initDashboard();
+      await _setupNotifications();
     }
   }
 
@@ -233,26 +248,126 @@ class _AdminPageState extends State<AdminPage> {
     if (e == adminEmail && p == adminPass) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('ss_admin_logged', true);
-      setState(() {
+             setState(() {
         loggedIn = true;
         loginError = '';
       });
       await initDashboard();
+      await _setupNotifications();
     } else {
+    
       setState(() => loginError = '❌ Wrong email or password');
     }
   }
 
-  Future<void> doLogout() async {
+       Future<void> doLogout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('ss_admin_logged');
+    await _ordersWatchSub?.cancel();
+    await _contactsWatchSub?.cancel();
+    _ordersWatchSub = null;
+    _contactsWatchSub = null;
+    _notifSetupDone = false;
     setState(() {
       loggedIn = false;
       currentPage = 'dashboard';
       mobilePageMode = false;
       emailController.clear();
       passwordController.clear();
+      _newOrdersBadge = 0;
+      _newContactsBadge = 0;
     });
+  }
+
+    // ---------------- Admin push-alert setup ----------------
+
+       Future<void> _setupNotifications() async {
+    if (_notifSetupDone) return;
+    _notifSetupDone = true;
+
+    _localNotifications = FlutterLocalNotificationsPlugin();
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosInit = DarwinInitializationSettings();
+    await _localNotifications!.initialize(
+      const InitializationSettings(android: androidInit, iOS: iosInit),
+    );
+
+    _watchOrders();
+    _watchContacts();
+  }
+
+  void _watchOrders() {
+    bool isFirstSnapshot = true;
+    _ordersWatchSub = _db.collection('orders').snapshots().listen((snap) {
+      if (isFirstSnapshot) {
+        isFirstSnapshot = false;
+        _seenOrderIds = snap.docs.map((d) => d.id).toSet();
+        return;
+      }
+      for (final change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added &&
+            !_seenOrderIds.contains(change.doc.id)) {
+          _seenOrderIds.add(change.doc.id);
+          final m = change.doc.data() ?? {};
+          final isCustom =
+              '${m['source'] ?? ''}'.toLowerCase() == 'custom-order';
+          _showLocalNotification(
+            title: isCustom ? '✂️ New Customized Order' : '🛒 New Order Received',
+            body:
+                '${m['name'] ?? 'Customer'} — ${m['product'] ?? ''}'
+                '${isCustom ? '' : ' (₹${m['amount'] ?? 0})'}',
+          );
+          if (mounted) setState(() => _newOrdersBadge++);
+        }
+      }
+    });
+  }
+
+  void _watchContacts() {
+    bool isFirstSnapshot = true;
+    _contactsWatchSub = _db.collection('contacts').snapshots().listen((snap) {
+      if (isFirstSnapshot) {
+        isFirstSnapshot = false;
+        _seenContactIds = snap.docs.map((d) => d.id).toSet();
+        return;
+      }
+      for (final change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added &&
+            !_seenContactIds.contains(change.doc.id)) {
+          _seenContactIds.add(change.doc.id);
+          final m = change.doc.data() ?? {};
+          _showLocalNotification(
+            title: '📨 New Contact Form Submission',
+            body: '${m['name'] ?? 'Someone'} — ${m['service'] ?? m['message'] ?? ''}',
+          );
+          if (mounted) setState(() => _newContactsBadge++);
+        }
+      }
+    });
+  }
+
+  Future<void> _showLocalNotification({
+    required String title,
+    required String body,
+  }) async {
+    if (_localNotifications == null) return;
+    const androidDetails = AndroidNotificationDetails(
+      'sumathi_admin_channel',
+      'Sumathi Styles Admin Alerts',
+      channelDescription: 'New order and contact form alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(),
+    );
+    await _localNotifications!.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      details,
+    );
   }
 
   Future<void> initDashboard() async {
@@ -5833,13 +5948,49 @@ class _AdminPageState extends State<AdminPage> {
               style: const TextStyle(fontSize: 13, color: Colors.white70),
             ),
             const SizedBox(width: 14),
-            OutlinedButton(
-              onPressed: () {},
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white70),
+                        InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                setState(() {
+                  _newOrdersBadge = 0;
+                  _newContactsBadge = 0;
+                });
+                showPage('ordersmgmt');
+              },
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white70),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('🔔'),
+                  ),
+                  if (_newOrdersBadge + _newContactsBadge > 0)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: danger,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white, width: 1),
+                        ),
+                        child: Text(
+                          '${_newOrdersBadge + _newContactsBadge}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              child: const Text('🔔'),
             ),
             const SizedBox(width: 10),
             ElevatedButton(
