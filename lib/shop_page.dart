@@ -3,8 +3,9 @@
 // Sumathi's Styles - Shop Collection
 // ------------------------------------------------------------
 // Features:
-// • Category bar (horizontal, Home-page style)
-// • Product grid
+// • Category bar (horizontal, Home-page style, fixed above the grid)
+// • Product grid — 3 columns, square image + compact info row
+//   (sized to match the Wishlist page card look)
 // • Home-page style product cards
 // • Wishlist button
 // • Rating badge
@@ -337,6 +338,8 @@ class _ShopPageState extends State<ShopPage> {
 
           // ======================================================
           // BODY
+          // Category bar stays outside the scrollable product grid,
+          // so it never scrolls away — always "stuck" above the products.
           // ======================================================
 
           body: Column(
@@ -354,7 +357,7 @@ class _ShopPageState extends State<ShopPage> {
   }
 
   // ============================================================
-  // CATEGORY BAR (horizontal chips, Home-page style)
+  // CATEGORY BAR (horizontal chips, Home-page style, fixed on top)
   // ============================================================
 
   Widget _buildCategoryBar() {
@@ -511,25 +514,35 @@ class _ShopPageState extends State<ShopPage> {
 
           // ======================================================
           // PRODUCT GRID
+          // 3 columns • square image + fixed-height info row
+          // (matches the Wishlist page card size)
           // ======================================================
-                      return LayoutBuilder(
+
+          return LayoutBuilder(
             builder: (context, constraints) {
-              const gap = 12.0;
-              final cardWidth = (constraints.maxWidth - gap) / 2;
+              const crossAxisCount = 3;
+              const gap = 10.0;
+              const infoHeight = 68.0; // name + price + cart-icon row
+
+              final cardWidth =
+                  (constraints.maxWidth - gap * (crossAxisCount - 1)) /
+                      crossAxisCount;
+              final cardHeight = cardWidth + infoHeight;
+
               return GridView.builder(
-            padding: const EdgeInsets.only(
-              bottom: 20,
-            ),
-            physics:
-                const BouncingScrollPhysics(),
-            gridDelegate:
-                SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: gap,
-              mainAxisSpacing: 16,
-              childAspectRatio: cardWidth / 225,
-            ),
-            itemCount: services.length,
+                padding: const EdgeInsets.only(
+                  bottom: 20,
+                ),
+                physics:
+                    const BouncingScrollPhysics(),
+                gridDelegate:
+                    SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: gap,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: cardWidth / cardHeight,
+                ),
+                itemCount: services.length,
                 itemBuilder: (
                   context,
                   index,
@@ -591,8 +604,8 @@ class _ShopPageState extends State<ShopPage> {
                       }
                     },
 
-                   // Buy Now
-                                        onBuyNowTap: () {
+                    // Buy Now
+                    onBuyNowTap: () {
                       _bookService(
                         service,
                         qty: 1,
@@ -611,6 +624,8 @@ class _ShopPageState extends State<ShopPage> {
 
 // ================================================================
 // PRODUCT CARD
+// Square image on top (AspectRatio 1:1, like the Wishlist card),
+// compact info row below — name, price, and a small cart button.
 // ================================================================
 
 class _ProductCard extends StatelessWidget {
@@ -686,12 +701,15 @@ class _ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment:
               CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             // ==================================================
-            // PRODUCT IMAGE
+            // PRODUCT IMAGE — square, sized off card width
+            // (same look as the Wishlist page card)
             // ==================================================
 
-            Expanded(
+            AspectRatio(
+              aspectRatio: 1,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -748,15 +766,15 @@ class _ProductCard extends StatelessWidget {
                         customBorder:
                             const CircleBorder(),
                         child: SizedBox(
-                          width: 29,
-                          height: 29,
+                          width: 27,
+                          height: 27,
                           child: Icon(
                             isWishlisted
                                 ? Icons
                                     .favorite
                                 : Icons
                                     .favorite_border,
-                            size: 16,
+                            size: 15,
                             color: isWishlisted
                                 ? AppColors
                                     .danger
@@ -774,8 +792,8 @@ class _ProductCard extends StatelessWidget {
                   // ------------------------------------------------
 
                   Positioned(
-                    left: 7,
-                    bottom: 7,
+                    left: 6,
+                    bottom: 6,
                     child: Container(
                       padding:
                           const EdgeInsets
@@ -830,132 +848,121 @@ class _ProductCard extends StatelessWidget {
             ),
 
             // ==================================================
-            // PRODUCT INFO
+            // PRODUCT INFO — fixed-height row (name/price + cart)
             // ==================================================
 
-            Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(
-                8,
-                8,
-                7,
-                8,
-              ),
-              child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                mainAxisSize:
-                    MainAxisSize.min,
-                children: [
-                  // ------------------------------------------------
-                  // PRODUCT NAME + PRICE
-                  // ------------------------------------------------
-
-                  Row(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .center,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment
-                                  .start,
-                          mainAxisSize:
-                              MainAxisSize.min,
-                          children: [
-                            Text(
-                              service.name,
-                              maxLines: 1,
-                              overflow:
-                                  TextOverflow
-                                      .ellipsis,
-                              style:
-                                  const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight:
-                                    FontWeight
-                                        .w500,
-                                color:
-                                    AppColors
-                                        .text,
+            SizedBox(
+              height: 68,
+              child: Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(
+                  8,
+                  8,
+                  7,
+                  8,
+                ),
+                child: Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment
+                                .start,
+                        mainAxisSize:
+                            MainAxisSize.min,
+                        children: [
+                          Text(
+                            service.name,
+                            maxLines: 1,
+                            overflow:
+                                TextOverflow
+                                    .ellipsis,
+                            style:
+                                const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight:
+                                  FontWeight
+                                      .w500,
+                              color:
+                                  AppColors
+                                      .text,
+                            ),
+                          ),
+                          const SizedBox(
+                            height: 4,
+                          ),
+                          Text(
+                            '₹${service.price.toStringAsFixed(0)}',
+                            maxLines: 1,
+                            overflow:
+                                TextOverflow
+                                    .ellipsis,
+                            style:
+                                const TextStyle(
+                              fontSize: 14,
+                              fontWeight:
+                                  FontWeight
+                                      .w800,
+                              color:
+                                  Color(
+                                0xFF212121,
                               ),
                             ),
-                            const SizedBox(
-                              height: 4,
-                            ),
-                            Text(
-                              '₹${service.price.toStringAsFixed(0)}',
-                              maxLines: 1,
-                              overflow:
-                                  TextOverflow
-                                      .ellipsis,
-                              style:
-                                  const TextStyle(
-                                fontSize: 14,
-                                fontWeight:
-                                    FontWeight
-                                        .w800,
-                                color:
-                                    Color(
-                                  0xFF212121,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
+                    ),
 
-                      const SizedBox(
-                        width: 6,
-                      ),
+                    const SizedBox(
+                      width: 6,
+                    ),
 
-                      // ------------------------------------------------
-                      // CART BUTTON
-                      // ------------------------------------------------
+                    // ------------------------------------------------
+                    // CART BUTTON
+                    // ------------------------------------------------
 
-                      Material(
-                        color: isInCart
-                            ? AppColors
-                                .primaryDark
-                            : AppColors
-                                .primary
-                                .withValues(
-                                alpha: 0.10,
-                              ),
+                    Material(
+                      color: isInCart
+                          ? AppColors
+                              .primaryDark
+                          : AppColors
+                              .primary
+                              .withValues(
+                              alpha: 0.10,
+                            ),
+                      borderRadius:
+                          BorderRadius
+                              .circular(7),
+                      child: InkWell(
+                        onTap:
+                            onCartTap,
                         borderRadius:
                             BorderRadius
                                 .circular(7),
-                        child: InkWell(
-                          onTap:
-                              onCartTap,
-                          borderRadius:
-                              BorderRadius
-                                  .circular(7),
-                          child: SizedBox(
-                            width: 31,
-                            height: 31,
-                            child: Icon(
-                              isInCart
-                                  ? Icons
-                                      .shopping_cart_checkout
-                                  : Icons
-                                      .add_shopping_cart,
-                              size: 16,
-                              color: isInCart
-                                  ? Colors
-                                      .white
-                                  : AppColors
-                                      .primary,
-                            ),
+                        child: SizedBox(
+                          width: 29,
+                          height: 29,
+                          child: Icon(
+                            isInCart
+                                ? Icons
+                                    .shopping_cart_checkout
+                                : Icons
+                                    .add_shopping_cart,
+                            size: 15,
+                            color: isInCart
+                                ? Colors
+                                    .white
+                                : AppColors
+                                    .primary,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-
-                             ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

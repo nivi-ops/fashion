@@ -44,6 +44,24 @@ import 'package:public_file_saver/public_file_saver.dart';
 ///   printing: ^5.13.1
 ///
 /// Put this file at: lib/admin_page.dart
+///
+/// ---------------------------------------------------------------------
+/// CHANGES IN THIS VERSION
+/// ---------------------------------------------------------------------
+/// 1) Status-change control (the little coloured pill used to change an
+///    order's status) was a `DropdownButton`, which Flutter forces to a
+///    minimum ~48dp touch height. That made the pill stretch/overlap
+///    neighbouring rows on mobile. It's now a small fixed-size pill
+///    (`_statusPillLikeBadge`) wrapped in a `PopupMenuButton`
+///    (`_statusChangeControl`) — tapping it opens a compact menu instead
+///    of an oversized inline dropdown. Colours are unchanged.
+/// 2) When a customer cancels an order, the cancellation reason
+///    (`cancel_reason` field from Firestore) is now surfaced to the admin
+///    in two places:
+///      - Orders table: a small red line under the status badge.
+///      - Order detail page: a highlighted red "❌ Cancellation Reason"
+///        box (same visual treatment as the ⭐ feedback box).
+/// ---------------------------------------------------------------------
 
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
@@ -991,6 +1009,102 @@ class _AdminPageState extends State<AdminPage> {
       default:
         return warning;
     }
+  }
+
+  /// Small pastel pill — SAME colours/look as `StatusBadge` — used as the
+  /// visible face of the status-change control. Fixed size, never grows.
+  Widget _statusPillLikeBadge(String status) {
+    Color bg;
+    Color fg;
+    switch (status) {
+      case 'Ordered':
+        bg = const Color(0xFFE3F2FD);
+        fg = const Color(0xFF1565C0);
+        break;
+      case 'Processing':
+        bg = const Color(0xFFEDE7F6);
+        fg = const Color(0xFF4527A0);
+        break;
+      case 'Shipping':
+        bg = const Color(0xFFE1F5FE);
+        fg = const Color(0xFF0277BD);
+        break;
+      case 'Delivered':
+        bg = const Color(0xFFE8F5E9);
+        fg = const Color(0xFF2E7D32);
+        break;
+      case 'Cancelled':
+        bg = const Color(0xFFFFEBEE);
+        fg = const Color(0xFFE53935);
+        break;
+      default:
+        bg = const Color(0xFFFFF3E0);
+        fg = const Color(0xFFE65100);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            status,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.arrow_drop_down, size: 14, color: fg),
+        ],
+      ),
+    );
+  }
+
+  /// Reusable status-change control. Replaces the old `DropdownButton`
+  /// (which forced a ~48dp minimum height and bloated/overlapped rows on
+  /// mobile) with a small fixed-size pill wrapped in a `PopupMenuButton` —
+  /// tapping it opens a compact menu instead of an oversized inline
+  /// dropdown. Used both in the Orders table and the order detail page.
+  Widget _statusChangeControl(String orderId, String currentStatus) {
+    return PopupMenuButton<String>(
+      tooltip: 'Change status',
+      padding: EdgeInsets.zero,
+      onSelected: (v) => updateStatus(orderId, v),
+      itemBuilder: (context) => [
+        'Ordered',
+        'Processing',
+        'Shipping',
+        'Delivered',
+        'Cancelled',
+      ]
+          .map(
+            (s) => PopupMenuItem(
+              value: s,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: _statusSolidColor(s),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Text(s, style: const TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+      child: _statusPillLikeBadge(currentStatus),
+    );
   }
 
   // ---------------- IMAGE URL HELPER ----------------
@@ -3167,65 +3281,41 @@ class _AdminPageState extends State<AdminPage> {
                   DataCell(
                     voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
                   ),
-                  DataCell(StatusBadge(status: '${o['status']}')),
-                  DataCell(Text('${o['date']}')),
-                                  DataCell(
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: '${o['status']}',
-                        icon: Icon(Icons.arrow_drop_down, size: 18, color: muted),
-                        items:
-                            [
-                                  'Ordered',
-                                  'Processing',
-                                  'Shipping',
-                                  'Delivered',
-                                  'Cancelled',
-                                ]
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s,
-                                    child: Text(
-                                      s,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                        selectedItemBuilder: (context) => [
-                              'Ordered',
-                              'Processing',
-                              'Shipping',
-                              'Delivered',
-                              'Cancelled',
-                            ]
-                            .map(
-                              (s) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: _statusSolidColor(s),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  s,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                  // ---- FIX 2: Status cell now also shows the cancel
+                  // reason (small red line) whenever the order was
+                  // Cancelled, so the admin sees WHY without opening the
+                  // order detail page. ----
+                  DataCell(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        StatusBadge(status: '${o['status']}'),
+                        if ('${o['status']}' == 'Cancelled' &&
+                            '${o['cancelReason'] ?? ''}'.trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: ConstrainedBox(
+                              constraints:
+                                  const BoxConstraints(maxWidth: 140),
+                              child: Text(
+                                '${o['cancelReason']}',
+                                style:
+                                    TextStyle(fontSize: 10, color: danger),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) updateStatus('${o['id']}', v);
-                        },
-                      ),
+                            ),
+                          ),
+                      ],
                     ),
+                  ),
+                  DataCell(Text('${o['date']}')),
+                  // ---- FIX 1: status-change control is now a small
+                  // fixed-size pill (PopupMenuButton) instead of a
+                  // DropdownButton, so it never bloats/overlaps rows. ----
+                  DataCell(
+                    _statusChangeControl('${o['id']}', '${o['status']}'),
                   ),
                   DataCell(
                     TextButton(
@@ -3309,89 +3399,61 @@ class _AdminPageState extends State<AdminPage> {
             row('Processing On', '${o['processingAt']}'),
           if ('${o['deliveredAt'] ?? ''}'.trim().isNotEmpty)
             row('Delivered On', '${o['deliveredAt']}'),
+          // ---- FIX 2: cancel reason shown as a highlighted red box
+          // (same visual treatment as the ⭐ feedback box below) instead
+          // of a plain text row, so it's impossible to miss. ----
           if ('${o['status']}' == 'Cancelled') ...[
             if ('${o['cancelledAt'] ?? ''}'.trim().isNotEmpty)
               row('Cancelled On', '${o['cancelledAt']}'),
-            row('Cancel Reason', '${o['cancelReason'] ?? ''}'),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEBEE),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: danger.withOpacity(.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '❌ Cancellation Reason',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: danger,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${o['cancelReason'] ?? ''}'.trim().isEmpty
+                        ? '—'
+                        : '${o['cancelReason']}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
           ],
-                    if ('${o['source']}'.toLowerCase() != 'custom-order') ...[
+          // ---- FIX 1: status-change control replaced with the small
+          // fixed-size pill instead of the old full-width DropdownButton
+          // box, so this section no longer looks like an oversized box. ----
+          if ('${o['source']}'.toLowerCase() != 'custom-order') ...[
             const SizedBox(height: 6),
             Row(
               children: [
                 Text(
                   'Status',
-                  style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: pageBg,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: border),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: '${o['status']}',
-                        isExpanded: true,
-                        icon: Icon(Icons.keyboard_arrow_down, color: tealDark),
-                        items:
-                            [
-                                  'Ordered',
-                                  'Processing',
-                                  'Shipping',
-                                  'Delivered',
-                                  'Cancelled',
-                                ]
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s,
-                                    child: Text(
-                                      s,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                        selectedItemBuilder: (context) => [
-                              'Ordered',
-                              'Processing',
-                              'Shipping',
-                              'Delivered',
-                              'Cancelled',
-                            ]
-                            .map(
-                              (s) => Align(
-                                alignment: Alignment.centerLeft,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _statusSolidColor(s),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    s,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) updateStatus('${o['id']}', v);
-                        },
-                      ),
-                    ),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: muted,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(width: 12),
+                _statusChangeControl('${o['id']}', '${o['status']}'),
               ],
             ),
             const SizedBox(height: 16),
