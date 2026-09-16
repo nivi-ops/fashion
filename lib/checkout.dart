@@ -100,8 +100,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _nameCtrl = TextEditingController();
+   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _phoneCtrl = TextEditingController();
+  final TextEditingController _altPhoneCtrl = TextEditingController();
   final TextEditingController _addressCtrl = TextEditingController();
   final TextEditingController _pincodeCtrl = TextEditingController();
 
@@ -227,8 +228,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   void dispose() {
     _razorpay.clear();
 
-    _nameCtrl.dispose();
+        _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _altPhoneCtrl.dispose();
     _addressCtrl.dispose();
     _pincodeCtrl.dispose();
 
@@ -603,7 +605,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         await db.collection('orders').add({
       'order_id': orderId,
       'name': _nameCtrl.text.trim(),
-      'mobile': phone,
+            'mobile': phone,
+      'alternate_mobile': _altPhoneCtrl.text.trim(),
       'address': _addressCtrl.text.trim(),
       'pincode': _pincodeCtrl.text.trim(),
       'delivery_address':
@@ -613,11 +616,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       'amount': orderTotal,
       'status': 'Ordered',
       'source': 'website',
-      'payment_method':
+             'payment_method':
           _payment == PaymentMethod.card ? 'Card' : 'UPI',
       'payment_status': 'paid',
       'razorpay_payment_id': _razorpayPaymentId,
       'razorpay_order_id': _razorpayOrderId,
+      'ordered_at': FieldValue.serverTimestamp(),
       'created_at': FieldValue.serverTimestamp(),
     });
 
@@ -656,7 +660,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
             await db.collection('orders').add({
         'order_id': orderId,
         'name': _nameCtrl.text.trim(),
-        'mobile': phone,
+                'mobile': phone,
+        'alternate_mobile': _altPhoneCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
         'pincode': _pincodeCtrl.text.trim(),
         'delivery_address':
@@ -666,8 +671,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'amount': orderTotal,
         'status': 'Ordered',
         'source': 'website',
-        'payment_method': 'COD',
+                'payment_method': 'COD',
         'payment_status': 'Not Required',
+        'ordered_at': FieldValue.serverTimestamp(),
         'created_at': FieldValue.serverTimestamp(),
       });
 
@@ -932,13 +938,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
             icon: Icons.person_outline,
           ),
           const SizedBox(height: 12),
-          _field(
+                    _field(
             controller: _phoneCtrl,
             label: 'Phone Number',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
             maxLength: 10,
             validator: _validatePhone,
+          ),
+          const SizedBox(height: 12),
+          _field(
+            controller: _altPhoneCtrl,
+            label: 'Alternate Mobile Number (Optional)',
+            icon: Icons.phone_forwarded_outlined,
+            keyboardType: TextInputType.phone,
+            maxLength: 10,
+            validator: _validateAltPhone,
           ),
           const SizedBox(height: 12),
           _field(
@@ -1031,7 +1046,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // PHONE VALIDATION
   // ===================================================================
 
-  String? _validatePhone(String? value) {
+    String? _validatePhone(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Required';
     }
@@ -1044,6 +1059,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (!RegExp(r'^[6-9][0-9]{9}$').hasMatch(phone)) {
       return 'Enter a valid phone number';
+    }
+
+    return null;
+  }
+
+  // Alternate number is optional — only validate if the user typed something.
+  String? _validateAltPhone(String? value) {
+    final phone = value?.trim() ?? '';
+    if (phone.isEmpty) return null;
+
+    if (phone.length != 10) {
+      return 'Enter a valid 10-digit phone number';
+    }
+
+    if (!RegExp(r'^[6-9][0-9]{9}$').hasMatch(phone)) {
+      return 'Enter a valid phone number';
+    }
+
+    if (phone == _phoneCtrl.text.trim()) {
+      return 'Enter a different number than above';
     }
 
     return null;
@@ -1132,10 +1167,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       'Pincode: ${_pincodeCtrl.text}',
                       style: const TextStyle(color: AppColors.textLight, fontSize: 12),
                     ),
-                    Text(
+                                        Text(
                       _phoneCtrl.text,
                       style: const TextStyle(color: AppColors.textLight, fontSize: 12),
                     ),
+                    if (_altPhoneCtrl.text.trim().isNotEmpty)
+                      Text(
+                        'Alternate: ${_altPhoneCtrl.text.trim()}',
+                        style: const TextStyle(color: AppColors.textLight, fontSize: 12),
+                      ),
                   ],
                 ),
               ),

@@ -5,8 +5,8 @@ import 'firebase_options.dart';
 
 import 'app_colors.dart';
 import 'app_state.dart';
-import 'main_nav_page.dart';
 import 'notification_service.dart';
+import 'splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
         useMaterial3: true,
       ),
-      home: const MainNavPage(),
+            home: const SplashScreen(),
     );
   }
 }

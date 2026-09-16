@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -2218,7 +2219,7 @@ class _CateringContactTabState
                           ),
                           const SizedBox(
                               height: 12),
-                          const _FieldLabel(
+                                                    const _FieldLabel(
                             'Mobile Number',
                           ),
                           TextFormField(
@@ -2226,10 +2227,26 @@ class _CateringContactTabState
                                 _phoneCtrl,
                             keyboardType:
                                 TextInputType.phone,
+                            maxLength: 10,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
                             decoration:
                                 _inputDecoration(
-                              '+91 XXXXX XXXXX',
+                              'Enter 10-digit mobile number',
+                              counterHidden: true,
                             ),
+                            validator: (v) {
+                              final value = v?.trim() ?? '';
+                              if (value.isEmpty) return null; // optional field
+                              if (value.length != 10) {
+                                return 'Enter a valid 10-digit number';
+                              }
+                              if (!RegExp(r'^[6-9][0-9]{9}$').hasMatch(value)) {
+                                return 'Enter a valid phone number';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(
                               height: 12),
@@ -2592,9 +2609,10 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-InputDecoration _inputDecoration(
-  String hint,
-) {
+ InputDecoration _inputDecoration(
+  String hint, {
+  bool counterHidden = false,
+}) {
   return InputDecoration(
     hintText: hint,
     hintStyle: const TextStyle(
@@ -2602,6 +2620,7 @@ InputDecoration _inputDecoration(
       color: AppColors.textLight,
     ),
     isDense: true,
+    counterText: counterHidden ? '' : null,
     contentPadding:
         const EdgeInsets.symmetric(
       horizontal: 14,
@@ -2633,6 +2652,15 @@ InputDecoration _inputDecoration(
         width: 1.5,
       ),
     ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: Colors.red, width: 1.5),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: Colors.red, width: 1.5),
+    ),
+    errorStyle: const TextStyle(fontSize: 11),
   );
 }
 

@@ -35,6 +35,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -553,13 +554,26 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
             ),
             const SizedBox(height: 16),
 
-            _buildLabel('Phone Number *'),
+                         _buildLabel('Phone Number *'),
             _buildTextField(
               controller: _phoneController,
-              hint: 'Enter phone number',
+              hint: 'Enter 10-digit phone number',
               keyboardType: TextInputType.phone,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+              maxLength: 10,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              validator: (v) {
+                final value = v?.trim() ?? '';
+                if (value.isEmpty) return 'Required';
+                if (value.length != 10) {
+                  return 'Enter a valid 10-digit number';
+                }
+                if (!RegExp(r'^[6-9][0-9]{9}$').hasMatch(value)) {
+                  return 'Enter a valid phone number';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 16),
 
@@ -664,23 +678,28 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
       ),
     );
   }
-
-  Widget _buildTextField({
+   
+      Widget _buildTextField({
     required TextEditingController controller,
     required String hint,
     TextInputType? keyboardType,
     int maxLines = 1,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      maxLength: maxLength,
+      inputFormatters: inputFormatters,
       validator: validator,
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(fontSize: 13, color: AppColors.textLight),
+        counterText: '',
         filled: true,
         fillColor: Colors.white,
         contentPadding:
@@ -697,6 +716,15 @@ class _CustomOrderPageState extends State<CustomOrderPage> {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
+        ),
+        errorStyle: const TextStyle(fontSize: 11),
       ),
     );
   }
