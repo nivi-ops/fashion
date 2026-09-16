@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'firebase_options.dart';
 
 /// ---------------------------------------------------------------------
 /// NOTIFICATION SERVICE
@@ -29,8 +31,12 @@ import 'api_service.dart';
 
 /// Must be a TOP-LEVEL function (not inside a class) — this is required
 /// by Firebase so it can run even when the app is fully closed.
-@pragma('vm:entry-point')
+ @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // This handler runs in a SEPARATE isolate when the app is terminated,
+  // so Firebase needs to be initialized here too.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   // No need to manually show a notification here — FCM automatically
   // displays a system tray notification when the app is in the
   // background/terminated AND the push payload has a "notification" block
