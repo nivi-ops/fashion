@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'register_page.dart';
-import 'home_page.dart';
+import 'main_nav_page.dart';
 import 'otp_verify_page.dart';
 import 'forgot_password_page.dart';
 import 'app_state.dart';
@@ -48,7 +48,7 @@ class _LoginPageState extends State<LoginPage> {
 
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const HomePage()),
+      MaterialPageRoute(builder: (_) => const MainNavPage()),
       (route) => false,
     );
   }

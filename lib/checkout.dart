@@ -940,7 +940,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           const SizedBox(height: 12),
                     _field(
             controller: _phoneCtrl,
-            label: 'Phone Number',
+            label: 'Mobile Number',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
             maxLength: 10,
