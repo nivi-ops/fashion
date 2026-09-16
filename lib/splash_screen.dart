@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'register_page.dart';
 import 'main_nav_page.dart';
+import 'services/onesignal_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,7 +18,7 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
-  @override
+    @override
   void initState() {
     super.initState();
 
@@ -30,6 +31,12 @@ class _SplashScreenState extends State<SplashScreen>
         Tween<double>(begin: 0, end: 1).animate(_controller);
 
     _controller.forward();
+
+    // Confirms this device registered with OneSignal and shows the
+    // "enable notifications" prompt once the subscription is ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      OneSignalService.instance.setupPushSubscriptionObserver(context);
+    });
 
     Timer(const Duration(seconds: 4), () {
       _checkLoginAndNavigate();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/onesignal_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
@@ -25,9 +26,12 @@ void main() async {
   // NotificationService. main.dart no longer duplicates any of that.
     await NotificationService.instance.init();
 
-  // Restore saved login (userId) so it survives app restarts —
+    // Restore saved login (userId) so it survives app restarts —
   // needed for product details page to fetch the saved delivery address.
   await AppState.instance.loadSavedLogin();
+
+  OneSignalService.instance.initialize('e2ba850f-0954-4c0a-8360-c17abbff7acf');
+  OneSignalService.instance.setRoleTag('customer');
 
   runApp(const MyApp());
 }
