@@ -4,8 +4,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,63 +17,19 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:public_file_saver/public_file_saver.dart';
 
-/// Flutter conversion of the supplied "Sumathi's Styles – Admin Dashboard".
-/// The login screen matches admin.html: black top bar ("Admin Login"),
-/// blue shield icon with a person badge, "Admin Panel" title, plain
-/// bordered Email/Password fields, and a full-width blue pill LOGIN button.
+/// Sumathi's Styles — Admin Dashboard (Flutter + Firebase)
 ///
-/// NOW CONNECTED TO FIREBASE (Firestore + Storage) instead of the
-/// Railway/PHP backend. Collections used:
-///   products            — product catalogue (name, category, price,
-///                          description, stock, visible, highlights,
-///                          price_tags, photos [list of Storage URLs])
-///   orders              — both normal orders and customized orders
-///                          (distinguished by the `source` field, e.g.
-///                          'custom-order')
+/// Firestore collections used:
+///   products            — product catalogue
+///   orders              — normal + customized orders (`source` field)
 ///   contacts            — boutique + catering contact form submissions
 ///   notifications       — admin broadcast notifications
-///   reviews             — customer reviews (name, mobile, rating, comment)
+///   reviews             — customer reviews
 ///   customer_requests   — data-export / grievance / deactivated /
-///                          deleted-account requests, distinguished by
-///                          a `type` field
-///
-/// Add to pubspec.yaml:
-///   cloud_firestore: ^5.6.12
-///   firebase_storage: ^12.3.2
-///   image_picker: ^1.1.2
-///   shared_preferences: ^2.5.5
-///   audioplayers: ^6.1.0
-///   pdf: ^3.11.1
-///   printing: ^5.13.1
+///                         deleted-account requests (`type` field)
+///   admin_tokens        — admin device FCM tokens
 ///
 /// Put this file at: lib/admin_page.dart
-///
-/// ---------------------------------------------------------------------
-/// CHANGES IN THIS VERSION
-/// ---------------------------------------------------------------------
-/// 1) Status-change control (the little coloured pill used to change an
-///    order's status) was a `DropdownButton`, which Flutter forces to a
-///    minimum ~48dp touch height. That made the pill stretch/overlap
-///    neighbouring rows on mobile. It's now a small fixed-size pill
-///    (`_statusPillLikeBadge`) wrapped in a `PopupMenuButton`
-///    (`_statusChangeControl`) — tapping it opens a compact menu instead
-///    of an oversized inline dropdown. Colours are unchanged.
-/// 2) When a customer cancels an order, the cancellation reason
-///    (`cancel_reason` field from Firestore) is now surfaced to the admin
-///    UNDER the "Message" column (in red, under the customer's notes),
-///    and in the order detail page as a highlighted red "❌ Cancellation
-///    Reason" box (same visual treatment as the ⭐ feedback box).
-/// 3) Orders search box (Order ID / Name / Mobile / Product) now filters
-///    live as you type — it was missing its onChanged wiring before, so
-///    typing didn't trigger a rebuild until something else did.
-/// 4) Status filter dropdown's empty option now shows a clearly visible
-///    black "All" label (was blank/washed out) — selecting it shows every
-///    order regardless of status, same as before, just visible now.
-/// 5) Payment status ("Not Required" text) is now a proper Pending/Paid
-///    dropdown pill (`_paymentStatusControl`), so admin can mark COD
-///    orders as paid — shown in the Orders table and order detail page,
-///    and saved to Firestore `payment_status`.
-/// ---------------------------------------------------------------------
 
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
@@ -100,17 +57,23 @@ class _AdminPageState extends State<AdminPage> {
   final Color border = const Color(0xFFE0E0E0);
   final Color muted = const Color(0xFF757575);
   final Color loginBlue = const Color(0xFF2400F5);
+  // ignore: unused_field
   final Color loginBlueDark = const Color(0xFF1A00C9);
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final ImagePicker picker = ImagePicker();
 
-   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ---------------- Admin push-alert (new order / contact) ----------------
+
   FlutterLocalNotificationsPlugin? _localNotifications;
   bool _notifSetupDone = false;
+
+  // Admin FCM device token
+  String? _adminFcmToken;
+
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ordersWatchSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _contactsWatchSub;
   Set<String> _seenOrderIds = {};
@@ -119,11 +82,9 @@ class _AdminPageState extends State<AdminPage> {
   int _newContactsBadge = 0;
 
   // ---------------- Voice-note playback (admin side) ----------------
-  // Orders coming from the customer app store the recorded voice note as a
-  // Base64 string in Firestore (field `voice_note_base64`), NOT as a URL —
-  // so it must be decoded and played from memory, not opened with
-  // url_launcher. `_playingOrderId` tracks which row's audio is currently
-  // playing so the Play/Pause icon updates for the right row only.
+  // Orders from the customer app store the voice note as a Base64 string
+  // in Firestore (`voice_note_base64`), NOT as a URL — so it is decoded
+  // and played from memory instead of being opened with url_launcher.
   final AudioPlayer _voicePlayer = AudioPlayer();
   String? _playingOrderId;
   bool _voiceLoading = false;
@@ -137,7 +98,7 @@ class _AdminPageState extends State<AdminPage> {
   String toastMessage = '';
   DateTime? toastUntil;
 
-  // ---------------- Revenue dashboard: period filter + PDF/Analysis ----------------
+  // ---------------- Revenue dashboard: period filter + PDF ----------------
   String revenuePeriod = 'month'; // 'week' | 'month' | 'year'
   bool pdfGenerating = false;
 
@@ -224,15 +185,19 @@ class _AdminPageState extends State<AdminPage> {
     ]) {
       c.dispose();
     }
-        for (final c in highlightControllers) c.dispose();
-    for (final c in priceTagControllers) c.dispose();
+    for (final c in highlightControllers) {
+      c.dispose();
+    }
+    for (final c in priceTagControllers) {
+      c.dispose();
+    }
     _ordersWatchSub?.cancel();
     _contactsWatchSub?.cancel();
     _voicePlayer.dispose();
     super.dispose();
   }
 
-    Future<void> _restoreLogin() async {
+  Future<void> _restoreLogin() async {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('ss_admin_logged') == true) {
       setState(() => loggedIn = true);
@@ -248,19 +213,18 @@ class _AdminPageState extends State<AdminPage> {
     if (e == adminEmail && p == adminPass) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('ss_admin_logged', true);
-             setState(() {
+      setState(() {
         loggedIn = true;
         loginError = '';
       });
       await initDashboard();
       await _setupNotifications();
     } else {
-    
       setState(() => loginError = '❌ Wrong email or password');
     }
   }
 
-       Future<void> doLogout() async {
+  Future<void> doLogout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('ss_admin_logged');
     await _ordersWatchSub?.cancel();
@@ -279,44 +243,87 @@ class _AdminPageState extends State<AdminPage> {
     });
   }
 
-    // ---------------- Admin push-alert setup ----------------
+  // ---------------- Admin push-alert setup ----------------
 
-       Future<void> _setupNotifications() async {
+  Future<void> _setupNotifications() async {
     if (_notifSetupDone) return;
     _notifSetupDone = true;
 
     _localNotifications = FlutterLocalNotificationsPlugin();
+
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings();
+
     await _localNotifications!.initialize(
       const InitializationSettings(android: androidInit, iOS: iosInit),
     );
+
+    // Ask notification permission for the ADMIN device.
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    // Save the current token once.
+    _adminFcmToken = await FirebaseMessaging.instance.getToken();
+    debugPrint('ADMIN FCM TOKEN: $_adminFcmToken');
+    await _saveAdminFcmToken();
+
+    // Keep token updated if Firebase refreshes it.
+    FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      _adminFcmToken = token;
+      debugPrint('ADMIN FCM TOKEN REFRESHED: $token');
+      await _saveAdminFcmToken();
+    });
 
     _watchOrders();
     _watchContacts();
   }
 
+  /// Stores this admin device's FCM token in Firestore so a server / cloud
+  /// function can push alerts to it later.
+  Future<void> _saveAdminFcmToken() async {
+    final token = _adminFcmToken;
+    if (token == null || token.isEmpty) return;
+    try {
+      await _db.collection('admin_tokens').doc(token).set({
+        'token': token,
+        'updated_at': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('❌ Could not save admin FCM token: $e');
+    }
+  }
+
   void _watchOrders() {
     bool isFirstSnapshot = true;
+
     _ordersWatchSub = _db.collection('orders').snapshots().listen((snap) {
       if (isFirstSnapshot) {
         isFirstSnapshot = false;
         _seenOrderIds = snap.docs.map((d) => d.id).toSet();
         return;
       }
+
       for (final change in snap.docChanges) {
         if (change.type == DocumentChangeType.added &&
             !_seenOrderIds.contains(change.doc.id)) {
           _seenOrderIds.add(change.doc.id);
+
           final m = change.doc.data() ?? {};
           final isCustom =
               '${m['source'] ?? ''}'.toLowerCase() == 'custom-order';
+
           _showLocalNotification(
-            title: isCustom ? '✂️ New Customized Order' : '🛒 New Order Received',
+            title: isCustom
+                ? '✂️ New Customized Order'
+                : '🛒 New Order Received',
             body:
                 '${m['name'] ?? 'Customer'} — ${m['product'] ?? ''}'
                 '${isCustom ? '' : ' (₹${m['amount'] ?? 0})'}',
           );
+
           if (mounted) setState(() => _newOrdersBadge++);
         }
       }
@@ -325,21 +332,27 @@ class _AdminPageState extends State<AdminPage> {
 
   void _watchContacts() {
     bool isFirstSnapshot = true;
+
     _contactsWatchSub = _db.collection('contacts').snapshots().listen((snap) {
       if (isFirstSnapshot) {
         isFirstSnapshot = false;
         _seenContactIds = snap.docs.map((d) => d.id).toSet();
         return;
       }
+
       for (final change in snap.docChanges) {
         if (change.type == DocumentChangeType.added &&
             !_seenContactIds.contains(change.doc.id)) {
           _seenContactIds.add(change.doc.id);
+
           final m = change.doc.data() ?? {};
+
           _showLocalNotification(
             title: '📨 New Contact Form Submission',
-            body: '${m['name'] ?? 'Someone'} — ${m['service'] ?? m['message'] ?? ''}',
+            body:
+                '${m['name'] ?? 'Someone'} — ${m['service'] ?? m['message'] ?? ''}',
           );
+
           if (mounted) setState(() => _newContactsBadge++);
         }
       }
@@ -351,6 +364,7 @@ class _AdminPageState extends State<AdminPage> {
     required String body,
   }) async {
     if (_localNotifications == null) return;
+
     const androidDetails = AndroidNotificationDetails(
       'sumathi_admin_channel',
       'Sumathi Styles Admin Alerts',
@@ -358,10 +372,12 @@ class _AdminPageState extends State<AdminPage> {
       importance: Importance.high,
       priority: Priority.high,
     );
+
     const details = NotificationDetails(
       android: androidDetails,
       iOS: DarwinNotificationDetails(),
     );
+
     await _localNotifications!.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
@@ -398,9 +414,12 @@ class _AdminPageState extends State<AdminPage> {
         final createdAt = m['created_at'];
         DateTime? created;
         if (createdAt is Timestamp) created = createdAt.toDate();
+
         String statusDate(String key) {
           final ts = m[key];
-          if (ts is Timestamp) return formatDateTime(ts.toDate().toIso8601String());
+          if (ts is Timestamp) {
+            return formatDateTime(ts.toDate().toIso8601String());
+          }
           return '';
         }
 
@@ -408,7 +427,7 @@ class _AdminPageState extends State<AdminPage> {
           'id': doc.id,
           'orderId': '#${m['order_id'] ?? doc.id.toUpperCase()}',
           'name': m['name'] ?? '',
-                     'mobile': m['mobile'] ?? '',
+          'mobile': m['mobile'] ?? '',
           'alternateMobile': m['alternate_mobile'] ?? '',
           'product': m['product'] ?? '',
           'amount': num.tryParse('${m['amount'] ?? 0}') ?? 0,
@@ -420,10 +439,10 @@ class _AdminPageState extends State<AdminPage> {
           'cancelledAt': statusDate('cancelled_at'),
           'source': m['source'] ?? 'website',
           'measurement': m['measurement'] ?? '',
-          // The customer app now stores the recorded voice note as a
-          // Base64 string under `voice_note_base64`. Older records (or a
-          // different source) may still have a plain URL under
-          // `voice_note`, so fall back to that if present.
+          // The customer app stores the recorded voice note as a Base64
+          // string under `voice_note_base64`. Older records (or another
+          // source) may still have a plain URL under `voice_note`, so
+          // fall back to that if present.
           'voiceNote': m['voice_note_base64'] ?? m['voice_note'] ?? '',
           'notes': m['notes'] ?? '',
           'cancelReason': m['cancel_reason'] ?? '',
@@ -436,8 +455,9 @@ class _AdminPageState extends State<AdminPage> {
           'feedback': m['feedback_text'] ?? '',
         };
       }).toList();
+
       // Keep a stable order — newest last, so `.reversed` (used all over
-      // this file) shows the newest first, matching the old behaviour.
+      // this file) shows the newest first.
       mapped.sort((a, b) => '${a['date']}'.compareTo('${b['date']}'));
       return mapped;
     } catch (_) {
@@ -520,8 +540,7 @@ class _AdminPageState extends State<AdminPage> {
     if (mounted) setState(() {});
   }
 
-  /// Loads customer reviews (submitted from the customer app's "Write a
-  /// review" flow — Firestore collection `reviews`, fields: name, mobile,
+  /// Loads customer reviews (Firestore collection `reviews`: name, mobile,
   /// rating, comment, createdAt). Sorted newest-first.
   Future<void> loadReviews() async {
     try {
@@ -537,7 +556,9 @@ class _AdminPageState extends State<AdminPage> {
         }
         return m;
       }).toList();
-      list.sort((a, b) => '${b['createdAt'] ?? ''}'.compareTo('${a['createdAt'] ?? ''}'));
+      list.sort(
+        (a, b) => '${b['createdAt'] ?? ''}'.compareTo('${a['createdAt'] ?? ''}'),
+      );
       reviews = list;
     } catch (_) {
       reviews = [];
@@ -584,7 +605,8 @@ class _AdminPageState extends State<AdminPage> {
     if (value == null || value.toString().isEmpty) return '';
     try {
       final d = DateTime.parse(value.toString()).toLocal();
-      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+      return '${d.day.toString().padLeft(2, '0')}/'
+          '${d.month.toString().padLeft(2, '0')}/${d.year}';
     } catch (_) {
       return value.toString();
     }
@@ -594,8 +616,10 @@ class _AdminPageState extends State<AdminPage> {
     if (value == null || value.toString().isEmpty) return '';
     try {
       final d = DateTime.parse(value.toString()).toLocal();
-      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}, '
-          '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      return '${d.day.toString().padLeft(2, '0')}/'
+          '${d.month.toString().padLeft(2, '0')}/${d.year}, '
+          '${d.hour.toString().padLeft(2, '0')}:'
+          '${d.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return value.toString();
     }
@@ -615,6 +639,7 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   // ---------------- Shared blue AppBar + swipe-back navigation ----------------
+
   PreferredSizeWidget _blueAppBar(String title) {
     return AppBar(
       backgroundColor: loginBlue,
@@ -636,9 +661,6 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   /// Pushes a full page with the blue app bar + real swipe-back gesture.
-  /// CupertinoPageRoute gives edge-swipe-to-pop on ALL platforms (not just
-  /// iOS), so this is what makes "page on top of page" feel real instead
-  /// of the old setState()-based content swap.
   Future<void> _pushPage(String title, Widget body) {
     return Navigator.of(context).push(
       CupertinoPageRoute(
@@ -690,10 +712,12 @@ class _AdminPageState extends State<AdminPage> {
     final formType =
         '${c['form_type'] ?? c['type'] ?? c['page'] ?? c['source'] ?? ''}'
             .toLowerCase();
-    if (formType.contains('boutique') || service.contains('boutique'))
+    if (formType.contains('boutique') || service.contains('boutique')) {
       return false;
-    if (formType.contains('catering') || service.contains('catering'))
+    }
+    if (formType.contains('catering') || service.contains('catering')) {
       return true;
+    }
     const keys = [
       'catering',
       'food',
@@ -730,16 +754,13 @@ class _AdminPageState extends State<AdminPage> {
   num get revenue =>
       deliveredOrders.fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
 
-  /// Orders created TODAY only — resets automatically next day since it
-  /// compares against DateTime.now() every time it's read.
+  /// Orders created TODAY only — resets automatically next day.
   int get todaysOrdersCount {
     final today = formatDate(DateTime.now().toIso8601String());
     return orders.where((o) => '${o['date']}' == today).length;
   }
 
-  /// Total ₹ value of orders placed TODAY (any status) — pairs with
-  /// todaysOrdersCount. Resets to 0 automatically the next day since it
-  /// re-checks DateTime.now() every time it's read, same as that getter.
+  /// Total ₹ value of orders placed TODAY (any status).
   num get todaysRevenue {
     final today = formatDate(DateTime.now().toIso8601String());
     return orders
@@ -747,7 +768,7 @@ class _AdminPageState extends State<AdminPage> {
         .fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
   }
 
-  // ---------------- SALES COMPARISON (Today / Week / Month / All) ----------------
+  // ---------------- SALES COMPARISON ----------------
 
   /// Revenue from DELIVERED orders placed today only.
   num get salesToday {
@@ -766,10 +787,7 @@ class _AdminPageState extends State<AdminPage> {
   num get salesThisYear =>
       ordersForPeriod('year').fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
 
-  // `revenue` (already defined) = All Time total, reused below.
-
-  /// "Sales Comparison" box — Today / This Week / This Month / This Year,
-  /// each with its own colour bar, matching the reference screenshot.
+  /// "Sales Comparison" box — Today / This Week / This Month / This Year.
   Widget _salesComparisonBox() {
     final rows = [
       ('Today', salesToday, const Color(0xFFFB8C00)),
@@ -791,10 +809,10 @@ class _AdminPageState extends State<AdminPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: [
-              const Icon(Icons.show_chart, size: 18, color: Color(0xFF616161)),
-              const SizedBox(width: 8),
-              const Text(
+            children: const [
+              Icon(Icons.show_chart, size: 18, color: Color(0xFF616161)),
+              SizedBox(width: 8),
+              Text(
                 'Sales Comparison',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
@@ -804,10 +822,7 @@ class _AdminPageState extends State<AdminPage> {
           for (final row in rows)
             Container(
               margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: pageBg,
                 borderRadius: BorderRadius.circular(10),
@@ -848,14 +863,10 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// "Day" summary box shown at the top of the Analysis page — today's
-  /// order count + today's order value. Purely date-driven (no stored
-  /// counter), so it naturally shows 0 / ₹0 as soon as the calendar
-  /// date changes, with no reset logic needed.
+  /// "Day" summary box — today's order count + today's order value.
   Widget _dayBox() {
     final today = DateTime.now();
-    final label =
-        '${today.day} ${monthName(today.month)} ${today.year}';
+    final label = '${today.day} ${monthName(today.month)} ${today.year}';
 
     return Container(
       width: double.infinity,
@@ -939,8 +950,7 @@ class _AdminPageState extends State<AdminPage> {
 
   // ---------------- Revenue period filter helpers ----------------
 
-  /// Parses the 'dd/MM/yyyy' strings produced by formatDate() back into
-  /// a DateTime, so orders can be filtered by week/month/year.
+  /// Parses the 'dd/MM/yyyy' strings produced by formatDate().
   DateTime? _parseOrderDate(String s) {
     final parts = s.split('/');
     if (parts.length != 3) return null;
@@ -951,9 +961,7 @@ class _AdminPageState extends State<AdminPage> {
     return DateTime(y, m, d);
   }
 
-  /// Delivered orders falling inside the selected period ('week' = last 7
-  /// days, 'month' = current calendar month, 'year' = current calendar
-  /// year).
+  /// Delivered orders inside the selected period.
   List<Map<String, dynamic>> ordersForPeriod(String period) {
     final now = DateTime.now();
     return deliveredOrders.where((o) {
@@ -1013,17 +1021,12 @@ class _AdminPageState extends State<AdminPage> {
             ),
             pw.SizedBox(height: 4),
             pw.Text(
-              'Period: ${periodLabel(revenuePeriod)}   |   Generated: ${formatDate(DateTime.now().toIso8601String())}',
+              'Period: ${periodLabel(revenuePeriod)}   |   '
+              'Generated: ${formatDate(DateTime.now().toIso8601String())}',
             ),
             pw.SizedBox(height: 16),
             pw.Table.fromTextArray(
-              headers: [
-                'Order ID',
-                'Customer',
-                'Product',
-                'Amount (₹)',
-                'Date',
-              ],
+              headers: ['Order ID', 'Customer', 'Product', 'Amount (₹)', 'Date'],
               data: periodOrders
                   .map(
                     (o) => [
@@ -1089,8 +1092,7 @@ class _AdminPageState extends State<AdminPage> {
 
   // ---------------- Product purchase analysis ----------------
 
-  /// How many DELIVERED orders each product name appears in — used to
-  /// compute "most bought products" percentages on the Analysis page.
+  /// How many DELIVERED orders each product name appears in.
   Map<String, int> productPurchaseCounts(List<Map<String, dynamic>> source) {
     final map = <String, int>{};
     for (final o in source) {
@@ -1119,7 +1121,7 @@ class _AdminPageState extends State<AdminPage> {
     return map[id] ?? 'Dashboard';
   }
 
-    Color _statusSolidColor(String status) {
+  Color _statusSolidColor(String status) {
     switch (status) {
       case 'Ordered':
         return const Color(0xFF1565C0);
@@ -1136,8 +1138,8 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  /// Small pastel pill — SAME colours/look as `StatusBadge` — used as the
-  /// visible face of the status-change control. Fixed size, never grows.
+  /// Small pastel pill — same look as `StatusBadge` — used as the visible
+  /// face of the status-change control. Fixed size, never grows.
   Widget _statusPillLikeBadge(String status) {
     Color bg;
     Color fg;
@@ -1190,11 +1192,9 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Reusable status-change control. Replaces the old `DropdownButton`
-  /// (which forced a ~48dp minimum height and bloated/overlapped rows on
-  /// mobile) with a small fixed-size pill wrapped in a `PopupMenuButton` —
-  /// tapping it opens a compact menu instead of an oversized inline
-  /// dropdown. Used both in the Orders table and the order detail page.
+  /// Reusable status-change control — a small fixed-size pill wrapped in a
+  /// PopupMenuButton (not a DropdownButton, which forced a ~48dp minimum
+  /// height and bloated rows on mobile).
   Widget _statusChangeControl(String orderId, String currentStatus) {
     return PopupMenuButton<String>(
       tooltip: 'Change status',
@@ -1234,13 +1234,8 @@ class _AdminPageState extends State<AdminPage> {
 
   // ---------------- IMAGE URL HELPER ----------------
 
-  /// Converts a Google Drive "share" link into a direct-viewable image
-  /// URL. Share links (drive.google.com/file/d/XXXX/view or
-  /// drive.google.com/open?id=XXXX) return an HTML preview page, not raw
-  /// image bytes, so Image.network() can never load them. This extracts
-  /// the file ID and rewrites it into the format that actually serves
-  /// the image directly. Any other URL (Imgur, Firebase Storage, etc.)
-  /// is returned unchanged.
+  /// Converts a Google Drive "share" link into a direct-viewable image URL.
+  /// Any other URL (Imgur, Firebase Storage, etc.) is returned unchanged.
   String _normalizeImageUrl(String url) {
     final m1 = RegExp(
       r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)',
@@ -1262,17 +1257,19 @@ class _AdminPageState extends State<AdminPage> {
       (p) => '${p['name']}' == productName,
       orElse: () => {},
     );
-    final photos = match['photos'] is List ? List.from(match['photos']) : <dynamic>[];
-    final raw = photos.isNotEmpty ? '${photos.first}' : '${match['photo'] ?? ''}';
+    final photos = match['photos'] is List
+        ? List.from(match['photos'])
+        : <dynamic>[];
+    final raw = photos.isNotEmpty
+        ? '${photos.first}'
+        : '${match['photo'] ?? ''}';
     return raw.isNotEmpty ? _normalizeImageUrl(raw) : '';
   }
 
   // ---------------- VOICE NOTE PLAYBACK HELPER ----------------
 
   /// Plays (or pauses) a voice note stored as a Base64 string, straight
-  /// from memory — no temp file, no URL needed. Tapping the same row's
-  /// button again stops playback; tapping a different row stops whatever
-  /// was playing and starts the new one.
+  /// from memory — no temp file, no URL needed.
   Future<void> _toggleVoicePlayback(String orderId, String base64Data) async {
     if (base64Data.trim().isEmpty) {
       showToast('⚠️ No voice note for this order');
@@ -1357,10 +1354,8 @@ class _AdminPageState extends State<AdminPage> {
 
     setState(() => loading = true);
     try {
-      // Collect photo URLs from TWO sources:
-      // 1) Any photos picked via the file picker (uploaded to Firebase
-      //    Storage) — kept for when Storage billing is enabled later.
-      // 2) A pasted image link (free — no Storage/billing needed).
+      // Photo URLs come from TWO sources: files picked with the picker
+      // (uploaded to Firebase Storage) and a pasted image link (free).
       final List<String> photoUrls = [];
 
       for (final photo in uploadedPhotos) {
@@ -1428,8 +1423,12 @@ class _AdminPageState extends State<AdminPage> {
       pStock = 'Available';
       pVisible = 'yes';
       uploadedPhotos.clear();
-      for (final c in highlightControllers) c.dispose();
-      for (final c in priceTagControllers) c.dispose();
+      for (final c in highlightControllers) {
+        c.dispose();
+      }
+      for (final c in priceTagControllers) {
+        c.dispose();
+      }
       highlightControllers = [TextEditingController()];
       priceTagControllers = [TextEditingController(), TextEditingController()];
     });
@@ -1460,12 +1459,27 @@ class _AdminPageState extends State<AdminPage> {
                 if (image.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(image, height: 180, width: double.infinity, fit: BoxFit.cover),
+                    child: Image.network(
+                      image,
+                      height: 180,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 const SizedBox(height: 12),
-                Text('₹${product['price']}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: tealDark)),
+                Text(
+                  '₹${product['price']}',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: tealDark,
+                  ),
+                ),
                 const SizedBox(height: 6),
-                Text('${product['category'] ?? product['cat']}', style: TextStyle(color: muted)),
+                Text(
+                  '${product['category'] ?? product['cat']}',
+                  style: TextStyle(color: muted),
+                ),
                 const SizedBox(height: 10),
                 Text('${product['description'] ?? product['desc'] ?? ''}'),
                 if (highlights.isNotEmpty) ...[
@@ -1477,11 +1491,15 @@ class _AdminPageState extends State<AdminPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
   }
+
   // ---------------- EDIT PRODUCT ----------------
 
   Future<void> editProduct(Map<String, dynamic> product) async {
@@ -1729,9 +1747,8 @@ class _AdminPageState extends State<AdminPage> {
                               'Visible on Website',
                               editVisible,
                               ['yes', 'no'],
-                              (v) => dialogSetState(
-                                () => editVisible = v ?? 'yes',
-                              ),
+                              (v) =>
+                                  dialogSetState(() => editVisible = v ?? 'yes'),
                             );
 
                             if (c.maxWidth < 520) {
@@ -1908,10 +1925,8 @@ class _AdminPageState extends State<AdminPage> {
     try {
       showToast('⏳ Updating status...');
       // Records a separate timestamp field per status (ordered_at,
-      // processing_at, delivered_at, cancelled_at, pending_at) the FIRST
-      // time an order reaches that status — this is what lets the
-      // customer app show a Flipkart-style "Ordered on ... / Processing
-      // on ... / Delivered on ..." timeline on the My Orders page.
+      // processing_at, delivered_at, cancelled_at) so the customer app can
+      // show a Flipkart-style timeline on the My Orders page.
       final statusKey = status.toLowerCase().replaceAll(' ', '_');
       await _db.collection('orders').doc(id).set({
         'status': status,
@@ -1925,8 +1940,7 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  /// Updates the order's Firestore `payment_status` field — used by the
-  /// Pending/Paid dropdown pill on the Orders table and order detail page.
+  /// Updates the order's Firestore `payment_status` field.
   Future<void> updatePaymentStatus(String id, String status) async {
     try {
       showToast('⏳ Updating payment status...');
@@ -1941,9 +1955,7 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  /// Small pastel pill for the payment-status dropdown — same visual
-  /// pattern as `_statusPillLikeBadge`, just Pending (orange) / Paid
-  /// (green).
+  /// Small pastel pill for the payment-status dropdown.
   Widget _paymentStatusPillLikeBadge(String status) {
     final bool paid = status == 'Paid';
     final Color bg = paid ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0);
@@ -1972,10 +1984,8 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Payment-status control — tapping it opens a compact menu to mark the
-  /// order Pending or Paid. Any legacy value (e.g. old "Not Required"
-  /// records) is treated as Pending so the pill always shows one of the
-  /// two valid states.
+  /// Payment-status control — Pending / Paid. Any legacy value (e.g. old
+  /// "Not Required" records) is treated as Pending.
   Widget _paymentStatusControl(String orderId, String currentStatus) {
     final normalized = currentStatus == 'Paid' ? 'Paid' : 'Pending';
     return PopupMenuButton<String>(
@@ -2200,9 +2210,9 @@ class _AdminPageState extends State<AdminPage> {
           s.isEmpty ||
           '${p['name']}'.toLowerCase().contains(s) ||
           '${p['cat']}'.toLowerCase().contains(s);
-      // "All" in the category filter now means "no category filter" —
-      // shows every product, regardless of its actual category.
-      final okCat = productCategory.isEmpty ||
+      // "All" means no category filter.
+      final okCat =
+          productCategory.isEmpty ||
           productCategory == 'All' ||
           p['cat'] == productCategory;
       final okStock = productStock.isEmpty || p['stock'] == productStock;
@@ -2213,8 +2223,7 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> filteredOrders() {
     final s = orderSearch.text.trim().toLowerCase().replaceFirst('#', '');
     return orders.where((o) {
-      // Customized-order requests live only under "Customized Order"
-      // (customOrders()) — keep them out of the main Orders list.
+      // Customized-order requests live only under "Customized Order".
       if ('${o['source']}'.toLowerCase() == 'custom-order') return false;
       final okSearch =
           s.isEmpty ||
@@ -2335,8 +2344,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Full-width version of the stat card, used for the Pending Orders card
-  /// so it doesn't sit alone as an odd, half-empty row in the 2-column grid.
+  /// Full-width version of the stat card, used for Pending Orders.
   Widget mobileWideStatCard(
     String value,
     String label,
@@ -2445,8 +2453,6 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // ---- FIX 3: `field()` now accepts an optional `onChanged` so search
-  // boxes can trigger a rebuild on every keystroke (live filtering). ----
   Widget field(
     String label,
     TextEditingController controller, {
@@ -2501,11 +2507,8 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // ---- FIX 1: `dropdownField()` now accepts an optional `emptyLabel` so
-  // the empty ('') option shows a clearly visible label (e.g. "All")
-  // instead of appearing blank/washed out. `selectedItemBuilder` makes
-  // sure that label (in solid black) is what shows in the closed box too,
-  // not just in the open menu. ----
+  /// `emptyLabel` makes the empty ('') option show a clearly visible label
+  /// (e.g. "All") instead of appearing blank.
   Widget dropdownField(
     String label,
     String value,
@@ -2535,9 +2538,6 @@ class _AdminPageState extends State<AdminPage> {
           icon: Icon(Icons.arrow_drop_down, color: muted),
           dropdownColor: Colors.white,
           style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
-          // Controls what's shown in the CLOSED box for the selected
-          // value — without this, an empty-string value renders blank
-          // here even though the open menu shows "All" correctly.
           selectedItemBuilder: (context) => values.map((v) {
             return Align(
               alignment: Alignment.centerLeft,
@@ -2585,15 +2585,9 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Notification "Type" dropdown with friendly display labels
-  /// (General / Promotions / Class Reminder) while still saving the
-  /// same lowercase values ('general' / 'promotion' / 'class') to
-  /// Firestore — matching what the customer app's notification
-  /// preference toggles expect.
-  Widget notificationTypeField(
-    String value,
-    ValueChanged<String?> onChanged,
-  ) {
+  /// Notification "Type" dropdown with friendly display labels while still
+  /// saving the lowercase values the customer app expects.
+  Widget notificationTypeField(String value, ValueChanged<String?> onChanged) {
     const options = {
       'general': 'General',
       'promotion': 'Promotions',
@@ -2656,8 +2650,8 @@ class _AdminPageState extends State<AdminPage> {
             '🗑️ Clear All Demo Data',
             () => clearData(
               'all_demo_data',
-              '⚠️ This will delete ALL Orders + Boutique + Catering contact submissions '
-                  '(Products will not be touched). Do you want to continue?',
+              '⚠️ This will delete ALL Orders + Boutique + Catering contact '
+                  'submissions (Products will not be touched). Continue?',
             ),
             color: danger,
           ),
@@ -2921,6 +2915,7 @@ class _AdminPageState extends State<AdminPage> {
             '🔗 Paste Image Link (e.g. from Imgur, Google Drive share link)',
             pImageUrl,
             hint: 'https://i.imgur.com/example.jpg',
+            onChanged: (v) => setState(() {}),
           ),
           if (pImageUrl.text.trim().isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -3267,45 +3262,56 @@ class _AdminPageState extends State<AdminPage> {
                 final stockColor = p['stock'] == 'Available'
                     ? success
                     : p['stock'] == 'Limited'
-                    ? warning
-                    : danger;
+                        ? warning
+                        : danger;
+
                 return InkWell(
                   onTap: () => showProductDetail(p),
                   child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: border),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0x10000000), blurRadius: 8),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: image.isNotEmpty
-                            ? Image.network(
-                                image,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, progress) {
-                                  if (progress == null) return child;
-                                  return Container(
-                                    color: tealLight,
-                                    child: const Center(
-                                      child: SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: border),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x10000000), blurRadius: 8),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: image.isNotEmpty
+                              ? Image.network(
+                                  image,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, progress) {
+                                    if (progress == null) return child;
+                                    return Container(
+                                      color: tealLight,
+                                      child: const Center(
+                                        child: SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
                                         ),
                                       ),
+                                    );
+                                  },
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: tealLight,
+                                    child: const Center(
+                                      child: Text(
+                                        '👗',
+                                        style: TextStyle(fontSize: 36),
+                                      ),
                                     ),
-                                  );
-                                },
-                                errorBuilder: (_, __, ___) => Container(
+                                  ),
+                                )
+                              : Container(
                                   color: tealLight,
                                   child: const Center(
                                     child: Text(
@@ -3314,130 +3320,123 @@ class _AdminPageState extends State<AdminPage> {
                                     ),
                                   ),
                                 ),
-                              )
-                            : Container(
-                                color: tealLight,
-                                child: const Center(
-                                  child: Text(
-                                    '👗',
-                                    style: TextStyle(fontSize: 36),
-                                  ),
-                                ),
-                              ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${p['cat']}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: tealDark,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '${p['name']}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '₹${p['price']}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: tealDark,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${p['stock']}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: stockColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              'Website: ${p['visible'] == 'yes' ? '✅ Visible' : '❌ Hidden'}',
-                              style: TextStyle(fontSize: 11, color: muted),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () => editProduct(p),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: tealDark,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 10,
-                                      ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 16,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Expanded(
-                                  child: Center(
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(20),
-                                      onTap: () => toggleVisible(
-                                        p['id'] as String,
-                                        p['visible'] == 'yes' ? 'no' : 'yes',
-                                      ),
-                                      child: Container(
-                                        width: 32,
-                                        height: 32,
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: border),
-                                        ),
-                                        child: Text(
-                                          p['visible'] == 'yes' ? '🙈' : '👁',
-                                          style: const TextStyle(fontSize: 14),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Expanded(
-                                  child: TextButton(
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: danger,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 10,
-                                      ),
-                                    ),
-                                    onPressed: () =>
-                                        deleteProduct(p['id'] as String),
-                                    child: const Text(
-                                      '🗑️ Delete',
-                                      style: TextStyle(fontSize: 10),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
                         ),
-                      ),
-                    ],
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${p['cat']}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: tealDark,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${p['name']}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '₹${p['price']}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: tealDark,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${p['stock']}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: stockColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                'Website: '
+                                '${p['visible'] == 'yes' ? '✅ Visible' : '❌ Hidden'}',
+                                style: TextStyle(fontSize: 11, color: muted),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => editProduct(p),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: tealDark,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 10,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Expanded(
+                                    child: Center(
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(20),
+                                        onTap: () => toggleVisible(
+                                          p['id'] as String,
+                                          p['visible'] == 'yes' ? 'no' : 'yes',
+                                        ),
+                                        child: Container(
+                                          width: 32,
+                                          height: 32,
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: border),
+                                          ),
+                                          child: Text(
+                                            p['visible'] == 'yes' ? '🙈' : '👁',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Expanded(
+                                    child: TextButton(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: danger,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 10,
+                                        ),
+                                      ),
+                                      onPressed: () =>
+                                          deleteProduct(p['id'] as String),
+                                      child: const Text(
+                                        '🗑️ Delete',
+                                        style: TextStyle(fontSize: 10),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 );
               },
             ),
@@ -3447,8 +3446,9 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget orderTable(List<Map<String, dynamic>> list, {bool compact = false}) {
-    if (list.isEmpty)
+    if (list.isEmpty) {
       return const EmptyState(icon: '📭', text: 'No orders yet');
+    }
 
     final columns = compact
         ? [
@@ -3516,7 +3516,7 @@ class _AdminPageState extends State<AdminPage> {
               : [
                   DataCell(Text('${o['orderId']}')),
                   DataCell(Text('${o['name']}')),
-                                    DataCell(
+                  DataCell(
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -3532,9 +3532,8 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                   DataCell(Text('${o['product']}')),
                   DataCell(Text('₹${o['amount']}')),
-                  // Payment cell — method text on top, and the Pending/Paid
-                  // dropdown pill underneath so admin can mark COD orders
-                  // as paid straight from the table.
+                  // Payment cell — method text on top, Pending/Paid pill
+                  // underneath so admin can mark COD orders as paid.
                   DataCell(
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3553,9 +3552,8 @@ class _AdminPageState extends State<AdminPage> {
                     ),
                   ),
                   DataCell(Text('${o['measurement'] ?? '—'}')),
-                  // ---- FIX 2: Message cell now also shows the
-                  // cancellation reason (in red) under the customer's
-                  // notes, whenever the order was Cancelled. ----
+                  // Message cell also shows the cancellation reason (red)
+                  // under the customer's notes when the order is Cancelled.
                   DataCell(
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3574,12 +3572,10 @@ class _AdminPageState extends State<AdminPage> {
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: ConstrainedBox(
-                              constraints:
-                                  const BoxConstraints(maxWidth: 160),
+                              constraints: const BoxConstraints(maxWidth: 160),
                               child: Text(
                                 '❌ ${o['cancelReason']}',
-                                style:
-                                    TextStyle(fontSize: 10, color: danger),
+                                style: TextStyle(fontSize: 10, color: danger),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -3588,18 +3584,13 @@ class _AdminPageState extends State<AdminPage> {
                       ],
                     ),
                   ),
-                  // Voice note is stored as Base64 audio, not a URL — play
-                  // it in-place from memory instead of trying to launch it.
+                  // Voice note is Base64 audio, not a URL — play it in
+                  // place from memory instead of launching it.
                   DataCell(
                     voiceNoteButton('${o['id']}', '${o['voiceNote'] ?? ''}'),
                   ),
-                  // Status cell back to a plain badge — cancellation
-                  // reason now lives under Message, not here.
                   DataCell(StatusBadge(status: '${o['status']}')),
                   DataCell(Text('${o['date']}')),
-                  // ---- FIX 1: status-change control is now a small
-                  // fixed-size pill (PopupMenuButton) instead of a
-                  // DropdownButton, so it never bloats/overlaps rows. ----
                   DataCell(
                     _statusChangeControl('${o['id']}', '${o['status']}'),
                   ),
@@ -3611,13 +3602,11 @@ class _AdminPageState extends State<AdminPage> {
                     ),
                   ),
                 ];
+
           return DataRow(
-            // Tapping anywhere on a row now pushes the full-screen order
-            // detail page (swipe-back works via CupertinoPageRoute).
-            onSelectChanged: (_) => _pushPage(
-              '${o['orderId']}',
-              _orderDetailBody(o),
-            ),
+            // Tapping a row pushes the full-screen order detail page.
+            onSelectChanged: (_) =>
+                _pushPage('${o['orderId']}', _orderDetailBody(o)),
             cells: cells,
           );
         }).toList(),
@@ -3626,11 +3615,7 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   /// Full-screen order detail body — pushed via _pushPage() when an order
-  /// row is tapped. Shows every field currently stored on the order.
-  /// NOTE: address / distance / delivery charge / rating / feedback will
-  /// only show real values once those fields are written by the customer
-  /// app into the `orders` Firestore document (see field mapping in
-  /// loadOrdersFromServer above) — until then they render as "—".
+  /// row is tapped. Fields with no value render as "—".
   Widget _orderDetailBody(Map<String, dynamic> o) {
     Widget row(String label, String value) {
       if (value.trim().isEmpty || value == 'null') value = '—';
@@ -3643,12 +3628,14 @@ class _AdminPageState extends State<AdminPage> {
               width: 120,
               child: Text(
                 label,
-                style: TextStyle(fontSize: 12, color: muted, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: muted,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-            Expanded(
-              child: Text(value, style: const TextStyle(fontSize: 14)),
-            ),
+            Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
           ],
         ),
       );
@@ -3659,7 +3646,7 @@ class _AdminPageState extends State<AdminPage> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: const [BoxShadow(color: Color(0x10000000), blurRadius: 10)],
       ),
       child: Column(
@@ -3670,14 +3657,12 @@ class _AdminPageState extends State<AdminPage> {
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 14),
-                    row('Customer', '${o['name']}'),
+          row('Customer', '${o['name']}'),
           row('Phone', '${o['mobile']}'),
           row('Alternate Mobile', '${o['alternateMobile'] ?? ''}'),
           row('Product', '${o['product']}'),
           row('Amount', '₹${o['amount']}'),
-          // Payment row — method on the left, and a tappable Pending/Paid
-          // pill instead of the old static "• Not Required" text so admin
-          // can mark COD orders as paid right from the detail page.
+          // Payment row — method on the left, tappable Pending/Paid pill.
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
@@ -3724,9 +3709,7 @@ class _AdminPageState extends State<AdminPage> {
             row('Processing On', '${o['processingAt']}'),
           if ('${o['deliveredAt'] ?? ''}'.trim().isNotEmpty)
             row('Delivered On', '${o['deliveredAt']}'),
-          // ---- FIX 2: cancel reason shown as a highlighted red box
-          // (same visual treatment as the ⭐ feedback box below) instead
-          // of a plain text row, so it's impossible to miss. ----
+          // Cancel reason as a highlighted red box.
           if ('${o['status']}' == 'Cancelled') ...[
             if ('${o['cancelledAt'] ?? ''}'.trim().isNotEmpty)
               row('Cancelled On', '${o['cancelledAt']}'),
@@ -3737,7 +3720,7 @@ class _AdminPageState extends State<AdminPage> {
               decoration: BoxDecoration(
                 color: const Color(0xFFFFEBEE),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: danger.withOpacity(.3)),
+                border: Border.all(color: danger.withValues(alpha: .3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -3762,9 +3745,6 @@ class _AdminPageState extends State<AdminPage> {
             ),
             const SizedBox(height: 10),
           ],
-          // ---- FIX 1: status-change control replaced with the small
-          // fixed-size pill instead of the old full-width DropdownButton
-          // box, so this section no longer looks like an oversized box. ----
           if ('${o['source']}'.toLowerCase() != 'custom-order') ...[
             const SizedBox(height: 6),
             Row(
@@ -3798,11 +3778,17 @@ class _AdminPageState extends State<AdminPage> {
                 children: [
                   Text(
                     '⭐ Customer Feedback — ${o['rating']}/5',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
                   ),
                   if ('${o['feedback'] ?? ''}'.trim().isNotEmpty) ...[
                     const SizedBox(height: 6),
-                    Text('${o['feedback']}', style: const TextStyle(fontSize: 13)),
+                    Text(
+                      '${o['feedback']}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ],
                 ],
               ),
@@ -3830,7 +3816,8 @@ class _AdminPageState extends State<AdminPage> {
               '🗑️ Clear All Orders',
               () => clearData(
                 'orders_all',
-                '⚠️ This will delete ALL Orders (Customized Orders will also be deleted, since they are in the same table). Do you want to continue?',
+                '⚠️ This will delete ALL Orders (Customized Orders too, since '
+                    'they are in the same collection). Continue?',
               ),
               color: danger,
             ),
@@ -3862,8 +3849,8 @@ class _AdminPageState extends State<AdminPage> {
           ),
           const SizedBox(height: 16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ---- FIX 3: onChanged wired so typing filters live. ----
               Expanded(
                 child: field(
                   '',
@@ -3873,9 +3860,6 @@ class _AdminPageState extends State<AdminPage> {
                 ),
               ),
               const SizedBox(width: 10),
-              // ---- FIX 1: emptyLabel: 'All' — shows a clear black
-              // "All" instead of a blank box, and selecting it shows
-              // every order (no status filter applied). ----
               SizedBox(
                 width: 170,
                 child: dropdownField(
@@ -3914,7 +3898,7 @@ class _AdminPageState extends State<AdminPage> {
               '🗑️ Clear Custom Orders',
               () => clearData(
                 'orders_custom',
-                '⚠️ This will delete ALL Customized Orders. Do you want to continue?',
+                '⚠️ This will delete ALL Customized Orders. Continue?',
               ),
               color: danger,
             ),
@@ -3957,8 +3941,6 @@ class _AdminPageState extends State<AdminPage> {
                           DataCell(Text('${o['product']}')),
                           DataCell(Text('${o['measurement'] ?? '—'}')),
                           DataCell(Text('${o['notes'] ?? '—'}')),
-                          // Was showing the raw Base64 text before — now a proper
-                          // Play/Pause button, same as the main Orders table.
                           DataCell(
                             voiceNoteButton(
                               '${o['id']}',
@@ -3968,10 +3950,8 @@ class _AdminPageState extends State<AdminPage> {
                           DataCell(Text('${o['date']}')),
                           DataCell(
                             TextButton(
-                              onPressed: () => openWhatsApp(
-                                '${o['mobile']}',
-                                '${o['name']}',
-                              ),
+                              onPressed: () =>
+                                  openWhatsApp('${o['mobile']}', '${o['name']}'),
                               child: const Text('💬'),
                             ),
                           ),
@@ -4025,13 +4005,11 @@ class _AdminPageState extends State<AdminPage> {
         .toList();
   }
 
-  num spentByPhone(String phone) => ordersForPhone(
-    phone,
-  ).where((o) => o['status'] == 'Delivered').fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
+  num spentByPhone(String phone) => ordersForPhone(phone)
+      .where((o) => o['status'] == 'Delivered')
+      .fold<num>(0, (s, o) => s + (o['amount'] ?? 0));
 
-  /// Merged "Contact Form" hub — Catering / Customized Order only now.
-  /// Customers was moved out to its own top-level page (see
-  /// customersPage() + sidebar "Customers" entry).
+  /// Merged "Contact Form" hub — Catering / Customized Order.
   Widget contactFormHubPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4048,18 +4026,8 @@ class _AdminPageState extends State<AdminPage> {
           ),
           child: Row(
             children: [
-              Expanded(
-                child: _hubTabButton(
-                  '🍽️ Catering',
-                  'catering',
-                ),
-              ),
-              Expanded(
-                child: _hubTabButton(
-                  '✂️ Customized Order',
-                  'custom',
-                ),
-              ),
+              Expanded(child: _hubTabButton('🍽️ Catering', 'catering')),
+              Expanded(child: _hubTabButton('✂️ Customized Order', 'custom')),
             ],
           ),
         ),
@@ -4107,12 +4075,8 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Standalone "Customers" page — its own sidebar/management entry now,
-  /// no longer nested inside Contact Form. Card layout matches the
-  /// reference screenshot: avatar, name, phone, Orders + Spent stats,
-  /// "View Order History" pill button. Tapping a card PUSHES a new page
-  /// (real Navigator route — swipe-back works) instead of swapping
-  /// in-place state.
+  /// Standalone "Customers" page. Tapping a card pushes a new route, so
+  /// swipe-back works.
   Widget customersPage() {
     final list = filteredUniqueCustomers;
     return sectionCard(
@@ -4144,19 +4108,28 @@ class _AdminPageState extends State<AdminPage> {
                   children: [
                     Row(
                       children: [
-                        CircleAvatar(
+                        const CircleAvatar(
                           radius: 22,
-                          backgroundColor: const Color(0xFFFCE4EC),
-                          child: Icon(Icons.person, color: const Color(0xFFE57373)),
+                          backgroundColor: Color(0xFFFCE4EC),
+                          child: Icon(Icons.person, color: Color(0xFFE57373)),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(c['name']!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                              Text(
+                                c['name']!,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                               const SizedBox(height: 2),
-                              Text(c['phone']!, style: TextStyle(fontSize: 13, color: muted)),
+                              Text(
+                                c['phone']!,
+                                style: TextStyle(fontSize: 13, color: muted),
+                              ),
                             ],
                           ),
                         ),
@@ -4171,20 +4144,46 @@ class _AdminPageState extends State<AdminPage> {
                         Expanded(
                           child: Column(
                             children: [
-                              const Icon(Icons.shopping_bag, color: Color(0xFFFF9800), size: 22),
+                              const Icon(
+                                Icons.shopping_bag,
+                                color: Color(0xFFFF9800),
+                                size: 22,
+                              ),
                               const SizedBox(height: 6),
-                              Text('$orderCount', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                              Text('Orders', style: TextStyle(fontSize: 12, color: muted)),
+                              Text(
+                                '$orderCount',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                'Orders',
+                                style: TextStyle(fontSize: 12, color: muted),
+                              ),
                             ],
                           ),
                         ),
                         Expanded(
                           child: Column(
                             children: [
-                              const Icon(Icons.currency_rupee, color: Color(0xFF43A047), size: 22),
+                              const Icon(
+                                Icons.currency_rupee,
+                                color: Color(0xFF43A047),
+                                size: 22,
+                              ),
                               const SizedBox(height: 6),
-                              Text('₹${spent.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                              Text('Spent', style: TextStyle(fontSize: 12, color: muted)),
+                              Text(
+                                '₹${spent.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                'Spent',
+                                style: TextStyle(fontSize: 12, color: muted),
+                              ),
                             ],
                           ),
                         ),
@@ -4199,7 +4198,9 @@ class _AdminPageState extends State<AdminPage> {
                           _customerHistoryBody(c['phone']!, c['name']!),
                         ),
                         style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         icon: const Icon(Icons.history, size: 18),
@@ -4215,8 +4216,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Body pushed via _pushPage() when "View Order History" is tapped —
-  /// shows only that customer's orders (matched by mobile number).
+  /// Body pushed when "View Order History" is tapped.
   Widget _customerHistoryBody(String phone, String name) {
     final custOrders = ordersForPhone(phone).reversed.toList();
     return Column(
@@ -4278,9 +4278,18 @@ class _AdminPageState extends State<AdminPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${o['product']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          Text(
+                            '${o['product']}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           const SizedBox(height: 3),
-                          Text('₹${o['amount']}  •  ${o['date']}', style: TextStyle(fontSize: 12, color: muted)),
+                          Text(
+                            '₹${o['amount']}  •  ${o['date']}',
+                            style: TextStyle(fontSize: 12, color: muted),
+                          ),
                         ],
                       ),
                     ),
@@ -4315,8 +4324,8 @@ class _AdminPageState extends State<AdminPage> {
               () => clearData(
                 catering ? 'contacts_catering' : 'contacts_boutique',
                 catering
-                    ? '⚠️ This will delete ALL Catering contact submissions. Do you want to continue?'
-                    : '⚠️ This will delete ALL Boutique contact submissions. Do you want to continue?',
+                    ? '⚠️ This will delete ALL Catering contact submissions. Continue?'
+                    : '⚠️ This will delete ALL Boutique contact submissions. Continue?',
               ),
               color: danger,
             ),
@@ -4386,8 +4395,7 @@ class _AdminPageState extends State<AdminPage> {
               field(
                 'Message *',
                 notificationMessage,
-                hint:
-                    'e.g. Check out our latest saree collection now available...',
+                hint: 'e.g. Check out our latest saree collection...',
                 maxLines: 3,
               ),
               const SizedBox(height: 14),
@@ -4413,7 +4421,7 @@ class _AdminPageState extends State<AdminPage> {
                   '🗑️ Clear All Notifications',
                   () => clearData(
                     'notifications_all',
-                    '⚠️ This will delete ALL sent notifications. Customers will no longer see them. Do you want to continue?',
+                    '⚠️ This will delete ALL sent notifications. Continue?',
                   ),
                   color: danger,
                 ),
@@ -4463,10 +4471,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// "Reviews" page — shows every customer review one by one (card
-  /// style): avatar with initial, Name, Mobile number, star rating and
-  /// the written comment. Search box filters by name or mobile. Each
-  /// card has a delete button so admin can remove a review if needed.
+  /// "Reviews" page — one card per customer review.
   Widget reviewsPage() {
     final list = filteredReviews();
     return sectionCard(
@@ -4479,7 +4484,7 @@ class _AdminPageState extends State<AdminPage> {
               '🗑️ Clear All Reviews',
               () => clearData(
                 'reviews_all',
-                '⚠️ This will delete ALL customer reviews. Do you want to continue?',
+                '⚠️ This will delete ALL customer reviews. Continue?',
               ),
               color: danger,
             ),
@@ -4555,7 +4560,11 @@ class _AdminPageState extends State<AdminPage> {
                           tooltip: 'Delete review',
                           visualDensity: VisualDensity.compact,
                           onPressed: () => deleteReview(r['id']),
-                          icon: Icon(Icons.delete_outline, color: danger, size: 20),
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: danger,
+                            size: 20,
+                          ),
                         ),
                       ],
                     ),
@@ -4583,7 +4592,9 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget cancellationTable(List<Map<String, dynamic>> list) {
-    if (list.isEmpty) return const EmptyState(icon: '❌', text: 'No cancellations yet');
+    if (list.isEmpty) {
+      return const EmptyState(icon: '❌', text: 'No cancellations yet');
+    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -4599,21 +4610,24 @@ class _AdminPageState extends State<AdminPage> {
           DataColumn(label: Text('WhatsApp')),
         ],
         rows: list.map((o) {
-          return DataRow(cells: [
-            DataCell(Text('${o['orderId']}')),
-            DataCell(Text('${o['name']}')),
-            DataCell(Text('📞 ${o['mobile']}')),
-            DataCell(Text('${o['product']}')),
-            DataCell(Text('₹${o['amount']}')),
-            DataCell(Text('${o['cancelReason'] ?? '—'}')),
-            DataCell(Text('${o['date']}')),
-            DataCell(
-              TextButton(
-                onPressed: () => openWhatsApp('${o['mobile']}', '${o['name']}'),
-                child: const Text('💬'),
+          return DataRow(
+            cells: [
+              DataCell(Text('${o['orderId']}')),
+              DataCell(Text('${o['name']}')),
+              DataCell(Text('📞 ${o['mobile']}')),
+              DataCell(Text('${o['product']}')),
+              DataCell(Text('₹${o['amount']}')),
+              DataCell(Text('${o['cancelReason'] ?? '—'}')),
+              DataCell(Text('${o['date']}')),
+              DataCell(
+                TextButton(
+                  onPressed: () =>
+                      openWhatsApp('${o['mobile']}', '${o['name']}'),
+                  child: const Text('💬'),
+                ),
               ),
-            ),
-          ]);
+            ],
+          );
         }).toList(),
       ),
     );
@@ -4644,11 +4658,12 @@ class _AdminPageState extends State<AdminPage> {
                         '${o['product']}'.toLowerCase().contains(s) ||
                         '${o['orderId']}'.toLowerCase().contains(s);
                   }).toList();
-                  if (cancelled.isEmpty)
+                  if (cancelled.isEmpty) {
                     return const EmptyState(
                       icon: '❌',
                       text: 'No cancellations yet',
                     );
+                  }
                   return cancellationTable(cancelled.reversed.toList());
                 },
               ),
@@ -4659,10 +4674,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// New "Complaints" page — wired up to the previously-unused
-  /// _grievanceTable(). Same layout pattern as the other list pages:
-  /// search + status filter on top, a Clear-all danger button, then the
-  /// table itself.
+  /// "Complaints" page.
   Widget grievancesPage() {
     return sectionCard(
       '⚖️ Customer Complaints',
@@ -4674,13 +4686,14 @@ class _AdminPageState extends State<AdminPage> {
               '🗑️ Clear All Complaints',
               () => clearData(
                 'grievances_all',
-                '⚠️ This will delete ALL customer complaints. Do you want to continue?',
+                '⚠️ This will delete ALL customer complaints. Continue?',
               ),
               color: danger,
             ),
           ),
           const SizedBox(height: 16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: field(
@@ -4723,8 +4736,9 @@ class _AdminPageState extends State<AdminPage> {
       return matchSearch && matchStatus;
     }).toList();
 
-    if (list.isEmpty)
+    if (list.isEmpty) {
       return const EmptyState(icon: '⚖️', text: 'No complaints yet');
+    }
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -4761,10 +4775,8 @@ class _AdminPageState extends State<AdminPage> {
               ),
               DataCell(
                 TextButton(
-                  onPressed: () => openWhatsApp(
-                    '${g['phone']}',
-                    '${g['name'] ?? 'Customer'}',
-                  ),
+                  onPressed: () =>
+                      openWhatsApp('${g['phone']}', '${g['name'] ?? 'Customer'}'),
                   child: const Text('💬'),
                 ),
               ),
@@ -4792,7 +4804,7 @@ class _AdminPageState extends State<AdminPage> {
             '🗑️ Clear Orders (resets Revenue)',
             () => clearData(
               'orders_all',
-              '⚠️ This will delete ALL Orders, and Revenue will reset to ₹0. Do you want to continue?',
+              '⚠️ This will delete ALL Orders, and Revenue will reset to ₹0. Continue?',
             ),
             color: danger,
           ),
@@ -4880,10 +4892,8 @@ class _AdminPageState extends State<AdminPage> {
                 SizedBox(
                   height: 260,
                   child: SimpleChart(
-                    // Was using ALL delivered orders across every year,
-                    // mixing them into the same 12 month buckets. Now
-                    // scoped to the current year, so it shows the full
-                    // current year correctly.
+                    // Scoped to the current year so the 12 month buckets
+                    // don't mix data from previous years.
                     data: monthlyRevenue(ordersForPeriod('year')),
                     bar: false,
                     color: teal,
@@ -4908,14 +4918,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Product-purchase-percentage page opened via the "📊 Analysis" button
-  /// on the Revenue page. Shows what percentage of delivered orders each
-  /// product accounts for, so the admin can see what customers buy most.
-  ///
-  /// Sales Comparison is now a TAPPABLE summary card that pushes its own
-  /// full page (via _pushPage) instead of sitting stacked inline with the
-  /// rest of the analysis content — this is what removes the "page inside
-  /// a page" look the analysis page used to have.
+  /// Product-purchase-percentage page, opened via "📊 Analysis".
   Widget analysisPage() {
     final periodOrders = ordersForPeriod(revenuePeriod);
     final counts = productPurchaseCounts(periodOrders);
@@ -4956,7 +4959,6 @@ class _AdminPageState extends State<AdminPage> {
               ),
             ],
           ),
-
           const SizedBox(height: 18),
           InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -4971,16 +4973,25 @@ class _AdminPageState extends State<AdminPage> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(color: Color(0x10000000), blurRadius: 10)],
+                boxShadow: const [
+                  BoxShadow(color: Color(0x10000000), blurRadius: 10),
+                ],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.show_chart, size: 20, color: Color(0xFF616161)),
+                  const Icon(
+                    Icons.show_chart,
+                    size: 20,
+                    color: Color(0xFF616161),
+                  ),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
                       'Sales Comparison — Today / Week / Month / Year',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   Icon(Icons.chevron_right, color: muted),
@@ -5063,8 +5074,9 @@ class _AdminPageState extends State<AdminPage> {
     final list = map.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final top = list.take(5).toList();
-    if (top.isEmpty)
+    if (top.isEmpty) {
       return const EmptyState(icon: '📊', text: 'No delivered orders yet');
+    }
     final maxValue = top.first.value == 0 ? 1 : top.first.value;
     return Column(
       children: List.generate(top.length, (i) {
@@ -5113,7 +5125,8 @@ class _AdminPageState extends State<AdminPage> {
   Future<void> openWhatsApp(String mobile, String name) async {
     final numText = mobile.replaceAll(RegExp(r'\D'), '');
     final msg = Uri.encodeComponent(
-      "Hi $name! 👗 Thank you for choosing Sumathi's Styles, Injambakkam. How can we help you today?",
+      "Hi $name! 👗 Thank you for choosing Sumathi's Styles, Injambakkam. "
+      "How can we help you today?",
     );
     final uri = Uri.parse('https://wa.me/91$numText?text=$msg');
     try {
@@ -5190,7 +5203,7 @@ class _AdminPageState extends State<AdminPage> {
           ],
         ),
       ),
-     floatingActionButton: toastMessage.isNotEmpty
+      floatingActionButton: toastMessage.isNotEmpty
           ? FloatingActionButton.extended(
               backgroundColor: tealDark,
               onPressed: () {},
@@ -5203,9 +5216,8 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// Login screen — matches admin.html: black top bar with "Admin Login",
-  /// blue shield icon with person badge, "Admin Panel" title, plain
-  /// bordered Email/Password fields, full-width blue pill LOGIN button.
+  /// Login screen — black top bar with "Admin Login", blue shield icon with
+  /// person badge, "Admin Panel" title, bordered fields, blue pill button.
   Widget loginScreen() {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -5372,7 +5384,7 @@ class _AdminPageState extends State<AdminPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.black.withOpacity(.55)),
+          Icon(icon, size: 18, color: Colors.black.withValues(alpha: .55)),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -5395,7 +5407,7 @@ class _AdminPageState extends State<AdminPage> {
               icon: Icon(
                 _obscurePassword ? Icons.visibility_off : Icons.visibility,
                 size: 19,
-                color: Colors.black.withOpacity(.5),
+                color: Colors.black.withValues(alpha: .5),
               ),
               onPressed: () {
                 setState(() => _obscurePassword = !_obscurePassword);
@@ -5407,9 +5419,6 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   /// Used by every tile/button on the mobile dashboard home screen.
-  /// Calls the existing showPage() so the right data loads (orders,
-  /// contacts, etc — same as the sidebar does on desktop), then flips
-  /// mobilePageMode so the app actually navigates to that page.
   void _openMobilePage(String id, {String? contactTab}) {
     showPage(id);
     setState(() => mobilePageMode = true);
@@ -5418,8 +5427,7 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  /// One of the 4 stat cards at the top (Orders / Revenue / Menu /
-  /// Customers) — light lavender card, coloured icon, big number.
+  /// One of the 4 stat cards at the top of the mobile home screen.
   Widget _homeStatCard(
     IconData icon,
     Color iconColor,
@@ -5447,7 +5455,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  /// One tile in the "Management" grid — coloured circle icon + label.
+  /// One tile in the "Management" grid.
   Widget _managementTile(
     IconData icon,
     Color iconColor,
@@ -5614,7 +5622,6 @@ class _AdminPageState extends State<AdminPage> {
                         'Analytics',
                         () => _openMobilePage('analysis'),
                       ),
-                      // Opens the merged Catering / Customized Order hub.
                       _managementTile(
                         Icons.forum,
                         teal,
@@ -5664,8 +5671,11 @@ class _AdminPageState extends State<AdminPage> {
                       onPressed: () => _openMobilePage('upload'),
                       icon: const Icon(Icons.add),
                       label: const Text(
-                        'Add New Product ',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        'Add New Product',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -5684,8 +5694,13 @@ class _AdminPageState extends State<AdminPage> {
                       onPressed: () => _openMobilePage('ordersmgmt'),
                       icon: const Icon(Icons.shopping_bag),
                       label: Text(
-                        pending > 0 ? 'View Orders ($pending pending)' : 'View Orders',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        pending > 0
+                            ? 'View Orders ($pending pending)'
+                            : 'View Orders',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -5707,14 +5722,14 @@ class _AdminPageState extends State<AdminPage> {
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.trending_up, color: Color(0xFF43A047)),
-                        const SizedBox(width: 12),
-                        const Expanded(
+                      children: const [
+                        Icon(Icons.trending_up, color: Color(0xFF43A047)),
+                        SizedBox(width: 12),
+                        Expanded(
                           child: Text(
                             '🟢 Live sync — orders & revenue\n'
                             'update automatically in real time.',
-                           style: TextStyle(fontSize: 13),
+                            style: TextStyle(fontSize: 13),
                           ),
                         ),
                       ],
@@ -5737,7 +5752,10 @@ class _AdminPageState extends State<AdminPage> {
                       icon: const Icon(Icons.logout),
                       label: const Text(
                         'Logout',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -5751,7 +5769,7 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget sidebarWidget() {
-   final groups = [
+    final groups = [
       ('Overview', [('dashboard', '📊', 'Dashboard')]),
       (
         'Catalogue',
@@ -5773,11 +5791,13 @@ class _AdminPageState extends State<AdminPage> {
         'Engagement',
         [
           ('reviews', '⭐', 'Reviews'),
+          ('grievances', '⚖️', 'Complaints'),
         ],
       ),
       (
         'Finance',
         [
+          ('revenue', '💰', 'Revenue'),
           ('analysis', '📊', 'Analysis'),
           ('notifications', '🔔', 'Send Notification'),
         ],
@@ -5786,7 +5806,6 @@ class _AdminPageState extends State<AdminPage> {
 
     return Container(
       width: 240,
-      height: double.infinity,
       color: sidebar,
       child: Column(
         children: [
@@ -5811,7 +5830,7 @@ class _AdminPageState extends State<AdminPage> {
                       Text(
                         'Admin Dashboard',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(.55),
+                          color: Colors.white.withValues(alpha: .55),
                           fontSize: 11,
                         ),
                       ),
@@ -5830,7 +5849,7 @@ class _AdminPageState extends State<AdminPage> {
                     child: Text(
                       group.$1.toUpperCase(),
                       style: TextStyle(
-                        color: Colors.white.withOpacity(.35),
+                        color: Colors.white.withValues(alpha: .35),
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
@@ -5868,7 +5887,7 @@ class _AdminPageState extends State<AdminPage> {
                                 style: TextStyle(
                                   color: currentPage == item.$1
                                       ? Colors.white
-                                      : Colors.white.withOpacity(.75),
+                                      : Colors.white.withValues(alpha: .75),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -5888,7 +5907,7 @@ class _AdminPageState extends State<AdminPage> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 border: Border(
-                  top: BorderSide(color: Colors.white.withOpacity(.1)),
+                  top: BorderSide(color: Colors.white.withValues(alpha: .1)),
                 ),
               ),
               child: Row(
@@ -5898,7 +5917,7 @@ class _AdminPageState extends State<AdminPage> {
                   Text(
                     'Logout',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(.65),
+                      color: Colors.white.withValues(alpha: .65),
                       fontSize: 14,
                     ),
                   ),
@@ -5959,11 +5978,13 @@ class _AdminPageState extends State<AdminPage> {
           ),
           if (!mobile) ...[
             Text(
-              '${DateTime.now().weekday.weekdayName()}, ${DateTime.now().day} ${monthName(DateTime.now().month)} ${DateTime.now().year}',
+              '${DateTime.now().weekday.weekdayName()}, '
+              '${DateTime.now().day} ${monthName(DateTime.now().month)} '
+              '${DateTime.now().year}',
               style: const TextStyle(fontSize: 13, color: Colors.white70),
             ),
             const SizedBox(width: 14),
-                        InkWell(
+            InkWell(
               borderRadius: BorderRadius.circular(20),
               onTap: () {
                 setState(() {
@@ -5976,7 +5997,10 @@ class _AdminPageState extends State<AdminPage> {
                 clipBehavior: Clip.none,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.white70),
                       borderRadius: BorderRadius.circular(6),
@@ -5988,7 +6012,10 @@ class _AdminPageState extends State<AdminPage> {
                       right: -4,
                       top: -4,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: danger,
                           borderRadius: BorderRadius.circular(10),
@@ -6059,8 +6086,8 @@ extension on int {
   }
 }
 
-/// Draws the shield used on the login screen — a direct port of the
-/// admin.html SVG path: M50 4 L92 18 V48 C92 74 74 92 50 98 C26 92 8 74 8 48 V18 Z
+/// Draws the shield used on the login screen — a port of the admin.html SVG:
+/// M50 4 L92 18 V48 C92 74 74 92 50 98 C26 92 8 74 8 48 V18 Z
 class ShieldPainter extends CustomPainter {
   ShieldPainter({required this.color});
   final Color color;
@@ -6246,7 +6273,7 @@ class _ChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
     final maxValue = math.max(1, data.fold<num>(0, (a, b) => math.max(a, b)));
     final bottom = size.height - 28;
-    final top = 12.0;
+    const top = 12.0;
     final chartHeight = bottom - top;
 
     if (bar) {
@@ -6261,7 +6288,7 @@ class _ChartPainter extends CustomPainter {
         );
         canvas.drawRRect(
           RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-          Paint()..color = color.withOpacity(.7),
+          Paint()..color = color.withValues(alpha: .7),
         );
       }
     } else {
@@ -6271,10 +6298,11 @@ class _ChartPainter extends CustomPainter {
             ? size.width / 2
             : i * size.width / (data.length - 1);
         final y = bottom - (data[i] / maxValue) * chartHeight;
-        if (i == 0)
+        if (i == 0) {
           path.moveTo(x, y);
-        else
+        } else {
           path.lineTo(x, y);
+        }
       }
       canvas.drawPath(path, paint);
       for (int i = 0; i < data.length; i++) {
@@ -6385,7 +6413,7 @@ class _DonutPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 24
-          ..color = colors[i],
+          ..color = colors[i % colors.length],
       );
       start += sweep;
     }

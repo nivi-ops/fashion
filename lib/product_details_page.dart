@@ -1240,17 +1240,31 @@ const SizedBox(height: 18),
     Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage()));
   }
 
-  void _buyNow() {
-    final product = _productWithQty(_qty);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CheckoutPage(
-          items: [product],
-          fromCart: false,
-          quantities: {product.id: _qty},
-        ),
+ void _buyNow() {
+  final phone = (AppState.instance.userId ?? '').trim();
+
+  if (phone.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Please login first to continue with your purchase.'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
       ),
     );
+    return;
   }
+
+  final product = _productWithQty(_qty);
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => CheckoutPage(
+        items: [product],
+        fromCart: false,
+        quantities: {product.id: _qty},
+      ),
+    ),
+  );
+}
 }
