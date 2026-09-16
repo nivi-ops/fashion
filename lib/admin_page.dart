@@ -408,7 +408,8 @@ class _AdminPageState extends State<AdminPage> {
           'id': doc.id,
           'orderId': '#${m['order_id'] ?? doc.id.toUpperCase()}',
           'name': m['name'] ?? '',
-          'mobile': m['mobile'] ?? '',
+                     'mobile': m['mobile'] ?? '',
+          'alternateMobile': m['alternate_mobile'] ?? '',
           'product': m['product'] ?? '',
           'amount': num.tryParse('${m['amount'] ?? 0}') ?? 0,
           'status': m['status'] ?? 'Ordered',
@@ -3515,7 +3516,20 @@ class _AdminPageState extends State<AdminPage> {
               : [
                   DataCell(Text('${o['orderId']}')),
                   DataCell(Text('${o['name']}')),
-                  DataCell(Text('${o['mobile']}')),
+                                    DataCell(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${o['mobile']}'),
+                        if ('${o['alternateMobile'] ?? ''}'.trim().isNotEmpty)
+                          Text(
+                            'Alt: ${o['alternateMobile']}',
+                            style: TextStyle(fontSize: 10, color: muted),
+                          ),
+                      ],
+                    ),
+                  ),
                   DataCell(Text('${o['product']}')),
                   DataCell(Text('₹${o['amount']}')),
                   // Payment cell — method text on top, and the Pending/Paid
@@ -3656,8 +3670,9 @@ class _AdminPageState extends State<AdminPage> {
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 14),
-          row('Customer', '${o['name']}'),
+                    row('Customer', '${o['name']}'),
           row('Phone', '${o['mobile']}'),
+          row('Alternate Mobile', '${o['alternateMobile'] ?? ''}'),
           row('Product', '${o['product']}'),
           row('Amount', '₹${o['amount']}'),
           // Payment row — method on the left, and a tappable Pending/Paid

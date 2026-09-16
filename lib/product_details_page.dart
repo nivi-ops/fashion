@@ -438,24 +438,28 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   // PRODUCT IMAGE
   // -------------------------------------------------------------------
 
-  Widget _buildProductImage(Product product) {
+    Widget _buildProductImage(Product product) {
     return AspectRatio(
       aspectRatio: 4 / 3,
       child: Hero(
         tag: 'product_${product.id}',
-        child: product.isNetworkImage
-            ? Image.network(
-                product.image,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _imagePlaceholder(),
-              )
-            : Image.asset(
-                product.image,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _imagePlaceholder(),
-              ),
+        child: Container(
+          width: double.infinity,
+          color: const Color(0xFFF6F8F7),
+          child: product.isNetworkImage
+              ? Image.network(
+                  product.image,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                )
+              : Image.asset(
+                  product.image,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                ),
+        ),
       ),
     );
   }

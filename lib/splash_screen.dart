@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'register_page.dart';
-import 'home_page.dart';
+import 'main_nav_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -47,7 +47,7 @@ class _SplashScreenState extends State<SplashScreen>
       context,
       MaterialPageRoute(
         builder: (_) =>
-            isLoggedIn ? const HomePage() : const RegisterPage(),
+          isLoggedIn ? const MainNavPage() : const RegisterPage(),
       ),
     );
   }

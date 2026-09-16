@@ -947,9 +947,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
             validator: _validatePhone,
           ),
           const SizedBox(height: 12),
-          _field(
+                    _field(
             controller: _altPhoneCtrl,
-            label: 'Alternate Mobile Number (Optional)',
+            label: 'Alternate Mobile Number',
             icon: Icons.phone_forwarded_outlined,
             keyboardType: TextInputType.phone,
             maxLength: 10,
@@ -1065,9 +1065,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // Alternate number is optional — only validate if the user typed something.
-  String? _validateAltPhone(String? value) {
+     String? _validateAltPhone(String? value) {
     final phone = value?.trim() ?? '';
-    if (phone.isEmpty) return null;
+    if (phone.isEmpty) return 'Required';
 
     if (phone.length != 10) {
       return 'Enter a valid 10-digit phone number';

@@ -713,38 +713,41 @@ class _ProductCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  ClipRRect(
+                                  ClipRRect(
                     borderRadius:
                         const BorderRadius.vertical(
                       top:
                           Radius.circular(10),
                     ),
-                    child: Image.network(
-                      service.imageUrl,
-                      fit: BoxFit.cover,
-                      alignment:
-                          Alignment.topCenter,
-                      errorBuilder:
-                          (
-                        _,
-                        __,
-                        ___,
-                      ) {
-                        return Container(
-                          color:
-                              AppColors.gray,
-                          alignment:
-                              Alignment.center,
-                          child:
-                              const Icon(
-                            Icons
-                                .image_not_supported,
+                    child: Container(
+                      color: AppColors.gray,
+                      child: Image.network(
+                        service.imageUrl,
+                        fit: BoxFit.contain,
+                        alignment:
+                            Alignment.center,
+                        errorBuilder:
+                            (
+                          _,
+                          __,
+                          ___,
+                        ) {
+                          return Container(
                             color:
-                                AppColors
-                                    .textLight,
-                          ),
-                        );
-                      },
+                                AppColors.gray,
+                            alignment:
+                                Alignment.center,
+                            child:
+                                const Icon(
+                              Icons
+                                  .image_not_supported,
+                              color:
+                                  AppColors
+                                      .textLight,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
 

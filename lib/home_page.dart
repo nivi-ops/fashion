@@ -2081,18 +2081,23 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    return Image.asset(
-      img,
-      width:
-          double.infinity,
+        return Container(
+      width: double.infinity,
       height: height,
-      fit: BoxFit.cover,
-      alignment:
-          Alignment.topCenter,
-      errorBuilder:
-          (_, __, ___) {
-        return _imageError(height);
-      },
+      color: AppColors.gray,
+      child: Image.asset(
+        img,
+        width:
+            double.infinity,
+        height: height,
+        fit: BoxFit.contain,
+        alignment:
+            Alignment.center,
+        errorBuilder:
+            (_, __, ___) {
+          return _imageError(height);
+        },
+      ),
     );
   }
 
@@ -2852,37 +2857,42 @@ class _TimedNetworkImageState
       return _errorPlaceholder();
     }
 
-    return Image.network(
-      widget.url,
+        return Container(
       width: double.infinity,
       height: widget.height,
-      fit: BoxFit.cover,
-      alignment:
-          Alignment.topCenter,
-      loadingBuilder:
-          (context, child, progress) {
-        if (progress == null) {
-          _cancelTimer();
-          return child;
-        }
+      color: AppColors.gray,
+      child: Image.network(
+        widget.url,
+        width: double.infinity,
+        height: widget.height,
+        fit: BoxFit.contain,
+        alignment:
+            Alignment.center,
+        loadingBuilder:
+            (context, child, progress) {
+          if (progress == null) {
+            _cancelTimer();
+            return child;
+          }
 
-        return Container(
-          height: widget.height,
-          color: AppColors.gray,
-          child:
-              const Center(
+          return Container(
+            height: widget.height,
+            color: AppColors.gray,
             child:
-                CircularProgressIndicator(
-              strokeWidth: 2,
+                const Center(
+              child:
+                  CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
             ),
-          ),
-        );
-      },
-      errorBuilder:
-          (_, __, ___) {
-        _cancelTimer();
-        return _errorPlaceholder();
-      },
+          );
+        },
+        errorBuilder:
+            (_, __, ___) {
+          _cancelTimer();
+          return _errorPlaceholder();
+        },
+      ),
     );
   }
 
