@@ -6,8 +6,8 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'models.dart';
 import 'app_state.dart';
+import 'models.dart';
 
 /// A tailoring/stitching service offered by the shop.
 class StitchingService {

@@ -8,6 +8,7 @@ import 'checkout.dart';
 import 'location_picker_page.dart';
 import 'cart_page.dart';
 import 'login_page.dart';
+import 'api_service.dart';
 
 /// ---------------------------------------------------------------------
 /// PRODUCT DETAILS PAGE — Sumathi's Styles
@@ -33,7 +34,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   String _recipient = '';
   // ignore: unused_field
   String _addressPhone = '';
-  List<Map<String, dynamic>> _savedAddressList = [];
+  List<ShopAddress> _savedAddressList = [];
   String? _selectedAddressId;
   final TextEditingController _addressSearchCtrl = TextEditingController();
 
@@ -69,37 +70,14 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   // LOAD SAVED ADDRESS
   // -------------------------------------------------------------------
 
-    Future<void> _loadSavedAddress() async {
-    final phone = (AppState.instance.userId ?? '').trim();
-
-    if (phone.isEmpty) {
-      if (mounted) setState(() => _loadingAddress = false);
-      return;
-    }
+     Future<void> _loadSavedAddress() async {
+    if (mounted) setState(() => _loadingAddress = true);
 
     try {
-      QuerySnapshot<Map<String, dynamic>> snap =
-          await FirebaseFirestore.instance
-              .collection('saved_addresses')
-              .doc(phone)
-              .collection('addresses')
-              .orderBy('updatedAt', descending: true)
-              .get();
+      final addresses = await ApiService.instance.getAddresses();
+      if (!mounted) return;
 
-      // Backward-compatible fallback for addresses saved by the ApiService
-      // address flow under users/{userId}/addresses.
-      if (snap.docs.isEmpty) {
-        snap = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(phone)
-            .collection('addresses')
-            .orderBy('updatedAt', descending: true)
-            .get();
-      }
-
-            if (!mounted) return;
-
-      if (snap.docs.isEmpty) {
+      if (addresses.isEmpty) {
         final fallback = AppState.instance.deliveryLocation.trim();
         setState(() {
           _address = fallback;
@@ -112,35 +90,34 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         return;
       }
 
-      final list = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-
       setState(() {
-        _savedAddressList = list;
+        _savedAddressList = addresses;
         _loadingAddress = false;
       });
-      _selectAddress(list.first);
+
+      final selectedId = AppState.instance.deliveryAddressId;
+      final match = addresses.firstWhere(
+        (a) => a.id == selectedId,
+        orElse: () => addresses.first,
+      );
+      _selectAddress(match);
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingAddress = false);
     }
   }
 
-  void _selectAddress(Map<String, dynamic> data) {
-    final parts = <String>[
-      '${data['door'] ?? ''}'.trim(),
-      '${data['street'] ?? ''}'.trim(),
-      '${data['area'] ?? ''}'.trim(),
-      '${data['city'] ?? ''}'.trim(),
-      '${data['state'] ?? ''}'.trim(),
-      '${data['pin'] ?? ''}'.trim(),
-    ].where((e) => e.isNotEmpty).toList();
-
+    void _selectAddress(ShopAddress data) {
     if (!mounted) return;
     setState(() {
-      _selectedAddressId = data['id']?.toString();
-      _recipient = '${data['recipient'] ?? ''}'.trim();
-      _addressPhone = '${data['phone'] ?? ''}'.trim();
-      _address = parts.join(', ');
+      _selectedAddressId = data.id;
+      _recipient = data.name ?? '';
+      _addressPhone = data.phone ?? '';
+      _address = [
+        data.addressLine,
+        data.city,
+        data.pincode,
+      ].where((e) => e.trim().isNotEmpty).join(', ');
     });
   }
 
@@ -705,13 +682,12 @@ const SizedBox(height: 18),
       builder: (sheetCtx) {
         return StatefulBuilder(
           builder: (ctx, setSheet) {
-            final query = _addressSearchCtrl.text.trim().toLowerCase();
+                      final query = _addressSearchCtrl.text.trim().toLowerCase();
             final filtered = query.isEmpty
                 ? _savedAddressList
                 : _savedAddressList.where((a) {
                     final blob = [
-                      a['recipient'], a['door'], a['street'], a['area'],
-                      a['city'], a['state'], a['pin'],
+                      a.name, a.addressLine, a.city, a.pincode, a.phone,
                     ].map((e) => '${e ?? ''}'.toLowerCase()).join(' ');
                     return blob.contains(query);
                   }).toList();
@@ -876,19 +852,16 @@ const SizedBox(height: 18),
     );
   }
 
-  Widget _addressSheetCard(Map<String, dynamic> data, BuildContext sheetCtx) {
+    Widget _addressSheetCard(ShopAddress data, BuildContext sheetCtx) {
     final parts = <String>[
-      '${data['door'] ?? ''}'.trim(),
-      '${data['street'] ?? ''}'.trim(),
-      '${data['area'] ?? ''}'.trim(),
-      '${data['city'] ?? ''}'.trim(),
-      '${data['state'] ?? ''}'.trim(),
-      '${data['pin'] ?? ''}'.trim(),
+      data.addressLine.trim(),
+      data.city.trim(),
+      data.pincode.trim(),
     ].where((e) => e.isNotEmpty).toList();
-    final recipient = '${data['recipient'] ?? ''}'.trim();
-    final phone = '${data['phone'] ?? ''}'.trim();
-    final isSelected = _selectedAddressId == data['id']?.toString();
-    final type = '${data['type'] ?? ''}'.trim().toLowerCase();
+    final recipient = (data.name ?? '').trim();
+    final phone = (data.phone ?? '').trim();
+    final isSelected = _selectedAddressId == data.id;
+    final type = data.label.trim().toLowerCase();
 
     return InkWell(
       onTap: () {
