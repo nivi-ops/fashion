@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import '../onesignal_rest_key.dart';
 
 /// Centralized OneSignal wrapper — every OneSignal call goes through here.
 class OneSignalService {
@@ -23,8 +26,37 @@ class OneSignalService {
     OneSignal.User.addTagWithKey('role', role);
   }
 
-  Future<bool> requestPermission() async {
+     Future<bool> requestPermission() async {
     return await OneSignal.Notifications.requestPermission(true);
+  }
+
+  /// Sends a push notification to every device tagged with the given
+  /// role (e.g. "admin") via the OneSignal REST API. This is what
+  /// makes the admin get a push even when the app is fully closed.
+  Future<void> sendPushToRole(String role, String title, String body) async {
+    final url = Uri.parse('https://onesignal.com/api/v1/notifications');
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Key $oneSignalRestApiKey',
+        },
+        body: jsonEncode({
+          'app_id': oneSignalAppId,
+          'filters': [
+            {'field': 'tag', 'key': 'role', 'relation': '=', 'value': role},
+          ],
+          'headings': {'en': title},
+          'contents': {'en': body},
+        }),
+      );
+      debugPrint(
+        'OneSignal push status: ${response.statusCode} ${response.body}',
+      );
+    } catch (e) {
+      debugPrint('OneSignal push error: $e');
+    }
   }
 
   bool _isRegistered(String? id) =>

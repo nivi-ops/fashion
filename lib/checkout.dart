@@ -10,6 +10,7 @@ import 'app_colors.dart';
 import 'app_state.dart';
 import 'models.dart';
 import 'api_service.dart';
+import 'services/onesignal_service.dart';
 
 /// ---------------------------------------------------------------------
 /// CARD INPUT FORMATTERS — auto space every 4 digits on Card Number,
@@ -625,7 +626,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
       'created_at': FieldValue.serverTimestamp(),
     });
 
-    await _awardCoinsIfEligible(phone);
+       await _awardCoinsIfEligible(phone);
+
+    OneSignalService.instance.sendPushToRole(
+      'admin',
+      '🛒 New Order Received',
+      '${_nameCtrl.text.trim()} — $productNames (₹${orderTotal.toStringAsFixed(0)})',
+    );
+
     await _completeLocalOrder(orderTotal, _payment, orderId);
   }
 
@@ -677,7 +685,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'created_at': FieldValue.serverTimestamp(),
       });
 
-      await _awardCoinsIfEligible(phone);
+            await _awardCoinsIfEligible(phone);
+
+      OneSignalService.instance.sendPushToRole(
+        'admin',
+        '🛒 New Order Received',
+        '${_nameCtrl.text.trim()} — $productNames (₹${orderTotal.toStringAsFixed(0)})',
+      );
+
       await _completeLocalOrder(orderTotal, PaymentMethod.cod, orderId);
     } catch (e) {
       if (!mounted) {

@@ -16,6 +16,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:public_file_saver/public_file_saver.dart';
+import 'services/onesignal_service.dart';
 
 /// Sumathi's Styles — Admin Dashboard (Flutter + Firebase)
 ///
@@ -264,6 +265,11 @@ class _AdminPageState extends State<AdminPage> {
       badge: true,
       sound: true,
     );
+
+          // 🔑 Tag this device as "admin" so OneSignal pushes targeting the
+    // admin role reach it — this is what makes the notification sound
+    // work even when the app is fully closed.
+    OneSignalService.instance.setRoleTag('admin');
 
     // Save the current token once.
     _adminFcmToken = await FirebaseMessaging.instance.getToken();
@@ -2029,12 +2035,17 @@ class _AdminPageState extends State<AdminPage> {
     }
     try {
       showToast('⏳ Sending...');
-      await _db.collection('notifications').add({
+            await _db.collection('notifications').add({
         'title': title,
         'message': message,
         'type': notificationType,
         'created_at': FieldValue.serverTimestamp(),
       });
+
+      // 🔑 Actually push it to customer devices via OneSignal — the
+      // Firestore write above alone does NOT deliver a push.
+      OneSignalService.instance.sendPushToRole('customer', title, message);
+
       notificationTitle.clear();
       notificationMessage.clear();
       notificationType = 'general';
@@ -5499,7 +5510,7 @@ class _AdminPageState extends State<AdminPage> {
         child: Column(
           children: [
             // ---------------- TOP APP BAR ----------------
-            Container(
+                  Container(
               width: double.infinity,
               color: loginBlue,
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -5520,6 +5531,67 @@ class _AdminPageState extends State<AdminPage> {
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () {
+                          setState(() {
+                            _newOrdersBadge = 0;
+                            _newContactsBadge = 0;
+                          });
+                          _openMobilePage('ordersmgmt');
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              alignment: Alignment.center,
+                              decoration: const BoxDecoration(
+                                color: Colors.white24,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Text(
+                                '🔔',
+                                style: TextStyle(fontSize: 18),
+                              ),
+                            ),
+                            if (_newOrdersBadge + _newContactsBadge > 0)
+                              Positioned(
+                                right: -2,
+                                top: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: danger,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${_newOrdersBadge + _newContactsBadge}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],

@@ -11,7 +11,6 @@ const TOPIC_MAP = {
   class: 'class_reminders',
 };
 
-
 exports.sendNotificationOnCreate = onDocumentCreated(
   'notifications/{notifId}',
   async (event) => {
@@ -56,6 +55,18 @@ async function pushToAdmins(title, body) {
   return getMessaging().sendEachForMulticast({
     notification: { title, body },
     data: { type: 'admin_alert' },
+    // 🔑 FIX: without this block, Android falls back to its own
+    // default notification channel instead of the app's
+    // "sumathi_admin_channel" — sound can be silent/unpredictable,
+    // especially when the app is fully closed (terminated).
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'sumathi_admin_channel', // must match admin_page.dart's channel id
+        sound: 'default',
+        priority: 'max',
+      },
+    },
     tokens,
   });
 }

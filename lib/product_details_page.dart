@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_state.dart';
 import 'models.dart';
 import 'checkout.dart';
+import 'location_picker_page.dart';
 import 'cart_page.dart';
 import 'login_page.dart';
 
@@ -28,7 +29,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
     bool _loadingAddress = true;
   String _address = '';
+    // ignore: unused_field
   String _recipient = '';
+  // ignore: unused_field
   String _addressPhone = '';
   List<Map<String, dynamic>> _savedAddressList = [];
   String? _selectedAddressId;
@@ -94,11 +97,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             .get();
       }
 
-      if (!mounted) return;
+            if (!mounted) return;
 
       if (snap.docs.isEmpty) {
+        final fallback = AppState.instance.deliveryLocation.trim();
         setState(() {
-          _address = '';
+          _address = fallback;
           _recipient = '';
           _addressPhone = '';
           _savedAddressList = [];
@@ -665,24 +669,25 @@ const SizedBox(height: 18),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+        return Row(
       children: [
-        if (_recipient.isNotEmpty)
-          Text(
-            _recipient,
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF20252B),
-            ),
+        const Text(
+          'HOME',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF20252B),
           ),
-        const SizedBox(height: 3),
-        Text(_address, style: const TextStyle(fontSize: 13, height: 1.35, color: Color(0xFF30363B))),
-        if (_addressPhone.isNotEmpty) ...[
-          const SizedBox(height: 3),
-          Text('Phone: +91 $_addressPhone', style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
-        ],
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _address,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF30363B)),
+          ),
+        ),
       ],
     );
   }
@@ -926,23 +931,34 @@ const SizedBox(height: 18),
     );
   }
 
-  void _useCurrentLocation() {
-    // TODO: point this to your location_map_picker_page.dart flow, e.g.
-    // Navigator.push(context, MaterialPageRoute(builder: (_) => LocationMapPickerPage(useCurrentLocation: true)))
-    //   .then((_) => _loadSavedAddress());
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Fetching current location...')),
-    );
+     Future<void> _useCurrentLocation() async {
+    await _openLocationPicker();
   }
 
-  void _addNewAddress() {
-    // TODO: point this to your location_map_picker_page.dart flow, e.g.
-    // Navigator.push(context, MaterialPageRoute(builder: (_) => const LocationMapPickerPage()))
-    //   .then((_) => _loadSavedAddress());
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Opening map to add a new address...')),
-    );
+  Future<void> _addNewAddress() async {
+    await _openLocationPicker();
   }
+
+  Future<void> _openLocationPicker() async {
+    final picked = await LocationPickerSheet.show(context);
+    if (picked == null) return;
+
+    final display = picked.addressLine.trim().isNotEmpty
+        ? picked.addressLine.trim()
+        : (picked.label.trim().isNotEmpty
+            ? picked.label.trim()
+            : 'Selected location');
+
+    await AppState.instance.setDeliveryLocation(
+      display,
+      lat: picked.latitude,
+      lng: picked.longitude,
+      pincode: picked.pincode,
+    );
+
+    await _loadSavedAddress();
+  }
+
 
   // -------------------------------------------------------------------
   // QUANTITY
