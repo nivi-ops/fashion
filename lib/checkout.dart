@@ -11,6 +11,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'api_service.dart';
 import 'services/onesignal_service.dart';
+import 'login_page.dart';
 
 /// ---------------------------------------------------------------------
 /// CARD INPUT FORMATTERS — auto space every 4 digits on Card Number,
@@ -212,6 +213,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
     super.initState();
 
     final state = AppState.instance;
+
+    // Guard: checkout should never be reachable without login (covers
+    // any path into CheckoutPage that doesn't already check, e.g. Cart).
+    if (!state.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login required to purchase'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+        );
+      });
+    }
 
     if (state.isLoggedIn) {
       _nameCtrl.text = state.userName ?? '';

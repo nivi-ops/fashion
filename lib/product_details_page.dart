@@ -1262,10 +1262,15 @@ const SizedBox(height: 18),
   if (phone.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Please login first to continue with your purchase.'),
+        content: Text('Login required to purchase'),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
       ),
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
     );
     return;
   }

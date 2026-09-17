@@ -1,10 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'register_page.dart';
 import 'main_nav_page.dart';
 import 'otp_verify_page.dart';
-import 'forgot_password_page.dart';
 import 'app_state.dart';
 import 'admin_page.dart';
 
@@ -20,11 +19,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
 
   final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-
-  bool hidePassword = true;
-  bool rememberMe = false;
+  final mobileController = TextEditingController();
 
   final Color teal = const Color(0xff0F766E);
   final Color lightTeal = const Color(0xff4FC3B0);
@@ -40,9 +35,10 @@ class _LoginPageState extends State<LoginPage> {
     await prefs.setBool('isLoggedIn', true);
 
     final name = nameController.text.trim();
-    final identifier = emailController.text.trim();
+    final mobile = mobileController.text.trim();
     await prefs.setString('userName', name);
-    AppState.instance.login(userId: identifier, userName: name);
+    await prefs.setString('userMobile', mobile);
+    AppState.instance.login(userId: mobile, userName: name);
 
     if (!mounted) return;
 
@@ -61,7 +57,7 @@ class _LoginPageState extends State<LoginPage> {
         context,
         MaterialPageRoute(
           builder: (_) => OtpVerifyPage(
-            phoneNumber: emailController.text.trim(),
+            phoneNumber: mobileController.text.trim(),
             correctOtp: otp,
             onVerified: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -76,6 +72,14 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
     }
+  }
+
+  void _continueAsGuest() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const MainNavPage()),
+      (route) => false,
+    );
   }
 
 
@@ -189,6 +193,9 @@ class _LoginPageState extends State<LoginPage> {
                         TextFormField(
                           controller: nameController,
                           keyboardType: TextInputType.name,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z ]')),
+                          ],
                           style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
                             prefixIcon: Icon(Icons.person_outline, color: gold),
@@ -209,6 +216,9 @@ class _LoginPageState extends State<LoginPage> {
                             if (value == null || value.trim().isEmpty) {
                               return "Please enter your name";
                             }
+                            if (!RegExp(r'^[a-zA-Z ]+$').hasMatch(value.trim())) {
+                              return "Only alphabets are allowed";
+                            }
                             return null;
                           },
                         ),
@@ -216,12 +226,17 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 16),
 
                         TextFormField(
-                          controller: emailController,
-                          keyboardType: TextInputType.emailAddress,
+                          controller: mobileController,
+                          keyboardType: TextInputType.phone,
+                          maxLength: 10,
                           style: const TextStyle(color: Colors.white),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
                           decoration: InputDecoration(
-                            prefixIcon: Icon(Icons.email_outlined, color: gold),
-                            hintText: "Email / Mobile Number",
+                            counterText: "",
+                            prefixIcon: Icon(Icons.phone_android_outlined, color: gold),
+                            hintText: "Mobile Number",
                             hintStyle: const TextStyle(color: Colors.white70),
                             filled: true,
                             fillColor: Colors.white.withValues(alpha: 0.06),
@@ -236,96 +251,13 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return "Please enter your Email or Mobile Number";
+                              return "Please enter your Mobile Number";
+                            }
+                            if (value.trim().length != 10) {
+                              return "Enter a valid 10 digit Mobile Number";
                             }
                             return null;
                           },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        TextFormField(
-                          controller: passwordController,
-                          obscureText: hidePassword,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            prefixIcon: Icon(Icons.lock_outline, color: gold),
-                            hintText: "Password",
-                            hintStyle: const TextStyle(color: Colors.white70),
-                            filled: true,
-                            fillColor: Colors.white.withValues(alpha: 0.06),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                hidePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: gold,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  hidePassword = !hidePassword;
-                                });
-                              },
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(15),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(15),
-                              borderSide: BorderSide(color: teal, width: 2),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.length < 6) {
-                              return "Password must be at least 6 characters";
-                            }
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: rememberMe,
-                              activeColor: teal,
-                              checkColor: Colors.white,
-                              onChanged: (value) {
-                                setState(() {
-                                  rememberMe = value ?? false;
-                                });
-                              },
-                            ),
-
-                            const Text(
-                              "Remember Me",
-                              style: TextStyle(
-                                color: Colors.white,
-                              ),
-                            ),
-
-                            const Spacer(),
-
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ForgotPasswordPage(),
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                "Forgot Password?",
-                                style: TextStyle(
-                                  color: gold,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
 
                         const SizedBox(height: 20),
@@ -356,36 +288,16 @@ class _LoginPageState extends State<LoginPage> {
 
                         const SizedBox(height: 16),
 
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-
-                            const Text(
-                              "Don't have an account?",
-                              style: TextStyle(
-                                color: Colors.white,
-                              ),
+                        TextButton(
+                          onPressed: _continueAsGuest,
+                          child: Text(
+                            "Continue as Guest",
+                            style: TextStyle(
+                              color: gold,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
                             ),
-
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const RegisterPage(),
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                "Register",
-                                style: TextStyle(
-                                  color: gold,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-
-                          ],
+                          ),
                         ),
 
                       ],
@@ -403,8 +315,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void dispose() {
     nameController.dispose();
-    emailController.dispose();
-    passwordController.dispose();
+    mobileController.dispose();
     super.dispose();
   }
 }
