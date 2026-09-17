@@ -6,10 +6,23 @@ header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 
 // =====================================================
-// RAZORPAY SECRET
+// RAZORPAY SECRET — read from environment variable,
+// NEVER hardcoded here (this file may end up on GitHub).
 // =====================================================
 
-$keySecret = "YOUR_RAZORPAY_KEY_SECRET";
+$keySecret = getenv("RAZORPAY_KEY_SECRET");
+
+if (!$keySecret) {
+
+    http_response_code(500);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "Server not configured: RAZORPAY_KEY_SECRET missing"
+    ]);
+
+    exit;
+}
 
 // =====================================================
 // READ REQUEST

@@ -101,7 +101,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-   final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _phoneCtrl = TextEditingController();
   final TextEditingController _altPhoneCtrl = TextEditingController();
   final TextEditingController _addressCtrl = TextEditingController();
@@ -110,7 +110,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // Card fields shown on the Payments step. Actual secure card entry
   // still happens inside Razorpay's own checkout sheet (PCI-compliant) —
   // these are just the visible Flipkart-style fields on our screen.
-   final TextEditingController _cardNumberCtrl = TextEditingController();
+  final TextEditingController _cardNumberCtrl = TextEditingController();
   final TextEditingController _cardExpiryCtrl = TextEditingController();
   final TextEditingController _cardCvvCtrl = TextEditingController();
 
@@ -171,21 +171,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String? _razorpaySignature;
 
   // -------------------------------------------------------------------
-  // IMPORTANT
+  // ⚠️ TODO — FILL THESE IN BEFORE TESTING PAYMENTS ⚠️
   // -------------------------------------------------------------------
   //
-  // Replace these with your actual PHP backend URLs.
+  // 1) createOrderUrl / verifyPaymentUrl:
+  //    Point these at wherever your create-order / verify-payment
+  //    backend actually lives (Firebase Cloud Function URL, or a PHP
+  //    URL if you're keeping PHP hosting somewhere other than Railway).
+  //    They must NOT be a local IP like 192.168.x.x once you test on
+  //    a real device or publish the app.
   //
   static const String createOrderUrl =
-      'http://192.168.1.5/fashion/api/create_order.php';
+      'https://YOUR-BACKEND-URL-HERE/createOrder';
 
   static const String verifyPaymentUrl =
-      'http://192.168.1.5/fashion/api/verify_payment.php';
+      'https://YOUR-BACKEND-URL-HERE/verifyPayment';
 
-  // Replace this with your REAL Razorpay TEST Key ID from
-  // Razorpay Dashboard -> Settings -> API Keys.
-  // DO NOT put the Razorpay SECRET KEY here.
-  static const String razorpayKeyId = 'rzp_test_xxxxxxxxxxxxx';
+  // 2) razorpayKeyId:
+  //    Replace with your REAL Razorpay TEST Key ID from
+  //    Razorpay Dashboard -> Settings -> API Keys (starts with rzp_test_).
+  //    This is public and safe to keep in the app.
+  //    DO NOT put the Razorpay Key SECRET here — that stays only on
+  //    your backend (Cloud Function config / server env variable).
+  static const String razorpayKeyId = 'rzp_test_YOUR_KEY_ID_HERE';
 
   // -------------------------------------------------------------------
   // DELIVERY CHARGE
@@ -229,7 +237,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   void dispose() {
     _razorpay.clear();
 
-        _nameCtrl.dispose();
+    _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _altPhoneCtrl.dispose();
     _addressCtrl.dispose();
@@ -603,10 +611,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final productNames = widget.items.map((p) => p.name).join(', ');
 
-        await db.collection('orders').add({
+    await db.collection('orders').add({
       'order_id': orderId,
       'name': _nameCtrl.text.trim(),
-            'mobile': phone,
+      'mobile': phone,
       'alternate_mobile': _altPhoneCtrl.text.trim(),
       'address': _addressCtrl.text.trim(),
       'pincode': _pincodeCtrl.text.trim(),
@@ -617,8 +625,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       'amount': orderTotal,
       'status': 'Ordered',
       'source': 'website',
-             'payment_method':
-          _payment == PaymentMethod.card ? 'Card' : 'UPI',
+      'payment_method': _payment == PaymentMethod.card ? 'Card' : 'UPI',
       'payment_status': 'paid',
       'razorpay_payment_id': _razorpayPaymentId,
       'razorpay_order_id': _razorpayOrderId,
@@ -626,7 +633,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       'created_at': FieldValue.serverTimestamp(),
     });
 
-       await _awardCoinsIfEligible(phone);
+    await _awardCoinsIfEligible(phone);
 
     OneSignalService.instance.sendPushToRole(
       'admin',
@@ -665,10 +672,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final productNames = widget.items.map((p) => p.name).join(', ');
 
-            await db.collection('orders').add({
+      await db.collection('orders').add({
         'order_id': orderId,
         'name': _nameCtrl.text.trim(),
-                'mobile': phone,
+        'mobile': phone,
         'alternate_mobile': _altPhoneCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
         'pincode': _pincodeCtrl.text.trim(),
@@ -679,13 +686,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'amount': orderTotal,
         'status': 'Ordered',
         'source': 'website',
-                'payment_method': 'COD',
+        'payment_method': 'COD',
         'payment_status': 'Not Required',
         'ordered_at': FieldValue.serverTimestamp(),
         'created_at': FieldValue.serverTimestamp(),
       });
 
-            await _awardCoinsIfEligible(phone);
+      await _awardCoinsIfEligible(phone);
 
       OneSignalService.instance.sendPushToRole(
         'admin',
@@ -953,7 +960,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             icon: Icons.person_outline,
           ),
           const SizedBox(height: 12),
-                    _field(
+          _field(
             controller: _phoneCtrl,
             label: 'Mobile Number',
             icon: Icons.phone_outlined,
@@ -962,7 +969,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             validator: _validatePhone,
           ),
           const SizedBox(height: 12),
-                    _field(
+          _field(
             controller: _altPhoneCtrl,
             label: 'Alternate Mobile Number',
             icon: Icons.phone_forwarded_outlined,
@@ -1061,7 +1068,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // PHONE VALIDATION
   // ===================================================================
 
-    String? _validatePhone(String? value) {
+  String? _validatePhone(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Required';
     }
@@ -1080,7 +1087,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // Alternate number is optional — only validate if the user typed something.
-     String? _validateAltPhone(String? value) {
+  String? _validateAltPhone(String? value) {
     final phone = value?.trim() ?? '';
     if (phone.isEmpty) return 'Required';
 
@@ -1182,7 +1189,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       'Pincode: ${_pincodeCtrl.text}',
                       style: const TextStyle(color: AppColors.textLight, fontSize: 12),
                     ),
-                                        Text(
+                    Text(
                       _phoneCtrl.text,
                       style: const TextStyle(color: AppColors.textLight, fontSize: 12),
                     ),
@@ -1741,7 +1748,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         children: [
           const Text('Card Number', style: TextStyle(fontSize: 12.5, color: AppColors.textLight)),
           const SizedBox(height: 6),
-                    TextField(
+          TextField(
             controller: _cardNumberCtrl,
             keyboardType: TextInputType.number,
             inputFormatters: [
@@ -1779,7 +1786,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   children: [
                     const Text('Valid Thru', style: TextStyle(fontSize: 12.5, color: AppColors.textLight)),
                     const SizedBox(height: 6),
-                                        TextField(
+                    TextField(
                       controller: _cardExpiryCtrl,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
