@@ -290,12 +290,26 @@ class _LoginPageState extends State<LoginPage> {
 
                         TextButton(
                           onPressed: _continueAsGuest,
-                          child: Text(
-                            "Continue as Guest",
-                            style: TextStyle(
-                              color: gold,
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: "Continue as ",
+                                  style: TextStyle(
+                                    color: teal,
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: "Guest",
+                                  style: TextStyle(
+                                    color: gold,
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),

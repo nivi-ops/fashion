@@ -439,6 +439,10 @@ class _AdminPageState extends State<AdminPage> {
           'amount': num.tryParse('${m['amount'] ?? 0}') ?? 0,
           'status': m['status'] ?? 'Ordered',
           'date': created != null ? formatDate(created.toIso8601String()) : '',
+          // Raw creation instant (date + time), kept only for sorting —
+          // the 'date' field above is display-only (dd/MM/yyyy) and loses
+          // ordering information for orders placed on the same day.
+          '_createdAtRaw': created,
           'orderedAt': statusDate('ordered_at'),
           'processingAt': statusDate('processing_at'),
           'deliveredAt': statusDate('delivered_at'),
@@ -462,9 +466,19 @@ class _AdminPageState extends State<AdminPage> {
         };
       }).toList();
 
-      // Keep a stable order — newest last, so `.reversed` (used all over
-      // this file) shows the newest first.
-      mapped.sort((a, b) => '${a['date']}'.compareTo('${b['date']}'));
+      // Keep a stable order — oldest first, using the actual creation
+      // timestamp (not the display-only dd/MM/yyyy string, which cannot
+      // tell apart same-day orders). `.reversed` (used all over this
+      // file) then shows the newest order first, in true chronological
+      // (and matching order-ID) sequence.
+      mapped.sort((a, b) {
+        final da = a['_createdAtRaw'] as DateTime?;
+        final db = b['_createdAtRaw'] as DateTime?;
+        if (da == null && db == null) return 0;
+        if (da == null) return -1;
+        if (db == null) return 1;
+        return da.compareTo(db);
+      });
       return mapped;
     } catch (_) {
       return [];
@@ -3669,8 +3683,8 @@ class _AdminPageState extends State<AdminPage> {
           ),
           const SizedBox(height: 14),
           row('Customer', '${o['name']}'),
-          row('Phone', '${o['mobile']}'),
-          row('Alternate Mobile', '${o['alternateMobile'] ?? ''}'),
+          row('Mobile No :', '${o['mobile']}'),
+          row('Alternate Mobile No :', '${o['alternateMobile'] ?? ''}'),
           row('Product', '${o['product']}'),
           row('Amount', '₹${o['amount']}'),
           // Payment row — method on the left, tappable Pending/Paid pill.
