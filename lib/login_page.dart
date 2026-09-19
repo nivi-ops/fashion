@@ -7,66 +7,6 @@ import 'otp_verify_page.dart';
 import 'app_state.dart';
 import 'admin_page.dart';
 
-/// Country with its dial code and allowed mobile number length.
-class Country {
-  final String name;
-  final String flag;
-  final String code;
-  final int minLen;
-  final int maxLen;
-
-  const Country(this.name, this.flag, this.code, this.minLen, this.maxLen);
-}
-
-// Lengths are for the number WITHOUT the country code.
-const List<Country> kCountries = [
-  Country('India', '🇮🇳', '+91', 10, 10),
-  Country('United States / Canada', '🇺🇸', '+1', 10, 10),
-  Country('United Kingdom', '🇬🇧', '+44', 10, 10),
-  Country('United Arab Emirates', '🇦🇪', '+971', 9, 9),
-  Country('Saudi Arabia', '🇸🇦', '+966', 9, 9),
-  Country('Qatar', '🇶🇦', '+974', 8, 8),
-  Country('Kuwait', '🇰🇼', '+965', 8, 8),
-  Country('Oman', '🇴🇲', '+968', 8, 8),
-  Country('Bahrain', '🇧🇭', '+973', 8, 8),
-  Country('Singapore', '🇸🇬', '+65', 8, 8),
-  Country('Malaysia', '🇲🇾', '+60', 9, 10),
-  Country('Sri Lanka', '🇱🇰', '+94', 9, 9),
-  Country('Maldives', '🇲🇻', '+960', 7, 7),
-  Country('Nepal', '🇳🇵', '+977', 10, 10),
-  Country('Bangladesh', '🇧🇩', '+880', 10, 10),
-  Country('Pakistan', '🇵🇰', '+92', 10, 10),
-  Country('Australia', '🇦🇺', '+61', 9, 9),
-  Country('New Zealand', '🇳🇿', '+64', 8, 10),
-  Country('Germany', '🇩🇪', '+49', 10, 11),
-  Country('France', '🇫🇷', '+33', 9, 9),
-  Country('Italy', '🇮🇹', '+39', 9, 10),
-  Country('Spain', '🇪🇸', '+34', 9, 9),
-  Country('Netherlands', '🇳🇱', '+31', 9, 9),
-  Country('Ireland', '🇮🇪', '+353', 9, 9),
-  Country('Switzerland', '🇨🇭', '+41', 9, 9),
-  Country('Sweden', '🇸🇪', '+46', 9, 9),
-  Country('Russia', '🇷🇺', '+7', 10, 10),
-  Country('Turkey', '🇹🇷', '+90', 10, 10),
-  Country('Israel', '🇮🇱', '+972', 9, 9),
-  Country('Japan', '🇯🇵', '+81', 10, 10),
-  Country('South Korea', '🇰🇷', '+82', 9, 10),
-  Country('China', '🇨🇳', '+86', 11, 11),
-  Country('Hong Kong', '🇭🇰', '+852', 8, 8),
-  Country('Thailand', '🇹🇭', '+66', 9, 9),
-  Country('Indonesia', '🇮🇩', '+62', 9, 12),
-  Country('Philippines', '🇵🇭', '+63', 10, 10),
-  Country('Vietnam', '🇻🇳', '+84', 9, 9),
-  Country('Mauritius', '🇲🇺', '+230', 8, 8),
-  Country('South Africa', '🇿🇦', '+27', 9, 9),
-  Country('Kenya', '🇰🇪', '+254', 9, 9),
-  Country('Nigeria', '🇳🇬', '+234', 10, 10),
-  Country('Egypt', '🇪🇬', '+20', 10, 10),
-  Country('Brazil', '🇧🇷', '+55', 10, 11),
-  Country('Mexico', '🇲🇽', '+52', 10, 10),
-  Country('Argentina', '🇦🇷', '+54', 10, 10),
-];
-
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -84,31 +24,13 @@ class _LoginPageState extends State<LoginPage> {
   final Color lightTeal = const Color(0xff4FC3B0);
   final Color gold = const Color(0xffD4AF37);
 
-  // Default country = India (+91)
-  Country _country = kCountries.first;
+  // India only
+  static const String _countryCode = '+91';
+  static const int _mobileLength = 10;
 
   String _generateOtp() {
     final rand = Random();
     return (100000 + rand.nextInt(900000)).toString();
-  }
-
-  String get _lengthText => _country.minLen == _country.maxLen
-      ? '${_country.maxLen}-digit'
-      : '${_country.minLen}-${_country.maxLen} digit';
-
-  void _onCountryChanged(Country? c) {
-    if (c == null) return;
-    setState(() {
-      _country = c;
-      // Trim already typed digits if the new country allows fewer digits
-      final text = mobileController.text;
-      if (text.length > c.maxLen) {
-        mobileController.text = text.substring(0, c.maxLen);
-        mobileController.selection = TextSelection.fromPosition(
-          TextPosition(offset: mobileController.text.length),
-        );
-      }
-    });
   }
 
   Future<void> _completeLogin() async {
@@ -119,12 +41,10 @@ class _LoginPageState extends State<LoginPage> {
     final mobile = mobileController.text.trim();
     await prefs.setString('userName', name);
     await prefs.setString('userMobile', mobile);
-    await prefs.setString('userCountryCode', _country.code);
+    await prefs.setString('userCountryCode', _countryCode);
 
-    // Indian numbers keep the same id as before (10 digits).
-    // Other countries get the country code prefix so ids never clash.
-    final userId = _country.code == '+91' ? mobile : '${_country.code}$mobile';
-    AppState.instance.login(userId: userId, userName: name);
+    // Same id as before (10 digits)
+    AppState.instance.login(userId: mobile, userName: name);
 
     if (!mounted) return;
 
@@ -143,7 +63,7 @@ class _LoginPageState extends State<LoginPage> {
         context,
         MaterialPageRoute(
           builder: (_) => OtpVerifyPage(
-            phoneNumber: '${_country.code} ${mobileController.text.trim()}',
+            phoneNumber: '$_countryCode ${mobileController.text.trim()}',
             correctOtp: otp,
             onVerified: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -197,53 +117,22 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _countryDropdown() {
+  /// Fixed India prefix (no dropdown)
+  Widget _indiaPrefix() {
     return Padding(
-      padding: const EdgeInsets.only(left: 12, right: 8),
+      padding: const EdgeInsets.only(left: 14, right: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          DropdownButtonHideUnderline(
-            child: DropdownButton<Country>(
-              value: _country,
-              isDense: true,
-              dropdownColor: const Color(0xff1E1E1E),
-              iconEnabledColor: gold,
-              menuWidth: 290,
-              menuMaxHeight: 360,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-              // Closed state: only flag + code
-              selectedItemBuilder: (context) => kCountries
-                  .map(
-                    (c) => Center(
-                      child: Text(
-                        '${c.flag} ${c.code}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-              // Open menu: flag + country name + code
-              items: kCountries
-                  .map(
-                    (c) => DropdownMenuItem<Country>(
-                      value: c,
-                      child: Text(
-                        '${c.flag}  ${c.name} (${c.code})',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _onCountryChanged,
+          const Text(
+            '🇮🇳 $_countryCode',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Container(
             width: 1,
             height: 24,
@@ -313,14 +202,12 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ---------- LOGO ----------
+                      // ---------- LOGO (circle, no extra box/padding) ----------
                       Container(
-                        width: 120,
-                        height: 120,
-                        padding: const EdgeInsets.all(8),
+                        width: 96,
+                        height: 96,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white,
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.35),
@@ -329,17 +216,23 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ],
                         ),
-                        child: Image.asset(
-                          "assets/images/app.png", // <-- your logo path
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                              Icon(Icons.checkroom, color: teal, size: 48),
+                        child: ClipOval(
+                          child: Image.asset(
+                            "assets/images/cir.png",
+                            width: 96,
+                            height: 96,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.white,
+                              child: Icon(Icons.checkroom, color: teal, size: 40),
+                            ),
+                          ),
                         ),
                       ),
 
                       const SizedBox(height: 14),
 
-                      // ---------- BRAND NAME (smaller font) ----------
+                      // ---------- BRAND NAME ----------
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -445,11 +338,11 @@ class _LoginPageState extends State<LoginPage> {
 
                               const SizedBox(height: 16),
 
-                              // Mobile Number with country code dropdown
+                              // Mobile Number (India +91 fixed)
                               TextFormField(
                                 controller: mobileController,
                                 keyboardType: TextInputType.phone,
-                                maxLength: _country.maxLen,
+                                maxLength: _mobileLength,
                                 autovalidateMode:
                                     AutovalidateMode.onUserInteraction,
                                 style: const TextStyle(color: Colors.white),
@@ -458,7 +351,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ],
                                 decoration: _fieldDecoration(
                                   hint: "Mobile Number",
-                                  prefixIcon: _countryDropdown(),
+                                  prefixIcon: _indiaPrefix(),
                                   prefixIconConstraints: const BoxConstraints(
                                     minWidth: 0,
                                     minHeight: 0,
@@ -469,13 +362,11 @@ class _LoginPageState extends State<LoginPage> {
                                   if (v.isEmpty) {
                                     return "Please enter your Mobile Number";
                                   }
-                                  if (v.length < _country.minLen ||
-                                      v.length > _country.maxLen) {
-                                    return "Enter a valid $_lengthText mobile number";
+                                  if (v.length != _mobileLength) {
+                                    return "Enter a valid $_mobileLength-digit mobile number";
                                   }
                                   // Indian mobile numbers start with 6-9
-                                  if (_country.code == '+91' &&
-                                      !RegExp(r'^[6-9]').hasMatch(v)) {
+                                  if (!RegExp(r'^[6-9]').hasMatch(v)) {
                                     return "Indian mobile numbers start with 6, 7, 8 or 9";
                                   }
                                   return null;
@@ -484,16 +375,16 @@ class _LoginPageState extends State<LoginPage> {
 
                               const SizedBox(height: 8),
 
-                              // Dynamic hint below the mobile field
+                              // Hint below the mobile field
                               Row(
-                                children: [
-                                  const Icon(Icons.info_outline,
+                                children: const [
+                                  Icon(Icons.info_outline,
                                       size: 16, color: Colors.white70),
-                                  const SizedBox(width: 8),
+                                  SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      "Enter a valid $_lengthText mobile number for ${_country.name}",
-                                      style: const TextStyle(
+                                      "Enter a valid 10-digit Indian mobile number",
+                                      style: TextStyle(
                                         color: Colors.white70,
                                         fontSize: 12.5,
                                       ),
@@ -504,7 +395,7 @@ class _LoginPageState extends State<LoginPage> {
 
                               const SizedBox(height: 20),
 
-                              // LOGIN button (inside container)
+                              // LOGIN button
                               ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: lightTeal,
@@ -535,7 +426,7 @@ class _LoginPageState extends State<LoginPage> {
 
                       const SizedBox(height: 20),
 
-                      // ---------- WELCOME TEXT (below container) ----------
+                      // ---------- WELCOME TEXT ----------
                       const Text(
                         "Welcome to Sumathi's Styles ✨",
                         textAlign: TextAlign.center,
@@ -572,7 +463,6 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
-
                     ],
                   ),
                 ),
