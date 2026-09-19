@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'register_page.dart';
+import 'login_page.dart';
 import 'main_nav_page.dart';
 import 'services/onesignal_service.dart';
 
@@ -18,7 +18,7 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
-    @override
+  @override
   void initState() {
     super.initState();
 
@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen>
       context,
       MaterialPageRoute(
         builder: (_) =>
-          isLoggedIn ? const MainNavPage() : const RegisterPage(),
+          isLoggedIn ? const MainNavPage() : const LoginPage(),
       ),
     );
   }
