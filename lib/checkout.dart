@@ -1,9 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import 'app_colors.dart';
@@ -11,7 +8,6 @@ import 'app_state.dart';
 import 'models.dart';
 import 'api_service.dart';
 import 'services/onesignal_service.dart';
-import 'login_page.dart';
 
 /// ---------------------------------------------------------------------
 /// CARD INPUT FORMATTERS — auto space every 4 digits on Card Number,
@@ -167,34 +163,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   late Razorpay _razorpay;
 
-  String? _razorpayOrderId;
   String? _razorpayPaymentId;
-  String? _razorpaySignature;
 
   // -------------------------------------------------------------------
-  // ⚠️ TODO — FILL THESE IN BEFORE TESTING PAYMENTS ⚠️
+  // ⚠️ TODO — put your real Razorpay TEST Key ID here.
+  // No backend/server involved — order is created directly from the
+  // app, and payment success is trusted from Razorpay's SDK callback
+  // (no server-side signature verification). See note below.
   // -------------------------------------------------------------------
-  //
-  // 1) createOrderUrl / verifyPaymentUrl:
-  //    Point these at wherever your create-order / verify-payment
-  //    backend actually lives (Firebase Cloud Function URL, or a PHP
-  //    URL if you're keeping PHP hosting somewhere other than Railway).
-  //    They must NOT be a local IP like 192.168.x.x once you test on
-  //    a real device or publish the app.
-  //
-  static const String createOrderUrl =
-      'https://YOUR-BACKEND-URL-HERE/createOrder';
-
-  static const String verifyPaymentUrl =
-      'https://YOUR-BACKEND-URL-HERE/verifyPayment';
-
-  // 2) razorpayKeyId:
-  //    Replace with your REAL Razorpay TEST Key ID from
-  //    Razorpay Dashboard -> Settings -> API Keys (starts with rzp_test_).
-  //    This is public and safe to keep in the app.
-  //    DO NOT put the Razorpay Key SECRET here — that stays only on
-  //    your backend (Cloud Function config / server env variable).
-  static const String razorpayKeyId = 'rzp_test_YOUR_KEY_ID_HERE';
+  static const String razorpayKeyId = 'rzp_test_TdoAh7mbMyni2j';
 
   // -------------------------------------------------------------------
   // DELIVERY CHARGE
@@ -213,25 +190,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     super.initState();
 
     final state = AppState.instance;
-
-    // Guard: checkout should never be reachable without login (covers
-    // any path into CheckoutPage that doesn't already check, e.g. Cart).
-    if (!state.isLoggedIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login required to purchase'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-        );
-      });
-    }
 
     if (state.isLoggedIn) {
       _nameCtrl.text = state.userName ?? '';
@@ -427,7 +385,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // ===================================================================
-  // RAZORPAY PAYMENT
+  // RAZORPAY PAYMENT — no backend. Order is opened directly from the
+  // app with just an amount (no order_id, no server call).
   // ===================================================================
 
   Future<void> _startRazorpayPayment() async {
@@ -448,33 +407,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Razorpay expects paise.
       final int amountInPaise = (_total * 100).round();
 
-      final response = await http.post(
-        Uri.parse(createOrderUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'amount': amountInPaise,
-          'currency': 'INR',
-        }),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception('Server error: ${response.statusCode}');
-      }
-
-      final data = jsonDecode(response.body);
-
-      if (data['success'] != true) {
-        throw Exception(
-          data['message'] ?? 'Unable to create payment order',
-        );
-      }
-
-      _razorpayOrderId = data['order_id']?.toString();
-
-      if (_razorpayOrderId == null || _razorpayOrderId!.isEmpty) {
-        throw Exception('Razorpay order ID missing');
-      }
-
       // Razorpay's own checkout sheet — this is what shows the native
       // UPI app picker (Google Pay / PhonePe / Paytm) and the card
       // entry screen. We don't need to build those ourselves; the card
@@ -485,7 +417,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'currency': 'INR',
         'name': 'Sumathi',
         'description': 'Dress / Tailoring Order',
-        'order_id': _razorpayOrderId,
         'prefill': {
           'name': _nameCtrl.text.trim(),
           'contact': _phoneCtrl.text.trim(),
@@ -522,63 +453,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // ===================================================================
-  // PAYMENT SUCCESS
+  // PAYMENT SUCCESS — trusted directly from Razorpay's SDK callback,
+  // no server-side signature verification (see risk note shared
+  // separately: keep an eye on Razorpay Dashboard -> Transactions and
+  // match razorpay_payment_id + amount before dispatching orders).
   // ===================================================================
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
     _razorpayPaymentId = response.paymentId;
-    _razorpayOrderId = response.orderId ?? _razorpayOrderId;
-    _razorpaySignature = response.signature;
 
-    await _verifyPaymentOnServer();
-  }
-
-  // ===================================================================
-  // VERIFY PAYMENT
-  // ===================================================================
-
-  Future<void> _verifyPaymentOnServer() async {
-    try {
-      final response = await http.post(
-        Uri.parse(verifyPaymentUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'razorpay_payment_id': _razorpayPaymentId,
-          'razorpay_order_id': _razorpayOrderId,
-          'razorpay_signature': _razorpaySignature,
-          'name': _nameCtrl.text.trim(),
-          'mobile': _phoneCtrl.text.trim(),
-          'address': _addressCtrl.text.trim(),
-          'pincode': _pincodeCtrl.text.trim(),
-          'amount': _total,
-          'product': widget.items.map((p) => p.name).join(', '),
-        }),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception('Payment verification server error');
-      }
-
-      final data = jsonDecode(response.body);
-
-      if (data['success'] == true) {
-        await _finishPaidOrder();
-      } else {
-        throw Exception(
-          data['message'] ?? 'Payment verification failed',
-        );
-      }
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _placingOrder = false;
-      });
-
-      _showMessage('Payment verification failed.');
-    }
+    await _finishPaidOrder();
   }
 
   // ===================================================================
@@ -648,7 +532,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       'payment_method': _payment == PaymentMethod.card ? 'Card' : 'UPI',
       'payment_status': 'paid',
       'razorpay_payment_id': _razorpayPaymentId,
-      'razorpay_order_id': _razorpayOrderId,
       'ordered_at': FieldValue.serverTimestamp(),
       'created_at': FieldValue.serverTimestamp(),
     });
